@@ -74,6 +74,7 @@ app.post('/api/me', requireTelegramAuth, async (req, res) => {
 app.post('/api/create-invoice', requireTelegramAuth, async (req, res) => {
   const { packageId } = req.body;
   const pack = STAR_PACKAGES[packageId];
+  
   if (!pack) {
     return res.status(400).json({ error: 'unknown_package' });
   }
@@ -88,20 +89,26 @@ app.post('/api/create-invoice', requireTelegramAuth, async (req, res) => {
       body: JSON.stringify({
         title: pack.title,
         description: pack.description,
-        payload,
-        provider_token: '',
+        payload: payload,
         currency: 'XTR',
-        prices: [{ label: pack.title, amount: pack.amount }],
+        // Убеждаемся, что amount — это число
+        prices: [{ label: pack.title, amount: Number(pack.amount) }],
       }),
     });
+    
     const data = await tgRes.json();
+    
     if (!data.ok) {
+      console.error('Telegram API Error:', data.description);
       return res.status(502).json({ error: 'telegram_api_error', details: data.description });
     }
+    
     res.json({ invoiceLink: data.result });
   } catch (err) {
     console.error('createInvoiceLink failed', err);
     res.status(500).json({ error: 'internal_error' });
+  }
+});
   }
 });
 
