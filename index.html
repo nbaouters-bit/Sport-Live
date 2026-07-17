@@ -99,7 +99,7 @@
           </div>
           <div class="text-right">
             <div class="text-[9px] text-emerald-500 font-bold uppercase">Общий фарм:</div>
-            <div id="total-farm-display" class="text-lg font-black text-emerald-400 bg-emerald-500/10 px-2 rounded border border-emerald-500/20">+0/сек</div>
+            <div id="total-farm-display" class="text-lg font-black text-emerald-400 bg-emerald-500/10 px-2 rounded border border-emerald-500/20">+0/день</div>
           </div>
         </div>
 
@@ -154,15 +154,23 @@
         </div>
       </div>
 
+      <!-- ТАБ 1.5: КЛУБ (полный инвентарь + продажа дубликатов) -->
+      <div id="tab-club" class="tab-content hidden p-4">
+        <h2 class="text-xl font-black uppercase italic tracking-tight mb-2">Мой Клуб</h2>
+        <p class="text-[10px] text-neutral-400 mb-4">Все твои карты. Лишние копии одного и того же игрока можно продать за $SLive — первую (или ту, что в составе) продать нельзя.</p>
+        <div id="club-list" class="grid grid-cols-3 gap-2"></div>
+      </div>
+
       <!-- ТАБ 2: ТАПАЛКА -->
       <div id="tab-tap" class="tab-content hidden h-full p-4 flex flex-col justify-center">
         <div class="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 text-center mb-8">
           <h3 class="font-black text-emerald-400">ТРЕНИРОВКА</h3>
-          <p class="text-[10px] text-neutral-400 mt-1">Тапай по мячу, чтобы добывать токены вручную.</p>
+          <p class="text-[10px] text-neutral-400 mt-1">Тапай по мячу — 1 тап = 1 энергия = 1 $SLive.</p>
           <div class="w-full bg-black h-3 rounded-full mt-4 overflow-hidden border border-neutral-800">
             <div id="energy-bar" class="bg-gradient-to-r from-blue-500 to-emerald-400 h-full w-full"></div>
           </div>
           <div class="text-[10px] font-bold mt-1 text-neutral-300">Энергия: <span id="energy-text">1000/1000</span></div>
+          <div class="text-[9px] text-neutral-500 mt-1">Полностью пополняется раз в сутки</div>
         </div>
 
         <div class="flex justify-center items-center">
@@ -175,17 +183,14 @@
       <!-- ТАБ 3: ПАКИ (Новая экономика и витрина дропа) -->
       <div id="tab-packs" class="tab-content hidden p-4">
         <h2 class="text-xl font-black uppercase italic tracking-tight mb-2">Магазин Паков</h2>
-        <p class="text-[10px] text-neutral-400 mb-4 bg-neutral-900 p-2 rounded-lg border border-neutral-800">
-          Собирай токены и открывай паки. Шанс выбить Легенду мал, но их фарм перекрывает всё!
-        </p>
-        
+
         <div class="space-y-4">
           <!-- Bronze -->
           <div class="bg-gradient-to-r from-[#3e2723] to-[#1a1a1a] border border-[#5d4037] rounded-2xl p-4 flex flex-col gap-3">
             <div class="flex justify-between items-center">
               <div>
                 <h3 class="font-black text-[#d7ccc8] text-sm">БРОНЗОВЫЙ ПАК 🥉</h3>
-                <p class="text-[10px] text-neutral-400 mt-0.5">Базовый фарм: ~1 $SLive/сек</p>
+                <p class="text-[10px] text-neutral-400 mt-0.5">Базовый доход: ~10-20 $SLive/день</p>
               </div>
               <div class="flex flex-col gap-1.5">
                 <button onclick="buyPack('bronze', 500, 'SLive')" class="bg-neutral-800 text-emerald-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 500</button>
@@ -196,7 +201,7 @@
             <div class="bg-black/50 rounded-xl p-2 border border-[#5d4037]/50">
               <div class="text-[8px] text-[#a1887f] font-bold uppercase mb-1.5 flex justify-between">
                 <span>Возможный дроп:</span>
-                <span class="text-emerald-500">+1/сек</span>
+                <span class="text-emerald-500">+10-20/день</span>
               </div>
               <div class="flex flex-wrap gap-1.5" id="drop-bronze"></div>
             </div>
@@ -207,7 +212,7 @@
             <div class="flex justify-between items-center">
               <div>
                 <h3 class="font-black text-[#cfd8dc] text-sm">СЕРЕБРЯНЫЙ ПАК 🥈</h3>
-                <p class="text-[10px] text-neutral-400 mt-0.5">Улучшенный фарм: ~3 $SLive/сек</p>
+                <p class="text-[10px] text-neutral-400 mt-0.5">Улучшенный доход: ~30-50 $SLive/день</p>
               </div>
               <div class="flex flex-col gap-1.5">
                 <button onclick="buyPack('silver', 2500, 'SLive')" class="bg-neutral-800 text-emerald-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 2.5K</button>
@@ -217,7 +222,7 @@
             <div class="bg-black/50 rounded-xl p-2 border border-[#78909c]/50">
               <div class="text-[8px] text-[#90a4ae] font-bold uppercase mb-1.5 flex justify-between">
                 <span>Возможный дроп:</span>
-                <span class="text-emerald-500">+3-4/сек</span>
+                <span class="text-emerald-500">+30-50/день</span>
               </div>
               <div class="flex flex-wrap gap-1.5" id="drop-silver"></div>
             </div>
@@ -228,7 +233,7 @@
             <div class="flex justify-between items-center">
               <div>
                 <h3 class="font-black text-[#fff59d] text-sm">ЗОЛОТОЙ ПАК 🥇</h3>
-                <p class="text-[10px] text-neutral-400 mt-0.5">Звездный фарм: ~10-15/сек</p>
+                <p class="text-[10px] text-neutral-400 mt-0.5">Звёздный доход: ~100-160/день</p>
               </div>
               <div class="flex flex-col gap-1.5">
                 <button onclick="buyPack('gold', 10000, 'SLive')" class="bg-neutral-800 text-emerald-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 10K</button>
@@ -238,7 +243,7 @@
             <div class="bg-black/50 rounded-xl p-2 border border-[#fbc02d]/30">
               <div class="text-[8px] text-[#fff59d] font-bold uppercase mb-1.5 flex justify-between">
                 <span>Возможный дроп:</span>
-                <span class="text-emerald-500">+10-15/сек</span>
+                <span class="text-emerald-500">+100-160/день</span>
               </div>
               <div class="flex flex-wrap gap-1.5" id="drop-gold"></div>
             </div>
@@ -249,7 +254,7 @@
             <div class="flex justify-between items-center">
               <div>
                 <h3 class="font-black text-[#ede7f6] text-sm">ИКОНЫ ФУТБОЛА 🔮</h3>
-                <p class="text-[10px] text-neutral-400 mt-0.5">Элитный фарм: ~50 $SLive/сек</p>
+                <p class="text-[10px] text-neutral-400 mt-0.5">Элитный доход: ~450-650 $SLive/день</p>
               </div>
               <div class="flex flex-col gap-1.5">
                 <button onclick="buyPack('legend', 50000, 'SLive')" class="bg-neutral-800 text-emerald-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 50K</button>
@@ -259,7 +264,7 @@
             <div class="bg-black/50 rounded-xl p-2 border border-[#b39ddb]/30">
               <div class="text-[8px] text-[#d1c4e9] font-bold uppercase mb-1.5 flex justify-between">
                 <span>Возможный дроп:</span>
-                <span class="text-emerald-500">+45-55/сек</span>
+                <span class="text-emerald-500">+450-650/день</span>
               </div>
               <div class="flex flex-wrap gap-1.5" id="drop-legend"></div>
             </div>
@@ -285,38 +290,90 @@
           <div class="col-span-3 text-center text-neutral-500 text-xs py-6">Загрузка каталога...</div>
         </div>
 
-        <h2 class="text-xl font-black uppercase italic tracking-tight mb-2 mt-2">Спортпит & VIP</h2>
+        <h2 class="text-xl font-black uppercase italic tracking-tight mb-2 mt-2">VIP-статус</h2>
         <p class="text-[10px] text-neutral-400 mb-4 bg-neutral-900 p-2 rounded-lg border border-neutral-800">
-          Покупай наборы My Sportpit. При покупке ты становишься <span class="text-yellow-500 font-bold">VIP Инсайдером</span> и получаешь личный разбор рациона от тренера!
+          Разовая покупка за Stars. Даёт значок VIP Инсайдера в профиле.
         </p>
 
-        <div class="space-y-4">
-          <div class="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 relative overflow-hidden">
-            <div class="absolute top-0 right-0 bg-yellow-500 text-black text-[8px] font-black px-2 py-1 rounded-bl-lg">+ VIP СТАТУС</div>
-            <h3 class="font-black text-sm">Сборка «Быстрый Старт» 🚀</h3>
-            <p class="text-[9px] text-neutral-400 mt-1">Гейнер + Креатин + Шейкер.</p>
-            <div class="flex justify-between items-end mt-4">
-              <div class="text-lg font-black">1 750 ₴</div>
-              <button onclick="triggerPurchase('Быстрый Старт')" class="bg-emerald-500 text-black text-[10px] font-black px-4 py-2 rounded-xl">Купить</button>
-            </div>
-          </div>
-          <div class="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 relative overflow-hidden">
-            <div class="absolute top-0 right-0 bg-yellow-500 text-black text-[8px] font-black px-2 py-1 rounded-bl-lg">+ VIP СТАТУС</div>
-            <h3 class="font-black text-sm">Сборка «Сушка» 🔥</h3>
-            <p class="text-[9px] text-neutral-400 mt-1">Протеин + Жиросжигатель + Витамины.</p>
-            <div class="flex justify-between items-end mt-4">
-              <div class="text-lg font-black">2 100 ₴</div>
-              <button onclick="triggerPurchase('Сушка')" class="bg-emerald-500 text-black text-[10px] font-black px-4 py-2 rounded-xl">Купить</button>
-            </div>
-          </div>
+        <div id="vip-purchase-block" class="bg-gradient-to-br from-yellow-900/40 to-black border border-yellow-500/30 rounded-2xl p-4 text-center">
+          <span class="text-3xl">🏆</span>
+          <h3 class="font-black text-yellow-500 mt-2 text-sm">VIP-СТАТУС</h3>
+          <p class="text-[10px] text-neutral-300 mt-1 mb-3">Отметка VIP в профиле и приоритет в топе поддержки.</p>
+          <button onclick="buyVipStatus()" class="bg-yellow-500 text-black font-black text-xs py-2.5 px-6 rounded-xl w-full">Купить VIP за ⭐️ 300</button>
+        </div>
+        <div id="vip-active-badge" class="hidden bg-gradient-to-br from-yellow-900/40 to-black border border-yellow-500/30 rounded-2xl p-4 text-center">
+          <span class="text-3xl">🏆</span>
+          <h3 class="font-black text-yellow-500 mt-2 text-sm">У ТЕБЯ УЖЕ ЕСТЬ VIP</h3>
+          <p class="text-[10px] text-neutral-300 mt-1">Спасибо за поддержку проекта!</p>
         </div>
 
-        <div id="vip-zone" class="hidden mt-6 bg-gradient-to-br from-yellow-900/40 to-black border border-yellow-500/30 rounded-2xl p-4 text-center">
-          <span class="text-3xl">🏆</span>
-          <h3 class="font-black text-yellow-500 mt-2 text-sm">ТВОЙ VIP АКТИВИРОВАН</h3>
-          <p class="text-[10px] text-neutral-300 mt-1 mb-4">Напиши тренеру @mysportpit_coach для старта личного ведения.</p>
-          <button class="bg-yellow-500 text-black font-black text-xs py-2 px-6 rounded-xl w-full">Написать тренеру</button>
+        <h2 class="text-xl font-black uppercase italic tracking-tight mb-2 mt-6">Пригласи друга</h2>
+        <div class="bg-neutral-900 border border-neutral-800 rounded-2xl p-4">
+          <p class="text-[10px] text-neutral-400 mb-3">За каждого друга, который впервые откроет игру по твоей ссылке, ты получишь <span class="text-emerald-400 font-bold">🪙 500 $SLive</span>.</p>
+          <div id="referral-link" class="bg-black/40 border border-neutral-800 rounded-lg px-3 py-2 text-[10px] text-neutral-300 break-all mb-2">Загрузка...</div>
+          <div class="flex gap-2">
+            <button onclick="copyReferralLink()" class="flex-1 bg-neutral-800 text-white text-[10px] font-black py-2 rounded-lg border border-neutral-700">Скопировать</button>
+            <button onclick="shareReferralLink()" class="flex-1 bg-emerald-500 text-black text-[10px] font-black py-2 rounded-lg">Поделиться</button>
+          </div>
+          <div class="text-[10px] text-neutral-400 mt-3">Приглашено друзей: <span id="referral-count" class="text-white font-bold">0</span></div>
         </div>
+      </div>
+
+      <!-- ТАБ 5: ЛИДЕРБОРД -->
+      <div id="tab-leaderboard" class="tab-content hidden p-4">
+        <!-- Лидерборд ДРАФТА — сверху, отдельная доска от рейтинга по балансу -->
+        <h2 class="text-xl font-black uppercase italic tracking-tight mb-2">⚔️ Топ Драфта</h2>
+        <p class="text-[10px] text-neutral-400 mb-3 bg-neutral-900 p-2 rounded-lg border border-neutral-800">
+          Рейтинг по очкам PvP-битв драфта. Лидер дня получает <span class="text-emerald-400 font-bold">🪙 1000 $SLive</span> автоматически.
+        </p>
+        <div id="draft-leaderboard-list" class="space-y-2 mb-6">
+          <div class="text-neutral-500 text-xs">Загрузка...</div>
+        </div>
+
+        <h2 class="text-xl font-black uppercase italic tracking-tight mb-2">Топ игроков</h2>
+        <p class="text-[10px] text-neutral-400 mb-3 bg-neutral-900 p-2 rounded-lg border border-neutral-800">
+          Рейтинг по балансу $SLive. Обновляется при каждом заходе на вкладку.
+        </p>
+        <div id="leaderboard-list" class="space-y-2 pb-6">
+          <div class="text-neutral-500 text-xs">Загрузка...</div>
+        </div>
+      </div>
+
+      <!-- ТАБ ДРАФТ: отдельный от основного Клуба состав из 5 карт + PvP-бои.
+           Карты драфта НЕ попадают в inventory/Клуб и не выставляются в обычный
+           "Состав" — это полностью изолированный режим (см. draft_squads в db.js). -->
+      <div id="tab-draft" class="tab-content hidden p-4">
+        <h2 class="text-xl font-black uppercase italic tracking-tight mb-2">Драфт</h2>
+        <p class="text-[10px] text-neutral-400 mb-3 bg-neutral-900 p-2 rounded-lg border border-neutral-800">
+          Собери случайный состав из 5 карт и бейся с другими игроками по сумме рейтинга.
+          Одно поражение — и серия заканчивается, для нового боя нужен новый вход.
+        </p>
+
+        <div id="draft-entry-block" class="grid grid-cols-2 gap-2 mb-4">
+          <button onclick="startDraftEntry('slive')" id="draft-entry-slive-btn" class="bg-neutral-800 text-emerald-400 border border-neutral-700 rounded-xl py-3 text-center">
+            <div class="text-xs font-black">🪙 1000</div>
+            <div class="text-[8px] text-neutral-500 mt-0.5">1 раз в сутки</div>
+          </button>
+          <button onclick="startDraftEntry('stars')" class="bg-amber-500 text-black rounded-xl py-3 text-center">
+            <div class="text-xs font-black">⭐️ 100</div>
+            <div class="text-[8px] text-black/60 mt-0.5">Без лимита</div>
+          </button>
+        </div>
+
+        <div id="draft-squad-block" class="hidden">
+          <div class="flex justify-between items-center mb-2">
+            <div class="text-[10px] font-bold text-neutral-300">Состав драфта:</div>
+            <div id="draft-status-badge" class="text-[9px] font-black px-2 py-0.5 rounded-full"></div>
+          </div>
+          <div id="draft-cards-grid" class="grid grid-cols-3 gap-2 mb-3"></div>
+          <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-2.5 flex justify-between items-center mb-3">
+            <div class="text-[10px] text-neutral-400">Рейтинг: <span id="draft-rating" class="text-white font-black">0</span></div>
+            <div class="text-[10px] text-neutral-400">Побед в серии: <span id="draft-wins" class="text-emerald-400 font-black">0</span></div>
+          </div>
+          <button onclick="playDraftBattleClick()" id="draft-battle-btn" class="w-full bg-red-500 text-white font-black py-3 rounded-xl text-sm">⚔️ В БОЙ</button>
+        </div>
+
+        <div id="draft-last-result" class="hidden mt-4 bg-neutral-900 border border-neutral-800 rounded-xl p-3"></div>
       </div>
 
       <!-- ТАБ АДМИН (существует в разметке для всех, но вкладка внизу скрыта
@@ -357,6 +414,19 @@
           </div>
         </div>
 
+        <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-3 mb-4">
+          <div class="text-[10px] font-bold text-neutral-300 mb-2">Ручная корректировка $SLive</div>
+          <div class="flex flex-col gap-2">
+            <input id="admin-slive-id" type="text" placeholder="Telegram ID игрока"
+              class="bg-black border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600">
+            <div class="flex gap-2">
+              <input id="admin-slive-amount" type="number" placeholder="Сумма (может быть отрицательной)"
+                class="flex-1 bg-black border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600">
+              <button onclick="adminAdjustSlive()" class="bg-emerald-500 text-black text-[11px] font-black px-4 rounded-lg">Применить</button>
+            </div>
+          </div>
+        </div>
+
         <div class="flex justify-between items-center mb-2">
           <div class="text-[10px] font-bold text-neutral-300">Игроки</div>
           <button onclick="loadAdminPanel()" class="text-[9px] text-emerald-400 font-bold">↻ Обновить</button>
@@ -373,6 +443,9 @@
       <button onclick="switchTab('squad')" id="nav-squad" class="flex flex-col items-center gap-1 text-[9px] font-black text-emerald-400">
         <span class="text-xl">🛡️</span> СОСТАВ
       </button>
+      <button onclick="switchTab('club')" id="nav-club" class="flex flex-col items-center gap-1 text-[9px] font-black text-neutral-500">
+        <span class="text-xl">🎒</span> КЛУБ
+      </button>
       <button onclick="switchTab('tap')" id="nav-tap" class="flex flex-col items-center gap-1 text-[9px] font-black text-neutral-500">
         <span class="text-xl">⚽</span> ТАП
       </button>
@@ -381,6 +454,12 @@
       </button>
       <button onclick="switchTab('market')" id="nav-market" class="flex flex-col items-center gap-1 text-[9px] font-black text-neutral-500">
         <span class="text-xl">🥩</span> МАРКЕТ
+      </button>
+      <button onclick="switchTab('leaderboard')" id="nav-leaderboard" class="flex flex-col items-center gap-1 text-[9px] font-black text-neutral-500">
+        <span class="text-xl">🏆</span> ТОП
+      </button>
+      <button onclick="switchTab('draft')" id="nav-draft" class="flex flex-col items-center gap-1 text-[9px] font-black text-neutral-500">
+        <span class="text-xl">⚔️</span> ДРАФТ
       </button>
       <!-- Кнопка админки скрыта по умолчанию (class="hidden") и показывается
            только если сервер подтвердил isAdmin: true в ответе /api/me.
@@ -406,7 +485,7 @@
     <div id="pack-reveal" class="hidden absolute inset-0 bg-black/95 z-50 flex flex-col justify-center items-center p-6">
       <h3 class="text-lg font-black text-emerald-400 mb-6 uppercase animate-pulse">🎉 НОВЫЙ ИГРОК!</h3>
       <div id="revealed-card-container"></div>
-      <div class="text-[10px] text-neutral-400 mt-4 text-center">Доход: <span id="reveal-income" class="font-bold text-emerald-400">+0/сек</span></div>
+      <div class="text-[10px] text-neutral-400 mt-4 text-center">Доход: <span id="reveal-income" class="font-bold text-emerald-400">+0/день</span></div>
       <button onclick="closeReveal()" class="mt-8 bg-yellow-500 text-black font-black text-xs px-8 py-3 rounded-xl hover:scale-105 transition-all">
         ЗАБРАТЬ В КЛУБ
       </button>
@@ -417,15 +496,25 @@
         <p id="alert-text" class="text-sm font-bold text-white"></p>
         <button onclick="document.getElementById('alert-modal').classList.add('hidden')" class="mt-4 bg-emerald-500 text-black font-black py-2 px-6 rounded-xl text-xs w-full">ОК</button>
       </div>
+    </div>
+
     <div id="stars-modal" class="hidden absolute inset-0 bg-black/90 z-50 flex flex-col justify-center items-center p-6">
       <div class="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 w-full max-w-xs text-center shadow-2xl">
         <div class="text-3xl mb-2">⭐️</div>
         <h3 class="font-black text-lg mb-1">Пополнить Stars</h3>
         <p class="text-[10px] text-neutral-400 mb-4">Оплата через официальный платёж Telegram Stars.</p>
-        <div class="flex flex-col gap-2">
+        <div class="flex flex-col gap-2 mb-4">
           <button onclick="purchaseStars('pack_100')" class="bg-amber-500 text-black font-black py-2.5 rounded-xl text-sm">100 ⭐️</button>
           <button onclick="purchaseStars('pack_500')" class="bg-amber-500 text-black font-black py-2.5 rounded-xl text-sm">500 ⭐️</button>
           <button onclick="purchaseStars('pack_1000')" class="bg-amber-500 text-black font-black py-2.5 rounded-xl text-sm">1000 ⭐️</button>
+        </div>
+        <div class="border-t border-neutral-800 pt-3">
+          <div class="text-[10px] text-neutral-400 mb-2 text-left">Своя сумма (мин. 50 ⭐️):</div>
+          <div class="flex gap-2">
+            <input id="stars-custom-amount" type="number" min="50" placeholder="Например, 250"
+              class="flex-1 bg-black border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600">
+            <button onclick="purchaseCustomStars()" class="bg-amber-500 text-black font-black px-4 rounded-lg text-xs">OK</button>
+          </div>
         </div>
         <button onclick="document.getElementById('stars-modal').classList.add('hidden')" class="mt-4 text-neutral-500 text-xs font-bold">Отмена</button>
       </div>
@@ -453,11 +542,16 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...body, initData }),
       });
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || `request_failed_${res.status}`);
+        // Прикрепляем весь ответ сервера к ошибке (balance/required/energy и т.п.),
+        // чтобы вызывающий код мог, например, сразу открыть магазин Stars на
+        // нужную недостающую сумму, а не просто показать текст ошибки.
+        const err = new Error(data.error || `request_failed_${res.status}`);
+        err.data = data;
+        throw err;
       }
-      return res.json();
+      return data;
     }
 
     // isAdmin приходит ТОЛЬКО с сервера (server.js сравнивает подписанный
@@ -500,9 +594,9 @@
       }, 300);
     }
 
-    // Баланс $SLive, tgStars, состав и инвентарь — источник правды сервер.
-    // Локальные копии (localStorage) используются только как demo-fallback,
-    // когда приложение открыто вне Telegram (нет initData).
+    // Баланс $SLive, tgStars, состав, инвентарь, энергия и VIP — источник
+    // правды сервер. Локальные копии (localStorage) используются только как
+    // demo-fallback, когда приложение открыто вне Telegram (нет initData).
     async function syncBalanceFromServer() {
       if (!tg?.initData) {
         // Приложение открыто не из Telegram (например, просто в браузере для теста верстки) —
@@ -510,9 +604,13 @@
         return;
       }
       try {
-        const { user, isAdmin: adminFlag } = await apiPost('/api/me');
+        // start_param мини-аппы — это telegram_id пригласившего, если ссылка реферальная.
+        const startParam = tg?.initDataUnsafe?.start_param || '';
+        const { user, isAdmin: adminFlag } = await apiPost('/api/me', { startParam });
         tgStars = user.tgStars;
         sliveTokens = user.sliveTokens;
+        isVip = user.isVip;
+        energy = user.energy;
         myClub = user.myClub; // карты — только те, что реально есть в инвентаре на сервере
         squad = instIdMapToSquad(user.squad, myClub);
         passiveIncome = user.farmRate;
@@ -520,6 +618,7 @@
         renderSquad();
         renderPackDrops();
         updateHeader();
+        checkVip();
 
         isAdmin = Boolean(adminFlag);
         if (isAdmin) {
@@ -551,19 +650,28 @@
           return;
         }
 
-        listEl.innerHTML = users.map(u => `
-          <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-2.5 flex justify-between items-center">
-            <div>
-              <div class="text-[11px] font-bold text-white">ID: ${u.telegramId}${u.isVip ? ' 🏆' : ''}</div>
+        listEl.innerHTML = users.map(u => {
+          // Ссылка на игрока в Telegram: по username, если он есть, иначе по ID
+          // (tg://user?id=... открывается только внутри самого Telegram).
+          const link = u.username ? `https://t.me/${u.username}` : `tg://user?id=${u.telegramId}`;
+          const label = u.username ? '@' + u.username : `ID ${u.telegramId}`;
+          return `
+          <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-2.5 flex justify-between items-center gap-2">
+            <div class="min-w-0">
+              <a href="${link}" target="_blank" class="text-[11px] font-bold text-emerald-400 underline truncate block">${label}${u.isVip ? ' 🏆' : ''}</a>
               <div class="text-[9px] text-neutral-500 mt-0.5">
                 <span class="text-amber-400 font-bold">⭐️ ${u.tgStars}</span>
                 &nbsp;·&nbsp;
                 <span class="text-emerald-400 font-bold">🪙 ${u.sliveTokens}</span>
+                &nbsp;·&nbsp;
+                <span class="text-neutral-400">👥 ${u.invited}</span>
+                &nbsp;·&nbsp;
+                <span class="text-neutral-400">⚡ ${u.energy}</span>
               </div>
             </div>
-            <button onclick="prefillAdjust('${u.telegramId}')" class="text-[9px] font-black text-neutral-400 border border-neutral-700 rounded-lg px-2 py-1">Изменить</button>
+            <button onclick="prefillAdjust('${u.telegramId}')" class="shrink-0 text-[9px] font-black text-neutral-400 border border-neutral-700 rounded-lg px-2 py-1">Изменить</button>
           </div>
-        `).join('');
+        `}).join('');
       } catch (e) {
         console.error(e);
         listEl.innerHTML = '<div class="text-red-400 text-xs">Не удалось загрузить данные. Открой эту вкладку под админ-аккаунтом.</div>';
@@ -572,6 +680,7 @@
 
     function prefillAdjust(telegramId) {
       document.getElementById('admin-adjust-id').value = telegramId;
+      document.getElementById('admin-slive-id').value = telegramId;
       document.getElementById('admin-adjust-amount').focus();
     }
 
@@ -585,12 +694,237 @@
 
       try {
         const result = await apiPost('/api/admin/adjust-stars', { telegramId, amount });
-        alertMsg(`Готово! Новый баланс игрока ${telegramId}: ⭐️ ${result.balance}`);
+        alertMsg(`Готово! Новый баланс Stars игрока ${telegramId}: ⭐️ ${result.balance}`);
         document.getElementById('admin-adjust-amount').value = '';
         loadAdminPanel();
       } catch (e) {
         console.error(e);
         alertMsg('Не удалось применить изменение.');
+      }
+    }
+
+    async function adminAdjustSlive() {
+      const telegramId = document.getElementById('admin-slive-id').value.trim();
+      const amount = Number(document.getElementById('admin-slive-amount').value);
+
+      if (!telegramId || !Number.isFinite(amount) || amount === 0) {
+        return alertMsg('Укажи Telegram ID и ненулевую сумму.');
+      }
+
+      try {
+        const result = await apiPost('/api/admin/adjust-slive', { telegramId, amount });
+        alertMsg(`Готово! Новый баланс $SLive игрока ${telegramId}: 🪙 ${result.balance}`);
+        document.getElementById('admin-slive-amount').value = '';
+        loadAdminPanel();
+      } catch (e) {
+        console.error(e);
+        alertMsg('Не удалось применить изменение.');
+      }
+    }
+
+    // ---------- ЛИДЕРБОРД ----------
+    async function loadLeaderboard() {
+      const listEl = document.getElementById('leaderboard-list');
+      listEl.innerHTML = '<div class="text-neutral-500 text-xs">Загрузка...</div>';
+      if (!tg?.initData) {
+        listEl.innerHTML = '<div class="text-neutral-500 text-xs">Доступно только внутри Telegram.</div>';
+        return;
+      }
+      try {
+        const { leaderboard } = await apiPost('/api/leaderboard');
+        const myId = String(tg?.initDataUnsafe?.user?.id || '');
+        if (leaderboard.length === 0) {
+          listEl.innerHTML = '<div class="text-neutral-500 text-xs">Пока никто не в топе.</div>';
+          return;
+        }
+        const medals = ['🥇', '🥈', '🥉'];
+        listEl.innerHTML = leaderboard.map((u, i) => `
+          <div class="bg-neutral-900 border ${u.telegramId === myId ? 'border-emerald-500' : 'border-neutral-800'} rounded-xl p-2.5 flex justify-between items-center">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="w-6 text-center font-black shrink-0">${medals[i] || (i + 1)}</span>
+              <span class="text-xs font-bold text-white truncate">${u.username ? '@' + u.username : 'ID ' + u.telegramId}${u.isVip ? ' 🏆' : ''}</span>
+            </div>
+            <span class="text-emerald-400 font-black text-xs shrink-0">🪙 ${u.balance.toLocaleString()}</span>
+          </div>
+        `).join('');
+      } catch (e) {
+        console.error(e);
+        listEl.innerHTML = '<div class="text-red-400 text-xs">Не удалось загрузить рейтинг.</div>';
+      }
+    }
+
+    // ---------- РЕФЕРАЛКА ----------
+    let referralLink = '';
+    async function loadReferralInfo() {
+      if (!tg?.initData) {
+        document.getElementById('referral-link').innerText = 'Доступно только внутри Telegram.';
+        return;
+      }
+      try {
+        const { invited, botUsername, telegramId } = await apiPost('/api/referral-info');
+        referralLink = botUsername ? `https://t.me/${botUsername}?startapp=${telegramId}` : '';
+        document.getElementById('referral-link').innerText = referralLink || 'Ссылка временно недоступна.';
+        document.getElementById('referral-count').innerText = invited;
+      } catch (e) {
+        console.error('Не удалось загрузить реферальные данные', e);
+      }
+    }
+
+    function copyReferralLink() {
+      if (!referralLink) return alertMsg('Ссылка ещё не загружена.');
+      navigator.clipboard?.writeText(referralLink);
+      alertMsg('Ссылка скопирована!');
+    }
+
+    function shareReferralLink() {
+      if (!referralLink) return alertMsg('Ссылка ещё не загружена.');
+      const text = 'Залетай в Sport Live FC — собирай состав и фарми $SLive!';
+      if (typeof tg?.openTelegramLink === 'function') {
+        tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent(text)}`);
+      } else {
+        window.open(referralLink, '_blank');
+      }
+    }
+
+    // ---------- VIP ----------
+    async function buyVipStatus() {
+      if (!tg?.initData) {
+        return alertMsg('Покупка VIP работает только внутри Telegram.');
+      }
+      try {
+        const { balance } = await apiPost('/api/buy-vip', {});
+        tgStars = balance;
+        isVip = true;
+        updateHeader();
+        checkVip();
+        alertMsg('Поздравляем! VIP-статус активирован 🏆');
+      } catch (e) {
+        if (e.message === 'insufficient_funds') {
+          // Сразу открываем магазин Telegram Stars на недостающую сумму.
+          purchaseStars('custom', e.data?.required || 300);
+        } else if (e.message === 'already_vip') {
+          alertMsg('У тебя уже есть VIP-статус.');
+        } else {
+          alertMsg('Не удалось купить VIP. Попробуй ещё раз.');
+        }
+      }
+    }
+
+    function checkVip() {
+      const badge = document.getElementById('status-badge');
+      const buyBlock = document.getElementById('vip-purchase-block');
+      const activeBlock = document.getElementById('vip-active-badge');
+      if (isVip) {
+        badge.innerText = 'Тариф: VIP Инсайдер';
+        badge.className = 'text-[9px] font-black uppercase text-yellow-500';
+        buyBlock.classList.add('hidden');
+        activeBlock.classList.remove('hidden');
+      } else {
+        badge.innerText = 'Тариф: Игрок';
+        badge.className = 'text-[9px] font-black uppercase text-neutral-400';
+        buyBlock.classList.remove('hidden');
+        activeBlock.classList.add('hidden');
+      }
+    }
+
+    function openStarsModal() {
+      if (!tg?.initData) {
+        return alertMsg('Пополнение работает только внутри Telegram — открой приложение через бота.');
+      }
+      document.getElementById('stars-modal').classList.remove('hidden');
+    }
+
+    function purchaseCustomStars() {
+      const amount = Number(document.getElementById('stars-custom-amount').value);
+      if (!Number.isFinite(amount) || amount < 50) {
+        return alertMsg('Минимальная сумма пополнения — 50 ⭐️.');
+      }
+      purchaseStars('custom', amount);
+    }
+
+    // packageId: пресет ('pack_100' и т.п.) или 'custom' с суммой в customAmount.
+    async function purchaseStars(packageId, customAmount) {
+      document.getElementById('stars-modal').classList.add('hidden');
+      try {
+        const { invoiceLink } = await apiPost('/api/create-invoice', { packageId, customAmount });
+
+        // tg.openInvoice — это и есть официальный магазин Stars внутри Mini App:
+        // Telegram открывает свой нативный платёжный лист, а если у юзера не
+        // хватает Stars на балансе, сам предложит их докупить перед оплатой.
+        if (typeof tg?.openInvoice === 'function') {
+          tg.openInvoice(invoiceLink, (status) => {
+            // status: 'paid' | 'cancelled' | 'failed' | 'pending'
+            if (status === 'paid') {
+              // Баланс уже начислен на сервере через webhook — просто перечитываем его.
+              syncBalanceFromServer();
+              alertMsg('Оплата прошла! Баланс Stars обновлён.');
+            } else if (status === 'failed') {
+              alertMsg('Платёж не прошёл. Попробуй ещё раз.');
+            }
+          });
+        } else if (typeof tg?.openTelegramLink === 'function') {
+          // Старый клиент Telegram без поддержки openInvoice — открываем счёт
+          // как обычную ссылку t.me/invoice/..., Telegram сам покажет магазин Stars.
+          tg.openTelegramLink(invoiceLink);
+        } else {
+          window.open(invoiceLink, '_blank');
+        }
+      } catch (e) {
+        console.error(e);
+        alertMsg('Не удалось создать счёт на оплату. Попробуй позже.');
+      }
+    }
+
+    function updateHeader() {
+      document.getElementById('slive-balance').innerText = sliveTokens.toLocaleString();
+      document.getElementById('stars-balance').innerText = tgStars.toLocaleString();
+      document.getElementById('energy-text').innerText = `${energy}/1000`;
+      document.getElementById('energy-bar').style.width = `${(energy / 1000) * 100}%`;
+    }
+
+    function saveData() {
+      localStorage.setItem('sliveTokens', sliveTokens);
+      localStorage.setItem('tgStars', tgStars);
+      localStorage.setItem('squad', JSON.stringify(squad));
+      localStorage.setItem('myClub', JSON.stringify(myClub));
+      localStorage.setItem('isVip', isVip);
+    }
+
+    function alertMsg(txt) {
+      document.getElementById('alert-text').innerText = txt;
+      document.getElementById('alert-modal').classList.remove('hidden');
+    }
+
+    function genCardHTML(p, isLarge) {
+      const cls = `card-${p.type}`;
+      const bg = p.type === 'legend' ? 'from-purple-800 to-indigo-950' : 
+                 p.type === 'gold' ? 'from-yellow-600 to-yellow-900' : 
+                 p.type === 'silver' ? 'from-slate-400 to-slate-700' : 'from-orange-700 to-orange-950';
+      
+      if (isLarge) {
+        return `
+          <div class="relative w-48 h-72 bg-gradient-to-b ${bg} border-4 rounded-2xl p-3 flex flex-col justify-between ${cls} shadow-2xl">
+            <div class="flex justify-between font-black text-white text-3xl">
+              <div class="flex flex-col items-center leading-none"><span class="text-4xl">${p.rating}</span><span class="text-sm mt-1">${p.pos}</span></div>
+              <span>${FLAGS[p.nation]}</span>
+            </div>
+            <div class="text-8xl text-center">🏃‍♂️</div>
+            <div class="bg-black/60 p-2 rounded-lg text-center leading-tight">
+              <div class="font-black text-lg uppercase truncate">${p.name}</div>
+            </div>
+          </div>`;
+      } else {
+        return `
+          <div class="w-[70px] h-[100px] bg-gradient-to-b ${bg} border-2 rounded-xl p-1.5 flex flex-col justify-between ${cls} text-white shadow-lg">
+            <div class="flex justify-between items-start leading-none">
+              <div class="flex flex-col items-center"><span class="font-black text-sm">${p.rating}</span><span class="text-[7px] font-bold">${p.pos}</span></div>
+              <span class="text-xs">${FLAGS[p.nation]}</span>
+            </div>
+            <div class="text-2xl text-center mt-auto mb-auto">🏃‍♂️</div>
+            <div class="bg-black/60 rounded px-1 text-center">
+              <div class="font-bold text-[7px] uppercase truncate">${p.name}</div>
+            </div>
+          </div>`;
       }
     }
 
@@ -600,41 +934,64 @@
     // tgStars теперь только ОТОБРАЖАЕТ баланс, реальный источник правды — сервер.
     // Локальное значение используется как fallback, пока идёт запрос к бэкенду.
     let tgStars = parseInt(localStorage.getItem('tgStars')) || 0;
+    // Энергия тоже приходит с сервера (1000/сутки) — локальное значение только
+    // для демо-режима вне Telegram.
     let energy = 1000;
     let isVip = localStorage.getItem('isVip') === 'true';
-    let passiveIncome = 0;
+    let passiveIncome = 0; // теперь это SLive/ДЕНЬ (см. players-data.js), не в секунду
+    let farmAccumulator = 0; // дробный остаток для плавного визуального тика раз в секунду
     
-    // Новая экономика: низкий доход от игроков
+    // Локальный справочник для витрины "Возможный дроп" в табе ПАКИ — не влияет
+    // на игровую логику (реальный дроп решает сервер по players-data.js).
     const PLAYER_POOL = {
       bronze: [
-        { id: 'b1', name: 'Zinchenko', rating: 79, pos: 'DEF', nation: 'UKR', type: 'bronze', income: 1 },
-        { id: 'b2', name: 'Mudryk', rating: 77, pos: 'FWD', nation: 'UKR', type: 'bronze', income: 1 },
-        { id: 'b3', name: 'Pickford', rating: 81, pos: 'GK', nation: 'ENG', type: 'bronze', income: 1 },
-        { id: 'b4', name: 'Maguire', rating: 79, pos: 'DEF', nation: 'ENG', type: 'bronze', income: 1 },
+        { id: 'b1', name: 'Zinchenko', rating: 79, pos: 'DEF', nation: 'UKR', type: 'bronze', income: 10 },
+        { id: 'b2', name: 'Mudryk', rating: 77, pos: 'FWD', nation: 'UKR', type: 'bronze', income: 10 },
+        { id: 'b3', name: 'Pickford', rating: 81, pos: 'GK', nation: 'ENG', type: 'bronze', income: 10 },
+        { id: 'b4', name: 'Maguire', rating: 79, pos: 'DEF', nation: 'ENG', type: 'bronze', income: 10 },
+        { id: 'b5', name: 'Timber', rating: 80, pos: 'DEF', nation: 'NED', type: 'bronze', income: 10 },
+        { id: 'b6', name: 'Malen', rating: 78, pos: 'FWD', nation: 'NED', type: 'bronze', income: 10 },
+        { id: 'b7', name: 'Konate', rating: 80, pos: 'DEF', nation: 'FRA', type: 'bronze', income: 10 },
+        { id: 'b8', name: 'Doku', rating: 79, pos: 'FWD', nation: 'BEL', type: 'bronze', income: 10 },
+        { id: 'b9', name: 'Wharton', rating: 76, pos: 'MID', nation: 'ENG', type: 'bronze', income: 10 },
+        { id: 'b10', name: 'Trubin', rating: 80, pos: 'GK', nation: 'UKR', type: 'bronze', income: 20 },
       ],
       silver: [
-        { id: 's1', name: 'Dovbyk', rating: 83, pos: 'FWD', nation: 'UKR', type: 'silver', income: 3 },
-        { id: 's2', name: 'Cucurella', rating: 82, pos: 'DEF', nation: 'ESP', type: 'silver', income: 3 },
-        { id: 's3', name: 'Gallagher', rating: 80, pos: 'MID', nation: 'ENG', type: 'silver', income: 3 },
-        { id: 's4', name: 'Tchouameni', rating: 84, pos: 'MID', nation: 'FRA', type: 'silver', income: 4 },
+        { id: 's1', name: 'Dovbyk', rating: 83, pos: 'FWD', nation: 'UKR', type: 'silver', income: 30 },
+        { id: 's2', name: 'Cucurella', rating: 82, pos: 'DEF', nation: 'ESP', type: 'silver', income: 30 },
+        { id: 's3', name: 'Gallagher', rating: 80, pos: 'MID', nation: 'ENG', type: 'silver', income: 30 },
+        { id: 's4', name: 'Tchouameni', rating: 84, pos: 'MID', nation: 'FRA', type: 'silver', income: 40 },
+        { id: 's5', name: 'Havertz', rating: 85, pos: 'FWD', nation: 'GER', type: 'silver', income: 40 },
+        { id: 's6', name: 'Musiala', rating: 86, pos: 'MID', nation: 'GER', type: 'silver', income: 50 },
+        { id: 's7', name: 'Zaire-Emery', rating: 82, pos: 'MID', nation: 'FRA', type: 'silver', income: 30 },
+        { id: 's8', name: 'Frimpong', rating: 81, pos: 'DEF', nation: 'NED', type: 'silver', income: 30 },
+        { id: 's9', name: 'Sudakov', rating: 82, pos: 'MID', nation: 'UKR', type: 'silver', income: 30 },
+        { id: 's10', name: 'Olise', rating: 84, pos: 'FWD', nation: 'FRA', type: 'silver', income: 40 },
       ],
       gold: [
-        { id: 'g1', name: 'L. Messi', rating: 92, pos: 'FWD', nation: 'ARG', type: 'gold', income: 15 },
-        { id: 'g2', name: 'Lamine Yamal', rating: 88, pos: 'FWD', nation: 'ESP', type: 'gold', income: 10 },
-        { id: 'g3', name: 'Rodri', rating: 91, pos: 'MID', nation: 'ESP', type: 'gold', income: 12 },
-        { id: 'g4', name: 'Bellingham', rating: 90, pos: 'MID', nation: 'ENG', type: 'gold', income: 12 },
+        { id: 'g1', name: 'L. Messi', rating: 92, pos: 'FWD', nation: 'ARG', type: 'gold', income: 150 },
+        { id: 'g2', name: 'Lamine Yamal', rating: 88, pos: 'FWD', nation: 'ESP', type: 'gold', income: 100 },
+        { id: 'g3', name: 'Rodri', rating: 91, pos: 'MID', nation: 'ESP', type: 'gold', income: 120 },
+        { id: 'g4', name: 'Bellingham', rating: 90, pos: 'MID', nation: 'ENG', type: 'gold', income: 120 },
+        { id: 'g5', name: 'Mbappe', rating: 93, pos: 'FWD', nation: 'FRA', type: 'gold', income: 160 },
+        { id: 'g6', name: 'Vinicius Jr', rating: 89, pos: 'FWD', nation: 'BRA', type: 'gold', income: 110 },
+        { id: 'g7', name: 'Haaland', rating: 91, pos: 'FWD', nation: 'NOR', type: 'gold', income: 140 },
+        { id: 'g8', name: 'De Bruyne', rating: 90, pos: 'MID', nation: 'BEL', type: 'gold', income: 120 },
       ],
       legend: [
-        { id: 'l1', name: 'Z. Zidane', rating: 96, pos: 'MID', nation: 'FRA', type: 'legend', income: 50 },
-        { id: 'l2', name: 'Ronaldinho', rating: 95, pos: 'FWD', nation: 'BRA', type: 'legend', income: 45 },
-        { id: 'l3', name: 'Ronaldo R9', rating: 97, pos: 'FWD', nation: 'BRA', type: 'legend', income: 55 },
+        { id: 'l1', name: 'Z. Zidane', rating: 96, pos: 'MID', nation: 'FRA', type: 'legend', income: 500 },
+        { id: 'l2', name: 'Ronaldinho', rating: 95, pos: 'FWD', nation: 'BRA', type: 'legend', income: 450 },
+        { id: 'l3', name: 'Ronaldo R9', rating: 97, pos: 'FWD', nation: 'BRA', type: 'legend', income: 550 },
+        { id: 'l4', name: 'Maradona', rating: 98, pos: 'MID', nation: 'ARG', type: 'legend', income: 600 },
+        { id: 'l5', name: 'Pele', rating: 99, pos: 'FWD', nation: 'BRA', type: 'legend', income: 650 },
+        { id: 'l6', name: 'C. Ronaldo', rating: 96, pos: 'FWD', nation: 'POR', type: 'legend', income: 520 },
       ]
     };
 
     const FLAGS = {'UKR':'🇺🇦', 'ARG':'🇦🇷', 'ESP':'🇪🇸', 'ENG':'🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'FRA':'🇫🇷', 'BRA':'🇧🇷', 'NED':'🇳🇱', 'BEL':'🇧🇪', 'GER':'🇩🇪', 'NOR':'🇳🇴', 'POR':'🇵🇹'};
 
     let myClub = JSON.parse(localStorage.getItem('myClub')) || [
-      { id: 'b1', name: 'Zinchenko', rating: 79, pos: 'DEF', nation: 'UKR', type: 'bronze', income: 1, instId: '1' }
+      { id: 'b1', name: 'Zinchenko', rating: 79, pos: 'DEF', nation: 'UKR', type: 'bronze', income: 10, instId: '1' }
     ];
     let squad = JSON.parse(localStorage.getItem('squad')) || { FWD1: null, FWD2: null, MID: null, DEF: null, GK: null };
     let tempOpened = null;
@@ -646,16 +1003,31 @@
       checkVip();
       renderPackDrops(); // Рендер витрины дропа
       loadMarketCatalog(); // Каталог карточек для прямой покупки в Маркете
-      syncBalanceFromServer(); // Баланс Stars — с сервера, не из localStorage
-      
+      syncBalanceFromServer(); // Баланс, энергия, VIP — с сервера, не из localStorage
+      loadReferralInfo();
+
+      // Пассивный фарм от состава — passiveIncome это SLive/СУТКИ, поэтому
+      // визуально тикаем раз в секунду только его долю (income/86400), а
+      // целые накопившиеся монеты добавляем на баланс по мере накопления.
+      // Авторитетный пересчёт (offline-farm) всё равно происходит на
+      // сервере при каждом syncBalanceFromServer() — это только красивая
+      // анимация между синхронизациями, не источник правды.
       setInterval(() => {
-        if (energy < 1000) energy += 2;
         if (passiveIncome > 0) {
-          sliveTokens += passiveIncome;
-          spawnMiningCoins();
+          farmAccumulator += passiveIncome / 86400;
+          if (farmAccumulator >= 1) {
+            const whole = Math.floor(farmAccumulator);
+            sliveTokens += whole;
+            farmAccumulator -= whole;
+            spawnMiningCoins();
+          }
         }
         updateHeader();
       }, 1000);
+
+      // Периодически подтягиваем авторитетный баланс/энергию с сервера —
+      // так цифры не расходятся даже при долгой открытой сессии.
+      setInterval(syncBalanceFromServer, 30000);
     };
 
     // Рендер витрины (Возможный дроп)
@@ -677,12 +1049,20 @@
     }
 
     // ТАПАЛКА
+    // Прогресс кликов теперь реально сохраняется: клиент копит клики локально
+    // (pendingTaps) для мгновенного отклика на экране, а затем короткой пачкой
+    // отправляет их на сервер — именно сервер решает, сколько энергии реально
+    // потратилось и сколько $SLive реально начислено (см. /api/tap).
+    let pendingTaps = 0;
+    let tapSyncTimer = null;
+
     const tapBall = document.getElementById('tap-ball');
     tapBall.addEventListener('pointerdown', (e) => {
-      if (energy <= 0) return alertMsg('Энергия исчерпана!');
+      if (energy <= 0) return alertMsg('Энергия на сегодня закончилась. Она полностью обновляется раз в сутки!');
       energy -= 1;
       sliveTokens += 1;
-      
+      pendingTaps += 1;
+
       const rect = tapBall.getBoundingClientRect();
       const span = document.createElement('span');
       span.className = 'click-indicator';
@@ -693,7 +1073,32 @@
       setTimeout(() => span.remove(), 800);
       
       updateHeader();
+      scheduleTapSync();
     });
+
+    function scheduleTapSync() {
+      if (!tg?.initData) return; // вне Telegram сервер недоступен — прогресс тапалки не сохранится
+      clearTimeout(tapSyncTimer);
+      tapSyncTimer = setTimeout(flushTaps, 600);
+    }
+
+    async function flushTaps() {
+      if (pendingTaps <= 0) return;
+      const count = pendingTaps;
+      pendingTaps = 0;
+      try {
+        const result = await apiPost('/api/tap', { count });
+        // Сервер — источник правды: подтягиваем то, что он реально записал
+        // (на случай если энергии не хватило на все накопленные клики).
+        energy = result.energy;
+        sliveTokens = result.balance;
+        updateHeader();
+      } catch (e) {
+        console.error('Не удалось сохранить прогресс тапалки', e);
+        // При ошибке подтягиваем актуальный баланс, чтобы не разойтись с сервером.
+        syncBalanceFromServer();
+      }
+    }
 
     // ЛОГИКА СОСТАВА
     function renderSquad() {
@@ -727,7 +1132,7 @@
 
       passiveIncome = Math.floor(baseIncome * chemMultiplier);
       
-      document.getElementById('total-farm-display').innerText = `+${passiveIncome}/сек`;
+      document.getElementById('total-farm-display').innerText = `+${passiveIncome}/день`;
       document.getElementById('chemistry-bar').style.width = `${chemPercent}%`;
       document.getElementById('chemistry-text').innerText = `${chemPercent}%`;
       saveData();
@@ -821,10 +1226,12 @@
         openPackAnim(card);
       } catch (e) {
         if (e.message === 'insufficient_funds') {
-          const msg = currency === 'slive'
-            ? `Не хватает $SLive! Цена: 🪙 ${price}`
-            : 'Не хватает Stars! Нажми "Пополнить" вверху.';
-          alertMsg(msg);
+          if (currency === 'slive') {
+            alertMsg(`Не хватает $SLive! Цена: 🪙 ${price}`);
+          } else {
+            // Недостаточно Stars — сразу открываем магазин Telegram Stars на недостающую сумму.
+            purchaseStars('custom', e.data?.required || price);
+          }
         } else {
           alertMsg('Не удалось открыть пак. Попробуй ещё раз.');
         }
@@ -840,7 +1247,7 @@
         tempOpened = card;
 
         document.getElementById('revealed-card-container').innerHTML = genCardHTML(tempOpened, true);
-        document.getElementById('reveal-income').innerText = `+${tempOpened.income}/сек`;
+        document.getElementById('reveal-income').innerText = `+${tempOpened.income}/день`;
         document.getElementById('pack-reveal').classList.remove('hidden');
       }, 1200);
     }
@@ -860,10 +1267,14 @@
       // всё равно получит 403 от сервера, так что подделать тут нечего.
       if (tabId === 'admin' && !isAdmin) return;
 
+      // Перед уходом со вкладки тапалки — досылаем накопленные, но ещё не
+      // отправленные клики, чтобы прогресс точно не потерялся.
+      if (tabId !== 'tap') flushTaps();
+
       document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
       document.getElementById(`tab-${tabId}`).classList.remove('hidden');
 
-      ['squad', 'tap', 'packs', 'market', 'admin'].forEach(t => {
+      ['squad', 'club', 'tap', 'packs', 'market', 'leaderboard', 'draft', 'admin'].forEach(t => {
         const el = document.getElementById(`nav-${t}`);
         if (!el) return;
         const isHiddenAdmin = t === 'admin' && !isAdmin;
@@ -871,6 +1282,10 @@
       });
 
       if (tabId === 'admin') loadAdminPanel();
+      if (tabId === 'leaderboard') { loadLeaderboard(); loadDraftLeaderboard(); }
+      if (tabId === 'market') loadReferralInfo();
+      if (tabId === 'club') renderClubInventory();
+      if (tabId === 'draft') loadDraftState();
     }
 
     // МАРКЕТ ИГРОКОВ (покупка конкретной карточки, без рандома)
@@ -930,117 +1345,239 @@
         alertMsg(`Куплен ${card.name}! Он уже в твоём Клубе — выставь его в состав.`);
       } catch (e) {
         if (e.message === 'insufficient_funds') {
-          alertMsg(currency === 'slive' ? 'Не хватает $SLive на балансе.' : 'Не хватает Stars! Нажми "Пополнить" вверху.');
+          if (currency === 'slive') {
+            alertMsg('Не хватает $SLive на балансе.');
+          } else {
+            purchaseStars('custom', e.data?.required || 50);
+          }
         } else {
           alertMsg('Не удалось купить карточку. Попробуй ещё раз.');
         }
       }
     }
 
-    function triggerPurchase(name) {
-      isVip = true;
-      saveData();
-      checkVip();
-      alertMsg(`Ты успешно купил набор "${name}"! VIP-статус активирован.`);
-    }
+    // ---------- ДРАФТ ----------
+    // Отдельный от основного Клуба режим: 5 случайных карт + асинхронный PvP.
+    // Всё состояние (состав, победы, очки, лимит бесплатного входа) хранится
+    // и проверяется на сервере — клиент только показывает то, что вернул API.
+    let draftState = null;
 
-    function checkVip() {
-      if (isVip) {
-        document.getElementById('status-badge').innerText = 'Тариф: VIP Инсайдер';
-        document.getElementById('status-badge').className = 'text-[9px] font-black uppercase text-yellow-500';
-        document.getElementById('vip-zone').classList.remove('hidden');
-      }
-    }
-
-    function openStarsModal() {
+    async function loadDraftState() {
       if (!tg?.initData) {
-        return alertMsg('Пополнение работает только внутри Telegram — открой приложение через бота.');
+        document.getElementById('draft-squad-block').classList.add('hidden');
+        return;
       }
-      document.getElementById('stars-modal').classList.remove('hidden');
+      try {
+        draftState = await apiPost('/api/draft/state');
+        renderDraftUI();
+      } catch (e) {
+        console.error('Не удалось загрузить состояние драфта', e);
+      }
     }
 
-    async function purchaseStars(packageId) {
-      document.getElementById('stars-modal').classList.add('hidden');
-      try {
-        const { invoiceLink } = await apiPost('/api/create-invoice', { packageId });
+    function renderDraftUI() {
+      if (!draftState) return;
+      const sliveBtn = document.getElementById('draft-entry-slive-btn');
+      sliveBtn.disabled = !draftState.canFreeEntry;
+      sliveBtn.classList.toggle('opacity-40', !draftState.canFreeEntry);
 
-        // tg.openInvoice — это и есть официальный магазин Stars внутри Mini App:
-        // Telegram открывает свой нативный платёжный лист, а если у юзера не
-        // хватает Stars на балансе, сам предложит их докупить перед оплатой.
-        if (typeof tg?.openInvoice === 'function') {
-          tg.openInvoice(invoiceLink, (status) => {
-            // status: 'paid' | 'cancelled' | 'failed' | 'pending'
-            if (status === 'paid') {
-              // Баланс уже начислен на сервере через webhook — просто перечитываем его.
-              syncBalanceFromServer();
-              alertMsg('Оплата прошла! Баланс Stars обновлён.');
-            } else if (status === 'failed') {
-              alertMsg('Платёж не прошёл. Попробуй ещё раз.');
-            }
-          });
-        } else if (typeof tg?.openTelegramLink === 'function') {
-          // Старый клиент Telegram без поддержки openInvoice — открываем счёт
-          // как обычную ссылку t.me/invoice/..., Telegram сам покажет магазин Stars.
-          tg.openTelegramLink(invoiceLink);
+      const squadBlock = document.getElementById('draft-squad-block');
+      if (!draftState.squad) {
+        squadBlock.classList.add('hidden');
+        return;
+      }
+
+      squadBlock.classList.remove('hidden');
+      const { players, rating, active, wins } = draftState.squad;
+
+      document.getElementById('draft-cards-grid').innerHTML = players.map(p => genCardHTML(p, false)).join('');
+      document.getElementById('draft-rating').innerText = rating;
+      document.getElementById('draft-wins').innerText = wins;
+
+      const badge = document.getElementById('draft-status-badge');
+      const battleBtn = document.getElementById('draft-battle-btn');
+      if (active) {
+        badge.innerText = 'СЕРИЯ ИДЁТ';
+        badge.className = 'text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+        battleBtn.disabled = false;
+        battleBtn.classList.remove('opacity-40');
+        battleBtn.innerText = '⚔️ В БОЙ';
+      } else {
+        badge.innerText = 'СЕРИЯ ЗАКОНЧЕНА';
+        badge.className = 'text-[9px] font-black px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30';
+        battleBtn.disabled = true;
+        battleBtn.classList.add('opacity-40');
+        battleBtn.innerText = 'Серия завершена — войди заново';
+      }
+    }
+
+    // currency: 'slive' (🪙1000, лимит 1/сутки — лимит проверяет сервер) или
+    // 'stars' (⭐️100, без лимита).
+    async function startDraftEntry(currency) {
+      if (!tg?.initData) {
+        return alertMsg('Драфт работает только внутри Telegram.');
+      }
+      if (currency === 'slive' && draftState && !draftState.canFreeEntry) {
+        return alertMsg('Бесплатный (за $SLive) вход уже использован сегодня. Возьми вход за ⭐️ 100 или загляни завтра.');
+      }
+      try {
+        const result = await apiPost('/api/draft/start', { currency });
+        if (currency === 'slive') sliveTokens = result.balance; else tgStars = result.balance;
+        updateHeader();
+        document.getElementById('draft-last-result').classList.add('hidden');
+        await loadDraftState();
+        alertMsg(`Драфт собран! Рейтинг состава: ${result.squad.rating} OVR. Одно поражение — и серия закончится.`);
+      } catch (e) {
+        if (e.message === 'daily_entry_used') {
+          alertMsg('Бесплатный вход за $SLive уже использован сегодня. Попробуй вход за ⭐️ 100.');
+        } else if (e.message === 'insufficient_funds') {
+          if (currency === 'slive') {
+            alertMsg('Не хватает $SLive на балансе.');
+          } else {
+            purchaseStars('custom', e.data?.required || 100);
+          }
         } else {
-          window.open(invoiceLink, '_blank');
+          alertMsg('Не удалось войти в драфт. Попробуй ещё раз.');
         }
+      }
+    }
+
+    async function playDraftBattleClick() {
+      if (!tg?.initData) {
+        return alertMsg('Бои драфта работают только внутри Telegram.');
+      }
+      try {
+        const result = await apiPost('/api/draft/battle');
+        draftState.squad = result.squad;
+        renderDraftUI();
+
+        if (result.won) {
+          sliveTokens += result.reward;
+          updateHeader();
+        }
+
+        const resultBlock = document.getElementById('draft-last-result');
+        resultBlock.classList.remove('hidden');
+        const opponentLabel = result.opponent.username ? '@' + result.opponent.username : 'соперника';
+        resultBlock.innerHTML = result.won
+          ? `<div class="text-emerald-400 font-black text-sm">🎉 ПОБЕДА!</div>
+             <div class="text-[10px] text-neutral-400 mt-1">Против ${opponentLabel} (рейтинг ${result.defenderRating})</div>
+             <div class="text-[10px] text-emerald-400 mt-1">+${result.reward} 🪙 SLive · +${result.pointsGained} очков в Драфт-топ</div>`
+          : `<div class="text-red-400 font-black text-sm">😔 ПОРАЖЕНИЕ</div>
+             <div class="text-[10px] text-neutral-400 mt-1">Против ${opponentLabel} (рейтинг ${result.defenderRating})</div>
+             <div class="text-[10px] text-red-400 mt-1">Серия закончена — войди в драфт заново, чтобы продолжить.</div>`;
+      } catch (e) {
+        if (e.message === 'draft_ended') {
+          alertMsg('Серия уже закончена — войди в драфт заново.');
+        } else if (e.message === 'no_opponents') {
+          alertMsg('Пока нет соперников с готовым драфт-составом. Попробуй чуть позже.');
+        } else if (e.message === 'no_draft_squad') {
+          alertMsg('Сначала войди в драфт.');
+        } else {
+          alertMsg('Не удалось провести бой. Попробуй ещё раз.');
+        }
+      }
+    }
+
+    // Лидерборд драфта — отдельная доска сверху вкладки "Топ" (см. loadLeaderboard
+    // для рейтинга по балансу $SLive, он остаётся отдельно и ниже).
+    async function loadDraftLeaderboard() {
+      const listEl = document.getElementById('draft-leaderboard-list');
+      listEl.innerHTML = '<div class="text-neutral-500 text-xs">Загрузка...</div>';
+      if (!tg?.initData) {
+        listEl.innerHTML = '<div class="text-neutral-500 text-xs">Доступно только внутри Telegram.</div>';
+        return;
+      }
+      try {
+        const { leaderboard } = await apiPost('/api/draft/leaderboard');
+        const myId = String(tg?.initDataUnsafe?.user?.id || '');
+        if (leaderboard.length === 0) {
+          listEl.innerHTML = '<div class="text-neutral-500 text-xs">Пока никто не сыграл в Драфт.</div>';
+          return;
+        }
+        const medals = ['🥇', '🥈', '🥉'];
+        listEl.innerHTML = leaderboard.map((u, i) => `
+          <div class="bg-neutral-900 border ${u.telegramId === myId ? 'border-emerald-500' : 'border-neutral-800'} rounded-xl p-2.5 flex justify-between items-center">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="w-6 text-center font-black shrink-0">${medals[i] || (i + 1)}</span>
+              <span class="text-xs font-bold text-white truncate">${u.username ? '@' + u.username : 'ID ' + u.telegramId}</span>
+              ${!u.active ? '<span class="text-[8px] text-neutral-500 shrink-0">серия окончена</span>' : ''}
+            </div>
+            <span class="text-amber-400 font-black text-xs shrink-0">🏆 ${u.totalPoints} · W${u.wins}</span>
+          </div>
+        `).join('');
       } catch (e) {
         console.error(e);
-        alertMsg('Не удалось создать счёт на оплату. Попробуй позже.');
+        listEl.innerHTML = '<div class="text-red-400 text-xs">Не удалось загрузить рейтинг драфта.</div>';
       }
     }
 
-    function updateHeader() {
-      document.getElementById('slive-balance').innerText = sliveTokens.toLocaleString();
-      document.getElementById('stars-balance').innerText = tgStars.toLocaleString();
-      document.getElementById('energy-text').innerText = `${energy}/1000`;
-      document.getElementById('energy-bar').style.width = `${(energy/1000)*100}%`;
-    }
+    // КЛУБ — полный инвентарь, группировка по игроку + продажа дубликатов.
+    // Продать можно только "лишнюю" копию: карту, которой у игрока 2+ штуки
+    // и которая прямо сейчас не стоит в составе (сервер это тоже проверяет
+    // отдельно, см. /api/sell-player — клиентская проверка тут только для UX).
+    function renderClubInventory() {
+      const container = document.getElementById('club-list');
+      if (!myClub.length) {
+        container.innerHTML = '<div class="col-span-3 text-center text-neutral-500 text-xs py-10">Пусто. Открой пак или купи карту в Маркете.</div>';
+        return;
+      }
 
-    function saveData() {
-      localStorage.setItem('sliveTokens', sliveTokens);
-      localStorage.setItem('tgStars', tgStars);
-      localStorage.setItem('squad', JSON.stringify(squad));
-      localStorage.setItem('myClub', JSON.stringify(myClub));
-      localStorage.setItem('isVip', isVip);
-    }
+      const equippedInstIds = new Set(Object.values(squad).filter(Boolean).map(p => p.instId));
 
-    function alertMsg(txt) {
-      document.getElementById('alert-text').innerText = txt;
-      document.getElementById('alert-modal').classList.remove('hidden');
-    }
+      const groups = new Map();
+      myClub.forEach(p => {
+        if (!groups.has(p.id)) groups.set(p.id, []);
+        groups.get(p.id).push(p);
+      });
 
-    function genCardHTML(p, isLarge) {
-      const cls = `card-${p.type}`;
-      const bg = p.type === 'legend' ? 'from-purple-800 to-indigo-950' : 
-                 p.type === 'gold' ? 'from-yellow-600 to-yellow-900' : 
-                 p.type === 'silver' ? 'from-slate-400 to-slate-700' : 'from-orange-700 to-orange-950';
-      
-      if (isLarge) {
+      container.innerHTML = Array.from(groups.values()).map(instances => {
+        const p = instances[0];
+        const count = instances.length;
+        const sellPrice = marketCatalog.sellPrices?.[p.type];
+        const spare = instances.find(inst => !equippedInstIds.has(inst.instId));
+
+        let actionHTML;
+        if (count <= 1) {
+          actionHTML = `<div class="text-[8px] text-neutral-500 text-center py-1">Единственная копия</div>`;
+        } else if (!spare) {
+          actionHTML = `<div class="text-[8px] text-neutral-500 text-center py-1">Все копии в составе</div>`;
+        } else if (!sellPrice) {
+          actionHTML = `<div class="text-[8px] text-neutral-500 text-center py-1">Загрузка цены...</div>`;
+        } else {
+          actionHTML = `<button onclick="sellDuplicate('${spare.instId}', '${p.name.replace(/'/g, "\\'")}')" class="w-full bg-red-500/20 text-red-400 text-[9px] font-black py-1 rounded border border-red-500/30">Продать 🪙${sellPrice}</button>`;
+        }
+
         return `
-          <div class="relative w-48 h-72 bg-gradient-to-b ${bg} border-4 rounded-2xl p-3 flex flex-col justify-between ${cls} shadow-2xl">
-            <div class="flex justify-between font-black text-white text-3xl">
-              <div class="flex flex-col items-center leading-none"><span class="text-4xl">${p.rating}</span><span class="text-sm mt-1">${p.pos}</span></div>
-              <span>${FLAGS[p.nation]}</span>
+          <div class="flex flex-col items-center gap-1 bg-neutral-900 border border-neutral-800 rounded-xl p-2">
+            <div class="relative">
+              ${genCardHTML(p, false)}
+              ${count > 1 ? `<div class="absolute -top-1 -right-1 bg-emerald-500 text-black text-[8px] font-black rounded-full w-4 h-4 flex items-center justify-center">${count}</div>` : ''}
             </div>
-            <div class="text-8xl text-center">🏃‍♂️</div>
-            <div class="bg-black/60 p-2 rounded-lg text-center leading-tight">
-              <div class="font-black text-lg uppercase truncate">${p.name}</div>
-            </div>
+            ${actionHTML}
           </div>`;
-      } else {
-        return `
-          <div class="w-[70px] h-[100px] bg-gradient-to-b ${bg} border-2 rounded-xl p-1.5 flex flex-col justify-between ${cls} text-white shadow-lg">
-            <div class="flex justify-between items-start leading-none">
-              <div class="flex flex-col items-center"><span class="font-black text-sm">${p.rating}</span><span class="text-[7px] font-bold">${p.pos}</span></div>
-              <span class="text-xs">${FLAGS[p.nation]}</span>
-            </div>
-            <div class="text-2xl text-center mt-auto mb-auto">🏃‍♂️</div>
-            <div class="bg-black/60 rounded px-1 text-center">
-              <div class="font-bold text-[7px] uppercase truncate">${p.name}</div>
-            </div>
-          </div>`;
+      }).join('');
+    }
+
+    async function sellDuplicate(instId, playerName) {
+      try {
+        const { balance, gained } = await apiPost('/api/sell-player', { instId });
+        sliveTokens = balance;
+        myClub = myClub.filter(p => p.instId !== instId);
+        saveData();
+        updateHeader();
+        renderClubInventory();
+        alertMsg(`Продан дубликат ${playerName} за +${gained} 🪙 SLive.`);
+      } catch (e) {
+        if (e.message === 'last_copy') {
+          alertMsg('Это единственная копия этого игрока — её нельзя продать.');
+        } else if (e.message === 'card_equipped') {
+          alertMsg('Сначала сними эту карту с поля во вкладке "Состав".');
+        } else if (e.message === 'not_owned') {
+          alertMsg('Эта карта не найдена в твоём инвентаре.');
+        } else {
+          alertMsg('Не удалось продать карту. Попробуй ещё раз.');
+        }
       }
     }
   </script>
