@@ -179,15 +179,18 @@ app.post('/api/admin/adjust-stars', requireTelegramAuth, requireAdmin, async (re
 // ---------- Webhook от Telegram ----------
 // Telegram Bot API шлёт сюда апдейты. Секретный заголовок X-Telegram-Bot-Api-Secret-Token
 // подтверждает, что запрос от Telegram, а не от кого попало из интернета.
-app.post('/webhook', express.json(), async (req, res) => {
+app.post('/webhook', async (req, res) => {
+  const secretHeader = req.header('X-Telegram-Bot-Api-Secret-Token');
+  if (secretHeader !== WEBHOOK_SECRET) {
+    return res.status(401).end();
+  }
+
   const update = req.body;
-  
-  // Проверка секрета временно отключена для отладки
-  console.log('Пришел запрос на webhook:', JSON.stringify(update));
 
   try {
     if (update.pre_checkout_query) {
       const pcq = update.pre_checkout_query;
+      // Тут можно ещё раз сверить payload/сумму со своим каталогом перед подтверждением.
       let ok = true;
       try {
         const payload = JSON.parse(pcq.invoice_payload);
@@ -216,16 +219,6 @@ app.post('/webhook', express.json(), async (req, res) => {
         await creditStarsFromPayment({
           telegramId: payload.telegramId,
           amount: pack.amount,
-        });
-      }
-    }
-    
-    res.status(200).send('OK');
-  } catch (error) {
-    console.error('Ошибка в webhook:', error);
-    res.status(500).send('Error');
-  }
-});
           // telegram_payment_charge_id уникален для каждого платежа — используем
           // как ключ идемпотентности, чтобы не начислить дважды при ретрае.
           paymentChargeId: payment.telegram_payment_charge_id,
