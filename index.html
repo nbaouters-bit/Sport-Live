@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
@@ -419,7 +419,7 @@
     // Замените на реальный адрес после деплоя backend/ (см. README в проекте).
     // Всё, что связано с деньгами (звёзды), идёт ТОЛЬКО через этот сервер —
     // никаких балансов "звёзд", придуманных прямо в браузере, здесь больше нет.
-    const BACKEND_URL = 'https://sport-live-3r24.onrender.com';
+    const BACKEND_URL = 'https://your-backend-domain.example.com';
 
     const tg = window.Telegram?.WebApp;
     if (tg) {
@@ -520,21 +520,11 @@
         return alertMsg('Укажи Telegram ID и ненулевую сумму.');
       }
 
-     // Внутри обработчика /api/create-invoice
-try {
-    const link = await bot.createInvoiceLink({
-        title: 'Покупка Stars',
-        description: 'Пополнение баланса Telegram Stars',
-        payload: `user_${userId}_pack_${packageId}`,
-        provider_token: '', // Для Stars оставляем пустым
-        currency: 'XTR',    // Обязательно XTR для Stars
-        prices: [{ label: 'Stars', amount: packageAmount }]
-    });
-    res.json({ invoiceLink: link });
-} catch (error) {
-    console.error('Ошибка создания инвойса:', error.response?.body || error.message);
-    res.status(500).json({ error: 'Не удалось создать счет' });
-}
+      try {
+        const result = await apiPost('/api/admin/adjust-stars', { telegramId, amount });
+        alertMsg(`Готово! Новый баланс игрока ${telegramId}: ⭐️ ${result.balance}`);
+        document.getElementById('admin-adjust-amount').value = '';
+        loadAdminPanel();
       } catch (e) {
         console.error(e);
         alertMsg('Не удалось применить изменение.');
