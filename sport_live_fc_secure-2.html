@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sport Live FC - TWA Game</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      background-color: #050505;
+      color: white;
+      user-select: none;
+    }
+    @keyframes floatUp {
+      0% { transform: translateY(0) scale(1); opacity: 1; }
+      100% { transform: translateY(-100px) scale(1.5); opacity: 0; }
+    }
+    .click-indicator {
+      position: absolute;
+      animation: floatUp 0.8s ease-out forwards;
+      pointer-events: none;
+      font-weight: 900;
+      color: #34d399;
+      text-shadow: 0 2px 10px rgba(16, 185, 129, 0.5);
+    }
+    @keyframes mineCoin {
+      0% { transform: translateY(0) scale(0.5); opacity: 0; }
+      20% { transform: translateY(-10px) scale(1); opacity: 1; }
+      100% { transform: translateY(-40px) scale(0.8); opacity: 0; }
+    }
+    .mining-coin {
+      position: absolute;
+      top: -10px;
+      right: -10px;
+      animation: mineCoin 1.5s linear forwards;
+      font-size: 14px;
+      font-weight: 900;
+      color: #fbbf24;
+      pointer-events: none;
+      z-index: 50;
+    }
+    .card-legend { box-shadow: 0 0 20px rgba(168, 85, 247, 0.5); border-color: #c084fc; }
+    .card-gold { box-shadow: 0 0 15px rgba(250, 204, 21, 0.4); border-color: #fde047; }
+    .card-silver { border-color: #cbd5e1; }
+    .card-bronze { border-color: #d97706; }
+    ::-webkit-scrollbar { width: 0px; background: transparent; }
+  </style>
+</head>
+<body class="flex justify-center items-center min-h-screen p-0 sm:p-4">
+
+  <div class="w-full max-w-md h-screen sm:h-[840px] bg-[#0a0a0a] flex flex-col relative overflow-hidden sm:rounded-[40px] sm:border-[8px] border-[#181818] shadow-2xl">
+    
+    <!-- HEADER -->
+    <div class="bg-[#111]/90 backdrop-blur-md border-b border-neutral-800 p-4 flex flex-col gap-3 z-30 shrink-0">
+      <div class="flex justify-between items-center">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-xs font-black text-black">SL</div>
+          <div>
+            <div class="text-xs font-bold">Менеджер</div>
+            <div id="status-badge" class="text-[9px] font-black uppercase text-neutral-400">Тариф: Игрок</div>
+          </div>
+        </div>
+        <button onclick="openStarsModal()" class="bg-amber-500/10 text-amber-400 border border-amber-500/30 text-[10px] font-black px-2 py-1.5 rounded-lg flex items-center gap-1">
+          ⭐️ Пополнить
+        </button>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2">
+        <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-2 flex justify-between items-center">
+          <div>
+            <div class="text-[9px] text-neutral-500 font-bold uppercase">Баланс $SLive</div>
+            <div id="slive-balance" class="text-lg font-black text-emerald-400 leading-none mt-1">0</div>
+          </div>
+          <span class="text-xl">🪙</span>
+        </div>
+        <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-2 flex justify-between items-center">
+          <div>
+            <div class="text-[9px] text-neutral-500 font-bold uppercase">Telegram Stars</div>
+            <div id="stars-balance" class="text-lg font-black text-amber-400 leading-none mt-1">0</div>
+          </div>
+          <span class="text-xl">⭐️</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="flex-1 overflow-y-auto pb-20 relative" id="main-content">
+      
+      <!-- ТАБ 1: СОСТАВ (ПОЛЕ) -->
+      <div id="tab-squad" class="tab-content h-full p-4 flex flex-col">
+        <div class="flex justify-between items-end mb-3">
+          <div>
+            <h2 class="text-xl font-black uppercase italic tracking-tight">Твой Состав</h2>
+            <div class="text-[10px] text-neutral-400 mt-0.5">Собирай игроков, чтобы фармить пассив!</div>
+          </div>
+          <div class="text-right">
+            <div class="text-[9px] text-emerald-500 font-bold uppercase">Общий фарм:</div>
+            <div id="total-farm-display" class="text-lg font-black text-emerald-400 bg-emerald-500/10 px-2 rounded border border-emerald-500/20">+0/сек</div>
+          </div>
+        </div>
+
+        <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-2 mb-3 flex justify-between items-center">
+          <div class="text-[10px] font-bold text-neutral-300">Сыгранность (Химия наций):</div>
+          <div class="flex items-center gap-2">
+            <div class="w-28 h-2 bg-neutral-800 rounded-full overflow-hidden">
+              <div id="chemistry-bar" class="h-full bg-gradient-to-r from-blue-500 to-purple-500 w-0 transition-all"></div>
+            </div>
+            <span id="chemistry-text" class="text-xs font-black text-purple-400">0%</span>
+          </div>
+        </div>
+
+        <!-- Поле -->
+        <div class="relative w-full flex-1 min-h-[350px] bg-gradient-to-b from-green-800 to-green-950 rounded-3xl border-2 border-green-600/30 p-4 flex flex-col justify-between shadow-[inset_0_0_50px_rgba(0,0,0,0.5)]">
+          <div class="absolute inset-0 border border-white/20 m-4 pointer-events-none rounded-xl">
+            <div class="absolute top-1/2 left-0 w-full border-t border-white/20"></div>
+            <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 rounded-full border border-white/20"></div>
+          </div>
+
+          <!-- НАП -->
+          <div class="flex justify-around z-10 pt-2">
+            <div class="relative" id="slot-container-FWD1" onclick="openBench('FWD1')">
+              <div class="text-[9px] text-green-300 font-bold text-center mb-1 drop-shadow-md">НАП</div>
+              <div id="slot-FWD1" class="w-[70px] h-[100px] bg-black/40 border-2 border-dashed border-white/20 rounded-xl flex items-center justify-center text-2xl text-white/30 cursor-pointer">+</div>
+            </div>
+            <div class="relative" id="slot-container-FWD2" onclick="openBench('FWD2')">
+              <div class="text-[9px] text-green-300 font-bold text-center mb-1 drop-shadow-md">НАП</div>
+              <div id="slot-FWD2" class="w-[70px] h-[100px] bg-black/40 border-2 border-dashed border-white/20 rounded-xl flex items-center justify-center text-2xl text-white/30 cursor-pointer">+</div>
+            </div>
+          </div>
+
+          <!-- ПОЛ -->
+          <div class="flex justify-center z-10">
+            <div class="relative" id="slot-container-MID" onclick="openBench('MID')">
+              <div class="text-[9px] text-green-300 font-bold text-center mb-1 drop-shadow-md">ПОЛ</div>
+              <div id="slot-MID" class="w-[70px] h-[100px] bg-black/40 border-2 border-dashed border-white/20 rounded-xl flex items-center justify-center text-2xl text-white/30 cursor-pointer">+</div>
+            </div>
+          </div>
+
+          <!-- ЗАЩ и ВРТ -->
+          <div class="flex justify-around items-end z-10 pb-2">
+            <div class="relative" id="slot-container-DEF" onclick="openBench('DEF')">
+              <div class="text-[9px] text-green-300 font-bold text-center mb-1 drop-shadow-md">ЗАЩ</div>
+              <div id="slot-DEF" class="w-[70px] h-[100px] bg-black/40 border-2 border-dashed border-white/20 rounded-xl flex items-center justify-center text-2xl text-white/30 cursor-pointer">+</div>
+            </div>
+            <div class="relative" id="slot-container-GK" onclick="openBench('GK')">
+              <div class="text-[9px] text-green-300 font-bold text-center mb-1 drop-shadow-md">ВРТ</div>
+              <div id="slot-GK" class="w-[70px] h-[100px] bg-black/40 border-2 border-dashed border-white/20 rounded-xl flex items-center justify-center text-2xl text-white/30 cursor-pointer">+</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ТАБ 2: ТАПАЛКА -->
+      <div id="tab-tap" class="tab-content hidden h-full p-4 flex flex-col justify-center">
+        <div class="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 text-center mb-8">
+          <h3 class="font-black text-emerald-400">ТРЕНИРОВКА</h3>
+          <p class="text-[10px] text-neutral-400 mt-1">Тапай по мячу, чтобы добывать токены вручную.</p>
+          <div class="w-full bg-black h-3 rounded-full mt-4 overflow-hidden border border-neutral-800">
+            <div id="energy-bar" class="bg-gradient-to-r from-blue-500 to-emerald-400 h-full w-full"></div>
+          </div>
+          <div class="text-[10px] font-bold mt-1 text-neutral-300">Энергия: <span id="energy-text">1000/1000</span></div>
+        </div>
+
+        <div class="flex justify-center items-center">
+          <div id="tap-ball" class="relative w-64 h-64 bg-gradient-to-b from-neutral-800 to-black rounded-full border-[6px] border-neutral-800 flex justify-center items-center shadow-[0_0_50px_rgba(16,185,129,0.15)] cursor-pointer active:scale-95 transition-transform duration-75">
+            <span class="text-9xl drop-shadow-2xl">⚽</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ТАБ 3: ПАКИ (Новая экономика и витрина дропа) -->
+      <div id="tab-packs" class="tab-content hidden p-4">
+        <h2 class="text-xl font-black uppercase italic tracking-tight mb-2">Магазин Паков</h2>
+        <p class="text-[10px] text-neutral-400 mb-4 bg-neutral-900 p-2 rounded-lg border border-neutral-800">
+          Собирай токены и открывай паки. Шанс выбить Легенду мал, но их фарм перекрывает всё!
+        </p>
+        
+        <div class="space-y-4">
+          <!-- Bronze -->
+          <div class="bg-gradient-to-r from-[#3e2723] to-[#1a1a1a] border border-[#5d4037] rounded-2xl p-4 flex flex-col gap-3">
+            <div class="flex justify-between items-center">
+              <div>
+                <h3 class="font-black text-[#d7ccc8] text-sm">БРОНЗОВЫЙ ПАК 🥉</h3>
+                <p class="text-[10px] text-neutral-400 mt-0.5">Базовый фарм: ~1 $SLive/сек</p>
+              </div>
+              <button onclick="buyPack('bronze', 500, 'SLive')" class="bg-neutral-800 text-emerald-400 text-[11px] font-black px-4 py-2 rounded-xl border border-neutral-700 hover:bg-neutral-700">🪙 500</button>
+            </div>
+            <!-- Витрина дропа -->
+            <div class="bg-black/50 rounded-xl p-2 border border-[#5d4037]/50">
+              <div class="text-[8px] text-[#a1887f] font-bold uppercase mb-1.5 flex justify-between">
+                <span>Возможный дроп:</span>
+                <span class="text-emerald-500">+1/сек</span>
+              </div>
+              <div class="flex flex-wrap gap-1.5" id="drop-bronze"></div>
+            </div>
+          </div>
+
+          <!-- Silver -->
+          <div class="bg-gradient-to-r from-[#37474f] to-[#1a1a1a] border border-[#78909c] rounded-2xl p-4 flex flex-col gap-3">
+            <div class="flex justify-between items-center">
+              <div>
+                <h3 class="font-black text-[#cfd8dc] text-sm">СЕРЕБРЯНЫЙ ПАК 🥈</h3>
+                <p class="text-[10px] text-neutral-400 mt-0.5">Улучшенный фарм: ~3 $SLive/сек</p>
+              </div>
+              <div class="flex flex-col gap-1.5">
+                <button onclick="buyPack('silver', 2500, 'SLive')" class="bg-neutral-800 text-emerald-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 2.5K</button>
+                <button onclick="buyPack('silver', 50, 'Stars')" class="bg-amber-500 text-black text-[11px] font-black px-3 py-1.5 rounded-xl hover:bg-amber-400 text-center">⭐️ 50</button>
+              </div>
+            </div>
+            <div class="bg-black/50 rounded-xl p-2 border border-[#78909c]/50">
+              <div class="text-[8px] text-[#90a4ae] font-bold uppercase mb-1.5 flex justify-between">
+                <span>Возможный дроп:</span>
+                <span class="text-emerald-500">+3-4/сек</span>
+              </div>
+              <div class="flex flex-wrap gap-1.5" id="drop-silver"></div>
+            </div>
+          </div>
+
+          <!-- Gold -->
+          <div class="bg-gradient-to-r from-[#514309] to-[#1a1a1a] border border-[#fbc02d] rounded-2xl p-4 flex flex-col gap-3 shadow-[0_0_15px_rgba(251,192,45,0.1)]">
+            <div class="flex justify-between items-center">
+              <div>
+                <h3 class="font-black text-[#fff59d] text-sm">ЗОЛОТОЙ ПАК 🥇</h3>
+                <p class="text-[10px] text-neutral-400 mt-0.5">Звездный фарм: ~10-15/сек</p>
+              </div>
+              <div class="flex flex-col gap-1.5">
+                <button onclick="buyPack('gold', 10000, 'SLive')" class="bg-neutral-800 text-emerald-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 10K</button>
+                <button onclick="buyPack('gold', 200, 'Stars')" class="bg-amber-500 text-black text-[11px] font-black px-3 py-1.5 rounded-xl hover:bg-amber-400 text-center">⭐️ 200</button>
+              </div>
+            </div>
+            <div class="bg-black/50 rounded-xl p-2 border border-[#fbc02d]/30">
+              <div class="text-[8px] text-[#fff59d] font-bold uppercase mb-1.5 flex justify-between">
+                <span>Возможный дроп:</span>
+                <span class="text-emerald-500">+10-15/сек</span>
+              </div>
+              <div class="flex flex-wrap gap-1.5" id="drop-gold"></div>
+            </div>
+          </div>
+
+          <!-- Legend -->
+          <div class="bg-gradient-to-r from-[#311b92] to-[#1a1a1a] border border-[#b39ddb] rounded-2xl p-4 flex flex-col gap-3 shadow-[0_0_20px_rgba(103,58,183,0.3)]">
+            <div class="flex justify-between items-center">
+              <div>
+                <h3 class="font-black text-[#ede7f6] text-sm">ИКОНЫ ФУТБОЛА 🔮</h3>
+                <p class="text-[10px] text-neutral-400 mt-0.5">Элитный фарм: ~50 $SLive/сек</p>
+              </div>
+              <div class="flex flex-col gap-1.5">
+                <button onclick="buyPack('legend', 50000, 'SLive')" class="bg-neutral-800 text-emerald-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 50K</button>
+                <button onclick="buyPack('legend', 1000, 'Stars')" class="bg-amber-500 text-black text-[11px] font-black px-3 py-1.5 rounded-xl hover:bg-amber-400 text-center">⭐️ 1000</button>
+              </div>
+            </div>
+            <div class="bg-black/50 rounded-xl p-2 border border-[#b39ddb]/30">
+              <div class="text-[8px] text-[#d1c4e9] font-bold uppercase mb-1.5 flex justify-between">
+                <span>Возможный дроп:</span>
+                <span class="text-emerald-500">+45-55/сек</span>
+              </div>
+              <div class="flex flex-wrap gap-1.5" id="drop-legend"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ТАБ 4: МАРКЕТ СПОРТПИТА -->
+      <div id="tab-market" class="tab-content hidden p-4">
+        <h2 class="text-xl font-black uppercase italic tracking-tight mb-2">Спортпит & VIP</h2>
+        <p class="text-[10px] text-neutral-400 mb-4 bg-neutral-900 p-2 rounded-lg border border-neutral-800">
+          Покупай наборы My Sportpit. При покупке ты становишься <span class="text-yellow-500 font-bold">VIP Инсайдером</span> и получаешь личный разбор рациона от тренера!
+        </p>
+
+        <div class="space-y-4">
+          <div class="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 relative overflow-hidden">
+            <div class="absolute top-0 right-0 bg-yellow-500 text-black text-[8px] font-black px-2 py-1 rounded-bl-lg">+ VIP СТАТУС</div>
+            <h3 class="font-black text-sm">Сборка «Быстрый Старт» 🚀</h3>
+            <p class="text-[9px] text-neutral-400 mt-1">Гейнер + Креатин + Шейкер.</p>
+            <div class="flex justify-between items-end mt-4">
+              <div class="text-lg font-black">1 750 ₴</div>
+              <button onclick="triggerPurchase('Быстрый Старт')" class="bg-emerald-500 text-black text-[10px] font-black px-4 py-2 rounded-xl">Купить</button>
+            </div>
+          </div>
+          <div class="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 relative overflow-hidden">
+            <div class="absolute top-0 right-0 bg-yellow-500 text-black text-[8px] font-black px-2 py-1 rounded-bl-lg">+ VIP СТАТУС</div>
+            <h3 class="font-black text-sm">Сборка «Сушка» 🔥</h3>
+            <p class="text-[9px] text-neutral-400 mt-1">Протеин + Жиросжигатель + Витамины.</p>
+            <div class="flex justify-between items-end mt-4">
+              <div class="text-lg font-black">2 100 ₴</div>
+              <button onclick="triggerPurchase('Сушка')" class="bg-emerald-500 text-black text-[10px] font-black px-4 py-2 rounded-xl">Купить</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="vip-zone" class="hidden mt-6 bg-gradient-to-br from-yellow-900/40 to-black border border-yellow-500/30 rounded-2xl p-4 text-center">
+          <span class="text-3xl">🏆</span>
+          <h3 class="font-black text-yellow-500 mt-2 text-sm">ТВОЙ VIP АКТИВИРОВАН</h3>
+          <p class="text-[10px] text-neutral-300 mt-1 mb-4">Напиши тренеру @mysportpit_coach для старта личного ведения.</p>
+          <button class="bg-yellow-500 text-black font-black text-xs py-2 px-6 rounded-xl w-full">Написать тренеру</button>
+        </div>
+      </div>
+
+      <!-- ТАБ АДМИН (существует в разметке для всех, но вкладка внизу скрыта
+           у обычных игроков и сам запрос данных всё равно упадёт с 403
+           на сервере, если открыть эту вкладку в обход интерфейса) -->
+      <div id="tab-admin" class="tab-content hidden p-4">
+        <h2 class="text-xl font-black uppercase italic tracking-tight mb-3">Админ-панель</h2>
+
+        <div class="grid grid-cols-2 gap-2 mb-4" id="admin-stats">
+          <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-2">
+            <div class="text-[9px] text-neutral-500 font-bold uppercase">Игроков</div>
+            <div id="stat-total-users" class="text-lg font-black text-white leading-none mt-1">—</div>
+          </div>
+          <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-2">
+            <div class="text-[9px] text-neutral-500 font-bold uppercase">Stars на балансах</div>
+            <div id="stat-total-stars" class="text-lg font-black text-amber-400 leading-none mt-1">—</div>
+          </div>
+          <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-2">
+            <div class="text-[9px] text-neutral-500 font-bold uppercase">$SLive в игре</div>
+            <div id="stat-total-slive" class="text-lg font-black text-emerald-400 leading-none mt-1">—</div>
+          </div>
+          <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-2">
+            <div class="text-[9px] text-neutral-500 font-bold uppercase">VIP / Платежей</div>
+            <div id="stat-vip-payments" class="text-lg font-black text-yellow-400 leading-none mt-1">—</div>
+          </div>
+        </div>
+
+        <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-3 mb-4">
+          <div class="text-[10px] font-bold text-neutral-300 mb-2">Ручная корректировка Stars</div>
+          <div class="flex flex-col gap-2">
+            <input id="admin-adjust-id" type="text" placeholder="Telegram ID игрока"
+              class="bg-black border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600">
+            <div class="flex gap-2">
+              <input id="admin-adjust-amount" type="number" placeholder="Сумма (может быть отрицательной)"
+                class="flex-1 bg-black border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600">
+              <button onclick="adminAdjustStars()" class="bg-emerald-500 text-black text-[11px] font-black px-4 rounded-lg">Применить</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex justify-between items-center mb-2">
+          <div class="text-[10px] font-bold text-neutral-300">Игроки</div>
+          <button onclick="loadAdminPanel()" class="text-[9px] text-emerald-400 font-bold">↻ Обновить</button>
+        </div>
+        <div id="admin-users-list" class="space-y-2 pb-6">
+          <div class="text-neutral-500 text-xs">Загрузка...</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- НИЖНЯЯ НАВИГАЦИЯ -->
+    <div class="bg-[#111] border-t border-neutral-800 p-2 flex justify-around items-center z-30 shrink-0">
+      <button onclick="switchTab('squad')" id="nav-squad" class="flex flex-col items-center gap-1 text-[9px] font-black text-emerald-400">
+        <span class="text-xl">🛡️</span> СОСТАВ
+      </button>
+      <button onclick="switchTab('tap')" id="nav-tap" class="flex flex-col items-center gap-1 text-[9px] font-black text-neutral-500">
+        <span class="text-xl">⚽</span> ТАП
+      </button>
+      <button onclick="switchTab('packs')" id="nav-packs" class="flex flex-col items-center gap-1 text-[9px] font-black text-neutral-500">
+        <span class="text-xl">⚡</span> ПАКИ
+      </button>
+      <button onclick="switchTab('market')" id="nav-market" class="flex flex-col items-center gap-1 text-[9px] font-black text-neutral-500">
+        <span class="text-xl">🥩</span> МАРКЕТ
+      </button>
+      <!-- Кнопка админки скрыта по умолчанию (class="hidden") и показывается
+           только если сервер подтвердил isAdmin: true в ответе /api/me.
+           Обычные игроки физически не видят и не могут открыть эту вкладку. -->
+      <button onclick="switchTab('admin')" id="nav-admin" class="hidden flex-col items-center gap-1 text-[9px] font-black text-neutral-500">
+        <span class="text-xl">🛠️</span> АДМИН
+      </button>
+    </div>
+
+    <!-- МОДАЛКИ И ОВЕРЛЕИ -->
+    <div id="bench-modal" class="hidden absolute inset-0 bg-black/95 z-40 flex flex-col pt-16 p-4">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="font-black text-lg">ВЫБЕРИ ИГРОКА</h3>
+        <button onclick="closeBench()" class="text-neutral-500 text-2xl">&times;</button>
+      </div>
+      <div id="bench-list" class="grid grid-cols-3 gap-2 overflow-y-auto pb-10"></div>
+    </div>
+
+    <div id="pack-loader" class="hidden absolute inset-0 bg-black/95 z-50 flex flex-col justify-center items-center">
+      <div class="w-32 h-48 bg-gradient-to-br from-yellow-500 to-amber-300 rounded-2xl flex items-center justify-center text-5xl shadow-[0_0_50px_rgba(245,158,11,0.5)] animate-pulse">⚡</div>
+    </div>
+
+    <div id="pack-reveal" class="hidden absolute inset-0 bg-black/95 z-50 flex flex-col justify-center items-center p-6">
+      <h3 class="text-lg font-black text-emerald-400 mb-6 uppercase animate-pulse">🎉 НОВЫЙ ИГРОК!</h3>
+      <div id="revealed-card-container"></div>
+      <div class="text-[10px] text-neutral-400 mt-4 text-center">Доход: <span id="reveal-income" class="font-bold text-emerald-400">+0/сек</span></div>
+      <button onclick="closeReveal()" class="mt-8 bg-yellow-500 text-black font-black text-xs px-8 py-3 rounded-xl hover:scale-105 transition-all">
+        ЗАБРАТЬ В КЛУБ
+      </button>
+    </div>
+
+    <div id="alert-modal" class="hidden absolute inset-0 bg-black/80 z-50 flex justify-center items-center p-6">
+      <div class="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 w-full max-w-xs text-center shadow-2xl">
+        <p id="alert-text" class="text-sm font-bold text-white"></p>
+        <button onclick="document.getElementById('alert-modal').classList.add('hidden')" class="mt-4 bg-emerald-500 text-black font-black py-2 px-6 rounded-xl text-xs w-full">ОК</button>
+      </div>
+    <div id="stars-modal" class="hidden absolute inset-0 bg-black/90 z-50 flex flex-col justify-center items-center p-6">
+      <div class="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 w-full max-w-xs text-center shadow-2xl">
+        <div class="text-3xl mb-2">⭐️</div>
+        <h3 class="font-black text-lg mb-1">Пополнить Stars</h3>
+        <p class="text-[10px] text-neutral-400 mb-4">Оплата через официальный платёж Telegram Stars.</p>
+        <div class="flex flex-col gap-2">
+          <button onclick="purchaseStars('pack_100')" class="bg-amber-500 text-black font-black py-2.5 rounded-xl text-sm">100 ⭐️</button>
+          <button onclick="purchaseStars('pack_500')" class="bg-amber-500 text-black font-black py-2.5 rounded-xl text-sm">500 ⭐️</button>
+          <button onclick="purchaseStars('pack_1000')" class="bg-amber-500 text-black font-black py-2.5 rounded-xl text-sm">1000 ⭐️</button>
+        </div>
+        <button onclick="document.getElementById('stars-modal').classList.add('hidden')" class="mt-4 text-neutral-500 text-xs font-bold">Отмена</button>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // --- КОНФИГ БЭКЕНДА ---
+    // Замените на реальный адрес после деплоя backend/ (см. README в проекте).
+    // Всё, что связано с деньгами (звёзды), идёт ТОЛЬКО через этот сервер —
+    // никаких балансов "звёзд", придуманных прямо в браузере, здесь больше нет.
+    const BACKEND_URL = 'https://your-backend-domain.example.com';
+
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+      tg.ready();
+      tg.expand();
+    }
+
+    async function apiPost(path, body = {}) {
+      const initData = tg?.initData || '';
+      const res = await fetch(`${BACKEND_URL}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...body, initData }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `request_failed_${res.status}`);
+      }
+      return res.json();
+    }
+
+    // isAdmin приходит ТОЛЬКО с сервера (server.js сравнивает подписанный
+    // Telegram ID с ADMIN_TELEGRAM_ID из .env). Это не настройка на клиенте —
+    // её нельзя включить, поправив что-то в браузере: любой запрос к
+    // /api/admin/* всё равно заново проверяется на сервере.
+    let isAdmin = false;
+
+    async function syncBalanceFromServer() {
+      if (!tg?.initData) {
+        // Приложение открыто не из Telegram (например, просто в браузере для теста верстки) —
+        // серверный баланс недоступен без initData, работаем в демо-режиме.
+        return;
+      }
+      try {
+        const { user, isAdmin: adminFlag } = await apiPost('/api/me');
+        tgStars = user.tgStars;
+        updateHeader();
+
+        isAdmin = Boolean(adminFlag);
+        if (isAdmin) {
+          document.getElementById('nav-admin').classList.remove('hidden');
+          document.getElementById('nav-admin').classList.add('flex');
+        }
+      } catch (e) {
+        console.error('Не удалось получить баланс с сервера', e);
+      }
+    }
+
+    // ---------- АДМИН-ПАНЕЛЬ ----------
+    async function loadAdminPanel() {
+      const listEl = document.getElementById('admin-users-list');
+      listEl.innerHTML = '<div class="text-neutral-500 text-xs">Загрузка...</div>';
+      try {
+        const [{ stats }, { users }] = await Promise.all([
+          apiPost('/api/admin/stats'),
+          apiPost('/api/admin/users'),
+        ]);
+
+        document.getElementById('stat-total-users').innerText = stats.totalUsers;
+        document.getElementById('stat-total-stars').innerText = stats.totalStarsBalance.toLocaleString();
+        document.getElementById('stat-total-slive').innerText = stats.totalSliveBalance.toLocaleString();
+        document.getElementById('stat-vip-payments').innerText = `${stats.vipUsers} / ${stats.totalPaymentsCount}`;
+
+        if (users.length === 0) {
+          listEl.innerHTML = '<div class="text-neutral-500 text-xs">Пока нет игроков.</div>';
+          return;
+        }
+
+        listEl.innerHTML = users.map(u => `
+          <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-2.5 flex justify-between items-center">
+            <div>
+              <div class="text-[11px] font-bold text-white">ID: ${u.telegramId}${u.isVip ? ' 🏆' : ''}</div>
+              <div class="text-[9px] text-neutral-500 mt-0.5">
+                <span class="text-amber-400 font-bold">⭐️ ${u.tgStars}</span>
+                &nbsp;·&nbsp;
+                <span class="text-emerald-400 font-bold">🪙 ${u.sliveTokens}</span>
+              </div>
+            </div>
+            <button onclick="prefillAdjust('${u.telegramId}')" class="text-[9px] font-black text-neutral-400 border border-neutral-700 rounded-lg px-2 py-1">Изменить</button>
+          </div>
+        `).join('');
+      } catch (e) {
+        console.error(e);
+        listEl.innerHTML = '<div class="text-red-400 text-xs">Не удалось загрузить данные. Открой эту вкладку под админ-аккаунтом.</div>';
+      }
+    }
+
+    function prefillAdjust(telegramId) {
+      document.getElementById('admin-adjust-id').value = telegramId;
+      document.getElementById('admin-adjust-amount').focus();
+    }
+
+    async function adminAdjustStars() {
+      const telegramId = document.getElementById('admin-adjust-id').value.trim();
+      const amount = Number(document.getElementById('admin-adjust-amount').value);
+
+      if (!telegramId || !Number.isFinite(amount) || amount === 0) {
+        return alertMsg('Укажи Telegram ID и ненулевую сумму.');
+      }
+
+      try {
+        const result = await apiPost('/api/admin/adjust-stars', { telegramId, amount });
+        alertMsg(`Готово! Новый баланс игрока ${telegramId}: ⭐️ ${result.balance}`);
+        document.getElementById('admin-adjust-amount').value = '';
+        loadAdminPanel();
+      } catch (e) {
+        console.error(e);
+        alertMsg('Не удалось применить изменение.');
+      }
+    }
+
+    // --- ДАННЫЕ И ЭКОНОМИКА (HARD MODE) ---
+    // Стартовый капитал (чтобы можно было потестить 1-2 бронзовых пака)
+    let sliveTokens = parseInt(localStorage.getItem('sliveTokens')) || 1000;
+    // tgStars теперь только ОТОБРАЖАЕТ баланс, реальный источник правды — сервер.
+    // Локальное значение используется как fallback, пока идёт запрос к бэкенду.
+    let tgStars = parseInt(localStorage.getItem('tgStars')) || 0;
+    let energy = 1000;
+    let isVip = localStorage.getItem('isVip') === 'true';
+    let passiveIncome = 0;
+    
+    // Новая экономика: низкий доход от игроков
+    const PLAYER_POOL = {
+      bronze: [
+        { id: 'b1', name: 'Zinchenko', rating: 79, pos: 'DEF', nation: 'UKR', type: 'bronze', income: 1 },
+        { id: 'b2', name: 'Mudryk', rating: 77, pos: 'FWD', nation: 'UKR', type: 'bronze', income: 1 },
+        { id: 'b3', name: 'Pickford', rating: 81, pos: 'GK', nation: 'ENG', type: 'bronze', income: 1 },
+        { id: 'b4', name: 'Maguire', rating: 79, pos: 'DEF', nation: 'ENG', type: 'bronze', income: 1 },
+      ],
+      silver: [
+        { id: 's1', name: 'Dovbyk', rating: 83, pos: 'FWD', nation: 'UKR', type: 'silver', income: 3 },
+        { id: 's2', name: 'Cucurella', rating: 82, pos: 'DEF', nation: 'ESP', type: 'silver', income: 3 },
+        { id: 's3', name: 'Gallagher', rating: 80, pos: 'MID', nation: 'ENG', type: 'silver', income: 3 },
+        { id: 's4', name: 'Tchouameni', rating: 84, pos: 'MID', nation: 'FRA', type: 'silver', income: 4 },
+      ],
+      gold: [
+        { id: 'g1', name: 'L. Messi', rating: 92, pos: 'FWD', nation: 'ARG', type: 'gold', income: 15 },
+        { id: 'g2', name: 'Lamine Yamal', rating: 88, pos: 'FWD', nation: 'ESP', type: 'gold', income: 10 },
+        { id: 'g3', name: 'Rodri', rating: 91, pos: 'MID', nation: 'ESP', type: 'gold', income: 12 },
+        { id: 'g4', name: 'Bellingham', rating: 90, pos: 'MID', nation: 'ENG', type: 'gold', income: 12 },
+      ],
+      legend: [
+        { id: 'l1', name: 'Z. Zidane', rating: 96, pos: 'MID', nation: 'FRA', type: 'legend', income: 50 },
+        { id: 'l2', name: 'Ronaldinho', rating: 95, pos: 'FWD', nation: 'BRA', type: 'legend', income: 45 },
+        { id: 'l3', name: 'Ronaldo R9', rating: 97, pos: 'FWD', nation: 'BRA', type: 'legend', income: 55 },
+      ]
+    };
+
+    const FLAGS = {'UKR':'🇺🇦', 'ARG':'🇦🇷', 'ESP':'🇪🇸', 'ENG':'🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'FRA':'🇫🇷', 'BRA':'🇧🇷'};
+
+    let myClub = JSON.parse(localStorage.getItem('myClub')) || [
+      { id: 'b1', name: 'Zinchenko', rating: 79, pos: 'DEF', nation: 'UKR', type: 'bronze', income: 1, instId: '1' }
+    ];
+    let squad = JSON.parse(localStorage.getItem('squad')) || { FWD1: null, FWD2: null, MID: null, DEF: null, GK: null };
+    let tempOpened = null;
+    let slotToFill = null;
+
+    window.onload = () => {
+      renderSquad();
+      updateHeader();
+      checkVip();
+      renderPackDrops(); // Рендер витрины дропа
+      syncBalanceFromServer(); // Баланс Stars — с сервера, не из localStorage
+      
+      setInterval(() => {
+        if (energy < 1000) energy += 2;
+        if (passiveIncome > 0) {
+          sliveTokens += passiveIncome;
+          spawnMiningCoins();
+        }
+        updateHeader();
+      }, 1000);
+    };
+
+    // Рендер витрины (Возможный дроп)
+    function renderPackDrops() {
+      const renderDrops = (pool, elementId, bgClass, borderClass, textClass) => {
+        const container = document.getElementById(elementId);
+        container.innerHTML = pool.map(p => `
+          <div class="bg-gradient-to-b ${bgClass} border ${borderClass} rounded px-1.5 py-0.5 flex items-center gap-1 shadow-sm">
+            <span class="text-[9px] font-black text-white">${p.rating}</span>
+            <span class="text-[8px] ${textClass}">${FLAGS[p.nation]} ${p.name}</span>
+          </div>
+        `).join('');
+      };
+
+      renderDrops(PLAYER_POOL.bronze, 'drop-bronze', 'from-[#4e342e] to-black', 'border-[#8d6e63]', 'text-[#d7ccc8]');
+      renderDrops(PLAYER_POOL.silver, 'drop-silver', 'from-[#455a64] to-black', 'border-[#90a4ae]', 'text-[#cfd8dc]');
+      renderDrops(PLAYER_POOL.gold, 'drop-gold', 'from-[#827717] to-black', 'border-[#fbc02d]', 'text-[#fff59d]');
+      renderDrops(PLAYER_POOL.legend, 'drop-legend', 'from-[#4527a0] to-black', 'border-[#b39ddb]', 'text-[#ede7f6]');
+    }
+
+    // ТАПАЛКА
+    const tapBall = document.getElementById('tap-ball');
+    tapBall.addEventListener('pointerdown', (e) => {
+      if (energy <= 0) return alertMsg('Энергия исчерпана!');
+      energy -= 1;
+      sliveTokens += 1;
+      
+      const rect = tapBall.getBoundingClientRect();
+      const span = document.createElement('span');
+      span.className = 'click-indicator';
+      span.style.left = `${e.clientX - rect.left}px`;
+      span.style.top = `${e.clientY - rect.top}px`;
+      span.innerText = '+1';
+      tapBall.appendChild(span);
+      setTimeout(() => span.remove(), 800);
+      
+      updateHeader();
+    });
+
+    // ЛОГИКА СОСТАВА
+    function renderSquad() {
+      let baseIncome = 0;
+      let nationsCount = {};
+      let filledSlots = 0;
+
+      Object.keys(squad).forEach(slot => {
+        const p = squad[slot];
+        const el = document.getElementById(`slot-${slot}`);
+        if (p) {
+          el.innerHTML = genCardHTML(p, false);
+          el.className = "w-[70px] h-[100px] relative";
+          baseIncome += p.income;
+          nationsCount[p.nation] = (nationsCount[p.nation] || 0) + 1;
+          filledSlots++;
+        } else {
+          el.innerHTML = '+';
+          el.className = "w-[70px] h-[100px] bg-black/40 border-2 border-dashed border-white/20 rounded-xl flex items-center justify-center text-2xl text-white/30 cursor-pointer hover:bg-emerald-900/30";
+        }
+      });
+
+      let maxSameNation = Math.max(...Object.values(nationsCount), 0);
+      let chemMultiplier = 1;
+      let chemPercent = 0;
+
+      if (maxSameNation > 1) {
+        chemMultiplier = 1 + (maxSameNation * 0.1);
+        chemPercent = Math.min(100, maxSameNation * 20);
+      }
+
+      passiveIncome = Math.floor(baseIncome * chemMultiplier);
+      
+      document.getElementById('total-farm-display').innerText = `+${passiveIncome}/сек`;
+      document.getElementById('chemistry-bar').style.width = `${chemPercent}%`;
+      document.getElementById('chemistry-text').innerText = `${chemPercent}%`;
+      saveData();
+    }
+
+    function spawnMiningCoins() {
+      Object.keys(squad).forEach(slot => {
+        if (squad[slot]) {
+          const container = document.getElementById(`slot-container-${slot}`);
+          const coin = document.createElement('div');
+          coin.className = 'mining-coin';
+          coin.innerText = `+${Math.floor(squad[slot].income)}`;
+          container.appendChild(coin);
+          setTimeout(() => coin.remove(), 1400);
+        }
+      });
+    }
+
+    // ИНВЕНТАРЬ
+    function openBench(targetSlot) {
+      slotToFill = targetSlot;
+      const list = document.getElementById('bench-list');
+      list.innerHTML = '';
+      
+      const expectedPos = targetSlot.replace(/[0-9]/g, '');
+      const availablePlayers = myClub.filter(p => p.pos === expectedPos);
+
+      if (availablePlayers.length === 0) {
+        list.innerHTML = `<div class="col-span-3 text-center text-neutral-500 text-xs py-10">Нет игроков на позицию ${expectedPos}. Открой паки!</div>`;
+      } else {
+        availablePlayers.forEach((p) => {
+          const isOnPitch = Object.values(squad).some(pitchP => pitchP && pitchP.instId === p.instId);
+          if (!isOnPitch) {
+            const div = document.createElement('div');
+            div.innerHTML = `
+              ${genCardHTML(p, false)}
+              <button onclick="assignToPitch('${p.instId}')" class="w-full mt-1 bg-emerald-500 text-black text-[9px] font-black py-1.5 rounded">Выбрать</button>
+            `;
+            list.appendChild(div);
+          }
+        });
+      }
+
+      if (squad[targetSlot] !== null) {
+        const removeBtn = document.createElement('button');
+        removeBtn.className = "col-span-3 mt-4 bg-red-500/20 text-red-400 font-bold py-2 rounded-lg text-xs border border-red-500/30";
+        removeBtn.innerText = "Снять игрока с поля";
+        removeBtn.onclick = () => {
+          squad[targetSlot] = null;
+          closeBench();
+          renderSquad();
+        };
+        list.appendChild(removeBtn);
+      }
+
+      document.getElementById('bench-modal').classList.remove('hidden');
+    }
+
+    function assignToPitch(instId) {
+      const p = myClub.find(x => x.instId === instId);
+      squad[slotToFill] = p;
+      closeBench();
+      renderSquad();
+    }
+
+    function closeBench() {
+      document.getElementById('bench-modal').classList.add('hidden');
+    }
+
+    // ПАКИ
+    async function buyPack(type, price, currency) {
+      if (currency === 'SLive') {
+        // $SLive — внутриигровая валюта без денежной ценности, тут достаточно клиентской проверки.
+        if (sliveTokens < price) return alertMsg(`Не хватает токенов! Цена: 🪙 ${price}`);
+        sliveTokens -= price;
+        updateHeader();
+        openPackAnim(type);
+        return;
+      }
+
+      // Stars — реальные деньги, списание должно быть подтверждено сервером,
+      // иначе баланс легко подделать через консоль браузера.
+      if (!tg?.initData) {
+        return alertMsg('Покупка за Stars работает только внутри Telegram.');
+      }
+      try {
+        const { balance } = await apiPost('/api/buy-pack', { packType: type });
+        tgStars = balance;
+        updateHeader();
+        openPackAnim(type);
+      } catch (e) {
+        if (e.message === 'insufficient_funds') {
+          alertMsg('Не хватает Stars! Нажми "Пополнить" вверху.');
+        } else {
+          alertMsg('Не удалось списать Stars. Попробуй ещё раз.');
+        }
+      }
+    }
+
+    function openPackAnim(type) {
+      const loader = document.getElementById('pack-loader');
+      loader.classList.remove('hidden');
+      
+      setTimeout(() => {
+        loader.classList.add('hidden');
+        const pool = PLAYER_POOL[type];
+        const p = pool[Math.floor(Math.random() * pool.length)];
+        tempOpened = { ...p, instId: Date.now().toString() };
+        
+        document.getElementById('revealed-card-container').innerHTML = genCardHTML(tempOpened, true);
+        document.getElementById('reveal-income').innerText = `+${tempOpened.income}/сек`;
+        document.getElementById('pack-reveal').classList.remove('hidden');
+      }, 1200);
+    }
+
+    function closeReveal() {
+      if (tempOpened) {
+        myClub.push(tempOpened);
+        tempOpened = null;
+        saveData();
+      }
+      document.getElementById('pack-reveal').classList.add('hidden');
+      alertMsg('Игрок добавлен в твой Клуб! Зайди в "Состав" и нажми на пустое место, чтобы выпустить его на поле.');
+    }
+
+    // УТИЛИТЫ И НАВИГАЦИЯ
+    function switchTab(tabId) {
+      // Защита от прямого вызова switchTab('admin') не-админом через консоль:
+      // сама вкладка визуально не откроется без прав, а любой запрос данных
+      // всё равно получит 403 от сервера, так что подделать тут нечего.
+      if (tabId === 'admin' && !isAdmin) return;
+
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
+      document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+
+      ['squad', 'tap', 'packs', 'market', 'admin'].forEach(t => {
+        const el = document.getElementById(`nav-${t}`);
+        if (!el) return;
+        const isHiddenAdmin = t === 'admin' && !isAdmin;
+        el.className = `${isHiddenAdmin ? 'hidden ' : 'flex '}flex-col items-center gap-1 text-[9px] font-black ${t === tabId ? 'text-emerald-400' : 'text-neutral-500'}`;
+      });
+
+      if (tabId === 'admin') loadAdminPanel();
+    }
+
+    function triggerPurchase(name) {
+      isVip = true;
+      saveData();
+      checkVip();
+      alertMsg(`Ты успешно купил набор "${name}"! VIP-статус активирован.`);
+    }
+
+    function checkVip() {
+      if (isVip) {
+        document.getElementById('status-badge').innerText = 'Тариф: VIP Инсайдер';
+        document.getElementById('status-badge').className = 'text-[9px] font-black uppercase text-yellow-500';
+        document.getElementById('vip-zone').classList.remove('hidden');
+      }
+    }
+
+    function openStarsModal() {
+      if (!tg?.initData) {
+        return alertMsg('Пополнение работает только внутри Telegram — открой приложение через бота.');
+      }
+      document.getElementById('stars-modal').classList.remove('hidden');
+    }
+
+    async function purchaseStars(packageId) {
+      document.getElementById('stars-modal').classList.add('hidden');
+      try {
+        const { invoiceLink } = await apiPost('/api/create-invoice', { packageId });
+        tg.openInvoice(invoiceLink, (status) => {
+          // status: 'paid' | 'cancelled' | 'failed' | 'pending'
+          if (status === 'paid') {
+            // Баланс уже начислен на сервере через webhook — просто перечитываем его.
+            syncBalanceFromServer();
+            alertMsg('Оплата прошла! Баланс Stars обновлён.');
+          } else if (status === 'failed') {
+            alertMsg('Платёж не прошёл. Попробуй ещё раз.');
+          }
+        });
+      } catch (e) {
+        console.error(e);
+        alertMsg('Не удалось создать счёт на оплату. Попробуй позже.');
+      }
+    }
+
+    function updateHeader() {
+      document.getElementById('slive-balance').innerText = sliveTokens.toLocaleString();
+      document.getElementById('stars-balance').innerText = tgStars.toLocaleString();
+      document.getElementById('energy-text').innerText = `${energy}/1000`;
+      document.getElementById('energy-bar').style.width = `${(energy/1000)*100}%`;
+    }
+
+    function saveData() {
+      localStorage.setItem('sliveTokens', sliveTokens);
+      localStorage.setItem('tgStars', tgStars);
+      localStorage.setItem('squad', JSON.stringify(squad));
+      localStorage.setItem('myClub', JSON.stringify(myClub));
+      localStorage.setItem('isVip', isVip);
+    }
+
+    function alertMsg(txt) {
+      document.getElementById('alert-text').innerText = txt;
+      document.getElementById('alert-modal').classList.remove('hidden');
+    }
+
+    function genCardHTML(p, isLarge) {
+      const cls = `card-${p.type}`;
+      const bg = p.type === 'legend' ? 'from-purple-800 to-indigo-950' : 
+                 p.type === 'gold' ? 'from-yellow-600 to-yellow-900' : 
+                 p.type === 'silver' ? 'from-slate-400 to-slate-700' : 'from-orange-700 to-orange-950';
+      
+      if (isLarge) {
+        return `
+          <div class="relative w-48 h-72 bg-gradient-to-b ${bg} border-4 rounded-2xl p-3 flex flex-col justify-between ${cls} shadow-2xl">
+            <div class="flex justify-between font-black text-white text-3xl">
+              <div class="flex flex-col items-center leading-none"><span class="text-4xl">${p.rating}</span><span class="text-sm mt-1">${p.pos}</span></div>
+              <span>${FLAGS[p.nation]}</span>
+            </div>
+            <div class="text-8xl text-center">🏃‍♂️</div>
+            <div class="bg-black/60 p-2 rounded-lg text-center leading-tight">
+              <div class="font-black text-lg uppercase truncate">${p.name}</div>
+            </div>
+          </div>`;
+      } else {
+        return `
+          <div class="w-[70px] h-[100px] bg-gradient-to-b ${bg} border-2 rounded-xl p-1.5 flex flex-col justify-between ${cls} text-white shadow-lg">
+            <div class="flex justify-between items-start leading-none">
+              <div class="flex flex-col items-center"><span class="font-black text-sm">${p.rating}</span><span class="text-[7px] font-bold">${p.pos}</span></div>
+              <span class="text-xs">${FLAGS[p.nation]}</span>
+            </div>
+            <div class="text-2xl text-center mt-auto mb-auto">🏃‍♂️</div>
+            <div class="bg-black/60 rounded px-1 text-center">
+              <div class="font-bold text-[7px] uppercase truncate">${p.name}</div>
+            </div>
+          </div>`;
+      }
+    }
+  </script>
+
+</body>
+</html>
