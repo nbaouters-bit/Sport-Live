@@ -1,4 +1,4 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
@@ -429,7 +429,7 @@
 
     async function apiPost(path, body = {}) {
       const initData = tg?.initData || '';
-      const res = await fetch(`${https://sport-live-3r24.onrender.com}${path}`, {
+      const res = await fetch(`${BACKEND_URL}${path}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...body, initData }),
