@@ -904,6 +904,20 @@
       }
     }
   </script>
-
+async function testConnection() {
+  try {
+    console.log("Тест связи...");
+    const response = await fetch('https://sport-live-3r24.onrender.com/webhook', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ test: "ping" })
+    });
+    console.log("Ответ от сервера:", await response.text());
+  } catch (e) {
+    console.error("Сервер недоступен:", e);
+  }
+}
+// Вызовем тест через 5 секунд после загрузки
+setTimeout(testConnection, 5000);
 </body>
 </html>
