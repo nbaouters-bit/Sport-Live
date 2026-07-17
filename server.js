@@ -10,21 +10,39 @@ import {
   creditStarsFromPayment,
   spendStars,
   spendSlive,
+  tap,
+  buyVip,
+  getReferralInfo,
   addPlayerToInventory,
+  sellCard,
   saveUserState,
   listUsers,
   getStats,
   adjustStarsAdmin,
+  adjustSliveAdmin,
   getLeaderboard,
+  canUseFreeDraftEntry,
+  startDraft,
+  getDraftState,
+  playDraftBattle,
+  getDraftLeaderboard,
+  payoutDraftTopIfNeeded,
 } from './db.js';
-import { getRandomPlayer, PLAYERS_BY_ID, MARKET_PRICE } from './players-data.js';
+import { getRandomPlayer, PLAYERS_BY_ID, MARKET_PRICE, SELL_RATE } from './players-data.js';
 
-const { BOT_TOKEN, WEBHOOK_SECRET, ADMIN_TELEGRAM_ID, PORT = 3000 } = process.env;
+const { BOT_TOKEN, WEBHOOK_SECRET, ADMIN_TELEGRAM_ID, BOT_USERNAME, PORT = 3000 } = process.env;
 
 if (!ADMIN_TELEGRAM_ID) {
   console.warn(
     'ADMIN_TELEGRAM_ID не задан в .env — админ-панель будет недоступна никому. ' +
     'Узнайте свой Telegram ID через бота @userinfobot и впишите его в .env.'
+  );
+}
+
+if (!BOT_USERNAME) {
+  console.warn(
+    'BOT_USERNAME не задан в .env — реферальные ссылки не будут формироваться. ' +
+    'Впишите username бота без @ (например BOT_USERNAME=sportlivefc_bot).'
   );
 }
 
@@ -35,13 +53,16 @@ if (!BOT_TOKEN || BOT_TOKEN.includes('PUT_YOUR_NEW_TOKEN_HERE')) {
 
 const TG_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
-// Каталог покупаемых пакетов звёзд. Цена = amount, задаётся В ЗВЁЗДАХ (XTR),
-// у Stars нет дробных единиц, provider_token для XTR всегда пустая строка.
+// Каталог покупаемых пакетов звёзд (готовые пресеты для быстрого пополнения).
+// Кроме них клиент может прислать packageId: 'custom' + customAmount — тогда
+// сумму задаёт сам игрок (см. /api/create-invoice).
 const STAR_PACKAGES = {
   pack_100: { amount: 100, title: '100 Stars', description: 'Пополнение баланса на 100 ⭐️' },
   pack_500: { amount: 500, title: '500 Stars', description: 'Пополнение баланса на 500 ⭐️' },
   pack_1000: { amount: 1000, title: '1000 Stars', description: 'Пополнение баланса на 1000 ⭐️' },
 };
+const MIN_CUSTOM_STARS = 50;
+const MAX_CUSTOM_STARS = 100000;
 
 // Внутриигровые паки ("Драфт"), которые покупаются за уже пополненный баланс.
 // ВАЖНО: цены здесь были рассинхронизированы с ценами, нарисованными на
@@ -64,6 +85,20 @@ const GAME_PACKS_SLIVE = {
   gold: 10000,
   legend: 50000,
 };
+
+// Цена VIP-статуса в Stars (разовая покупка, см. /api/buy-vip).
+const VIP_PRICE_STARS = 300;
+
+// ---------- Драфт (отдельный от основного Клуба режим: 5 случайных карт + PvP) ----------
+// Вход за $SLive — раз в сутки (лимит проверяется в db.js через
+// canUseFreeDraftEntry/last_free_entry_day, не на клиенте). Вход за Stars —
+// без ограничений, можно пересобирать состав сколько угодно раз в день.
+const DRAFT_ENTRY_SLIVE = 1000;
+const DRAFT_ENTRY_STARS = 100;
+// Прогрессия паков для 5 карт драфт-состава (по одной карте на шаг) —
+// используем ту же getRandomPlayer(), что и обычные паки, но повыше рангом,
+// потому что это отдельная платная активность.
+const DRAFT_PACK_SEQUENCE = ['silver', 'silver', 'gold', 'gold', 'legend'];
 
 const app = express();
 // Мини-приложение (index.html) отдаётся не с этого же домена, а из Telegram
@@ -113,40 +148,108 @@ async function notifyUser(telegramId, text) {
 
 // ---------- Каталог маркета (публичный, для отрисовки витрины) ----------
 app.get('/api/market-catalog', async (req, res) => {
-  res.json({ players: Object.values(PLAYERS_BY_ID), prices: MARKET_PRICE });
+  const sellPrices = Object.fromEntries(
+    Object.entries(MARKET_PRICE).map(([type, price]) => [type, Math.floor(price.slive * SELL_RATE)])
+  );
+  res.json({ players: Object.values(PLAYERS_BY_ID), prices: MARKET_PRICE, sellPrices, vipPriceStars: VIP_PRICE_STARS });
 });
 
 // ---------- Профиль / баланс ----------
-// Каждый вызов пересчитывает офлайн-фарм (delta * farm_rate текущего состава)
-// внутри getUser/ensureUser — клиент просто читает готовый актуальный баланс.
+// Каждый вызов пересчитывает офлайн-фарм и суточную энергию внутри
+// getUser/ensureUser — клиент просто читает готовые актуальные цифры.
+// startParam — это start_param мини-аппы (Telegram.WebApp.initDataUnsafe.start_param):
+// если это telegram_id другого игрока, засчитываем реферальную привязку
+// (см. ensureUser в db.js — сработает только для НОВОГО пользователя).
 app.post('/api/me', requireTelegramAuth, async (req, res) => {
-  const user = await ensureUser(String(req.telegramUser.id), req.telegramUser.username || null);
-  const isAdmin = Boolean(ADMIN_TELEGRAM_ID) && String(req.telegramUser.id) === String(ADMIN_TELEGRAM_ID);
+  const telegramId = String(req.telegramUser.id);
+  const startParam = req.body.startParam;
+  const referrerId = startParam && /^\d+$/.test(String(startParam)) && String(startParam) !== telegramId
+    ? String(startParam)
+    : null;
+
+  const user = await ensureUser(telegramId, req.telegramUser.username || null, referrerId);
+  const isAdmin = Boolean(ADMIN_TELEGRAM_ID) && telegramId === String(ADMIN_TELEGRAM_ID);
   res.json({ user, isAdmin });
 });
 
+// ---------- Тапалка ----------
+// Клиент батчит клики и присылает их пачкой (см. flushTaps() в index.html).
+// Сервер сам решает, сколько энергии реально можно списать сегодня — это
+// единственное место, где прогресс тапалки надёжно сохраняется между сессиями.
+app.post('/api/tap', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  const { count = 1 } = req.body;
+
+  const result = await tap({ telegramId, count });
+  if (!result.ok) {
+    return res.status(409).json({ error: result.reason, energy: result.energy, balance: result.balance });
+  }
+  res.json({ ok: true, gained: result.gained, energy: result.energy, balance: result.balance });
+});
+
+// ---------- VIP-статус ----------
+app.post('/api/buy-vip', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  const result = await buyVip({ telegramId, amount: VIP_PRICE_STARS });
+
+  if (!result.ok) {
+    if (result.reason === 'insufficient_funds') {
+      return res.status(402).json({ error: result.reason, balance: result.balance, required: VIP_PRICE_STARS - result.balance });
+    }
+    return res.status(409).json({ error: result.reason, balance: result.balance });
+  }
+
+  notifyUser(telegramId, `🏆 Поздравляем! Ты получил VIP-статус за ${VIP_PRICE_STARS} ⭐️!`);
+  res.json({ ok: true, balance: result.balance, price: VIP_PRICE_STARS });
+});
+
+// ---------- Рефералка ----------
+app.post('/api/referral-info', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  const info = await getReferralInfo(telegramId);
+  res.json({ ...info, telegramId, botUsername: BOT_USERNAME || null });
+});
+
 // ---------- Создание счёта на пополнение Stars ----------
+// packageId: один из готовых пресетов STAR_PACKAGES, либо 'custom' — тогда
+// сумму задаёт customAmount (число от MIN_CUSTOM_STARS до MAX_CUSTOM_STARS).
 app.post('/api/create-invoice', requireTelegramAuth, async (req, res) => {
-  const { packageId } = req.body;
-  const pack = STAR_PACKAGES[packageId];
-  if (!pack) {
-    return res.status(400).json({ error: 'unknown_package' });
+  const { packageId, customAmount } = req.body;
+
+  let amount, title, description;
+  if (packageId === 'custom') {
+    amount = Math.floor(Number(customAmount));
+    if (!Number.isFinite(amount) || amount < MIN_CUSTOM_STARS || amount > MAX_CUSTOM_STARS) {
+      return res.status(400).json({ error: 'invalid_amount', min: MIN_CUSTOM_STARS, max: MAX_CUSTOM_STARS });
+    }
+    title = `${amount} Stars`;
+    description = `Пополнение баланса на ${amount} ⭐️`;
+  } else {
+    const pack = STAR_PACKAGES[packageId];
+    if (!pack) {
+      return res.status(400).json({ error: 'unknown_package' });
+    }
+    amount = pack.amount;
+    title = pack.title;
+    description = pack.description;
   }
 
   const telegramId = String(req.telegramUser.id);
-  const payload = JSON.stringify({ telegramId, packageId, ts: Date.now() });
+  // Сумма кладётся прямо в payload — так вебхуку не нужно повторно смотреть
+  // в STAR_PACKAGES (что раньше ломалось бы для кастомных сумм).
+  const payload = JSON.stringify({ telegramId, amount, ts: Date.now() });
 
   try {
     const tgRes = await fetch(`${TG_API}/createInvoiceLink`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        title: pack.title,
-        description: pack.description,
+        title,
+        description,
         payload,
         provider_token: '', // для Telegram Stars всегда пусто
         currency: 'XTR',
-        prices: [{ label: pack.title, amount: pack.amount }],
+        prices: [{ label: title, amount }],
       }),
     });
     const data = await tgRes.json();
@@ -178,16 +281,20 @@ app.post('/api/buy-pack', requireTelegramAuth, async (req, res) => {
   }
 
   let spendResult;
+  let price;
   if (currency === 'slive') {
-    const price = GAME_PACKS_SLIVE[packType];
+    price = GAME_PACKS_SLIVE[packType];
     spendResult = await spendSlive({ telegramId, amount: price });
   } else {
-    const price = GAME_PACKS[packType].price;
+    price = GAME_PACKS[packType].price;
     spendResult = await spendStars({ telegramId, amount: price });
   }
 
   if (!spendResult.ok) {
-    return res.status(402).json({ error: spendResult.reason, balance: spendResult.balance });
+    const extra = currency !== 'slive' && spendResult.reason === 'insufficient_funds'
+      ? { required: price - spendResult.balance }
+      : {};
+    return res.status(402).json({ error: spendResult.reason, balance: spendResult.balance, ...extra });
   }
 
   const drawn = getRandomPlayer(packType);
@@ -226,13 +333,36 @@ app.post('/api/buy-player', requireTelegramAuth, async (req, res) => {
   }
 
   if (!spendResult.ok) {
-    return res.status(402).json({ error: spendResult.reason, balance: spendResult.balance });
+    const extra = currency !== 'slive' && spendResult.reason === 'insufficient_funds'
+      ? { required: price.stars - spendResult.balance }
+      : {};
+    return res.status(402).json({ error: spendResult.reason, balance: spendResult.balance, ...extra });
   }
 
   const card = addPlayerToInventory({ telegramId, playerId });
   notifyUser(telegramId, `🛒 Куплен <b>${card.name}</b> (${card.rating} OVR) за ${currency === 'slive' ? price.slive + ' 🪙' : price.stars + ' ⭐️'}!`);
 
   res.json({ ok: true, balance: spendResult.balance, currency, card });
+});
+
+// ---------- Продажа дубликата карты ----------
+// Продать можно только карту, которой у игрока 2+ экземпляра, и только если
+// она сейчас не стоит в составе — см. все проверки в sellCard (db.js).
+// Цена — фиксированная доля от гарантированной цены в Маркете (SELL_RATE).
+app.post('/api/sell-player', requireTelegramAuth, async (req, res) => {
+  const { instId } = req.body;
+  const telegramId = String(req.telegramUser.id);
+
+  if (!instId) {
+    return res.status(400).json({ error: 'invalid_input' });
+  }
+
+  const result = await sellCard({ telegramId, instId });
+  if (!result.ok) {
+    return res.status(409).json({ error: result.reason });
+  }
+
+  res.json({ ok: true, balance: result.balance, gained: result.gained, instId });
 });
 
 // ---------- Сохранение состава ----------
@@ -247,9 +377,79 @@ app.post('/api/save-state', requireTelegramAuth, async (req, res) => {
   res.json({ ok: true, user });
 });
 
-// ---------- Лидерборд ----------
+// ---------- Лидерборд ($SLive) ----------
 app.post('/api/leaderboard', requireTelegramAuth, async (req, res) => {
   const leaderboard = await getLeaderboard(10);
+  res.json({ leaderboard });
+});
+
+// ---------- ДРАФТ ----------
+// Текущее состояние драфт-состава игрока + доступна ли ещё сегодня
+// бесплатная (за $SLive) попытка входа.
+app.post('/api/draft/state', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  const state = await getDraftState(telegramId);
+  res.json({ ...state, entryPrices: { slive: DRAFT_ENTRY_SLIVE, stars: DRAFT_ENTRY_STARS } });
+});
+
+// Вход в драфт: собирает НОВЫЙ состав из 5 карт (по прогрессии
+// DRAFT_PACK_SEQUENCE) и полностью заменяет предыдущий, если он был.
+// currency: 'slive' (1000 🪙, лимит 1/сутки) или 'stars' (100 ⭐️, без лимита).
+app.post('/api/draft/start', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  const { currency = 'stars' } = req.body;
+
+  if (currency !== 'slive' && currency !== 'stars') {
+    return res.status(400).json({ error: 'invalid_currency' });
+  }
+
+  if (currency === 'slive') {
+    const canFree = await canUseFreeDraftEntry(telegramId);
+    if (!canFree) {
+      return res.status(409).json({ error: 'daily_entry_used' });
+    }
+  }
+
+  const price = currency === 'slive' ? DRAFT_ENTRY_SLIVE : DRAFT_ENTRY_STARS;
+  const spendResult = currency === 'slive'
+    ? await spendSlive({ telegramId, amount: price })
+    : await spendStars({ telegramId, amount: price });
+
+  if (!spendResult.ok) {
+    const extra = currency === 'stars' && spendResult.reason === 'insufficient_funds'
+      ? { required: price - spendResult.balance }
+      : {};
+    return res.status(402).json({ error: spendResult.reason, balance: spendResult.balance, ...extra });
+  }
+
+  const drawnPlayers = DRAFT_PACK_SEQUENCE.map(tier => getRandomPlayer(tier));
+  const result = await startDraft({ telegramId, playerIds: drawnPlayers.map(p => p.id), currency });
+
+  notifyUser(telegramId, `🎯 Драфт собран! Рейтинг состава: ${result.squad.rating} OVR. Одно поражение — и серия закончится, бейся с умом!`);
+
+  res.json({ ok: true, balance: spendResult.balance, currency, ...result });
+});
+
+// Один PvP-бой против случайного соперника с готовым драфт-составом. Победа
+// даёт награду и очки в лидерборд драфта; поражение сразу завершает серию —
+// новый бой потребует новый вход через /api/draft/start.
+app.post('/api/draft/battle', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  const result = await playDraftBattle({ telegramId });
+  if (!result.ok) {
+    return res.status(409).json({ error: result.reason });
+  }
+  if (result.won) {
+    const opponentLabel = result.opponent.username ? `@${result.opponent.username}` : 'соперника';
+    notifyUser(telegramId, `⚔️ Победа в Драфт-битве против ${opponentLabel}! +${result.reward} 🪙 SLive.`);
+  }
+  res.json(result);
+});
+
+// Лидерборд драфта (по накопительным очкам total_points) — отдельный от
+// лидерборда по балансу $SLive, показывается сверху вкладки "Топ".
+app.post('/api/draft/leaderboard', requireTelegramAuth, async (req, res) => {
+  const leaderboard = await getDraftLeaderboard(10);
   res.json({ leaderboard });
 });
 
@@ -276,6 +476,18 @@ app.post('/api/admin/adjust-stars', requireTelegramAuth, requireAdmin, async (re
   res.json(result);
 });
 
+app.post('/api/admin/adjust-slive', requireTelegramAuth, requireAdmin, async (req, res) => {
+  const { telegramId, amount, reason } = req.body;
+  const numAmount = Number(amount);
+
+  if (!telegramId || !Number.isFinite(numAmount) || numAmount === 0) {
+    return res.status(400).json({ error: 'invalid_input' });
+  }
+
+  const result = await adjustSliveAdmin({ telegramId: String(telegramId), amount: numAmount, reason });
+  res.json(result);
+});
+
 // ---------- Webhook от Telegram ----------
 app.post('/webhook', async (req, res) => {
   const secretHeader = req.header('X-Telegram-Bot-Api-Secret-Token');
@@ -292,10 +504,10 @@ app.post('/webhook', async (req, res) => {
       let errorMessage;
       try {
         const payload = JSON.parse(pcq.invoice_payload);
-        const pack = STAR_PACKAGES[payload.packageId];
-        // Дополнительно сверяем сумму счёта с нашим каталогом — на случай если
-        // payload когда-нибудь начнёт приходить не от нашего /api/create-invoice.
-        ok = Boolean(pack) && pack.amount === pcq.total_amount && pcq.currency === 'XTR';
+        // Сверяем сумму счёта с тем, что мы сами положили в payload при
+        // создании инвойса (см. /api/create-invoice) — работает как для
+        // пресетов, так и для кастомной суммы.
+        ok = Number.isFinite(payload.amount) && payload.amount === pcq.total_amount && pcq.currency === 'XTR';
         if (!ok) errorMessage = 'Пакет недоступен, попробуйте снова.';
       } catch {
         ok = false;
@@ -320,15 +532,14 @@ app.post('/webhook', async (req, res) => {
     if (update.message?.successful_payment) {
       const payment = update.message.successful_payment;
       const payload = JSON.parse(payment.invoice_payload);
-      const pack = STAR_PACKAGES[payload.packageId];
 
-      if (pack) {
+      if (Number.isFinite(payload.amount)) {
         await creditStarsFromPayment({
           telegramId: payload.telegramId,
-          amount: pack.amount,
+          amount: payload.amount,
           paymentChargeId: payment.telegram_payment_charge_id,
         });
-        notifyUser(payload.telegramId, `✅ Баланс пополнен на ${pack.amount} ⭐️!`);
+        notifyUser(payload.telegramId, `✅ Баланс пополнен на ${payload.amount} ⭐️!`);
       }
     }
 
@@ -338,6 +549,23 @@ app.post('/webhook', async (req, res) => {
     res.status(200).end();
   }
 });
+
+// ---------- Ежедневная награда лидеру Драфт-рейтинга ----------
+// Проверяем не по таймеру от момента старта процесса, а по фактической смене
+// календарных суток (UTC, см. payoutDraftTopIfNeeded/draft_meta в db.js) —
+// так рестарт сервера (Render) не приведёт ни к задвоению, ни к пропуску выплаты.
+async function checkDraftTopPayout() {
+  try {
+    const result = await payoutDraftTopIfNeeded();
+    if (result) {
+      notifyUser(result.telegramId, `🏆 Ты — лидер Драфт-рейтинга дня! Начислено +${result.reward} 🪙 SLive.`);
+    }
+  } catch (err) {
+    console.error('draft top payout check failed', err);
+  }
+}
+checkDraftTopPayout();
+setInterval(checkDraftTopPayout, 10 * 60 * 1000);
 
 app.listen(PORT, () => {
   console.log(`Sport Live FC backend listening on :${PORT}`);
