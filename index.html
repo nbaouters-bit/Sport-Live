@@ -429,7 +429,7 @@
 
     async function apiPost(path, body = {}) {
       const initData = tg?.initData || '';
-      const res = await fetch(`${BACKEND_URL}${path}`, {
+     const BACKEND_URL = 'https://sport-live-3r24.onrender.com'
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...body, initData }),
