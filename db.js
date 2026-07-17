@@ -1,10 +1,10 @@
-// db.js
+  // db.js
 // Вся денежная и игровая экономика живёт только тут (SQLite через better-sqlite3).
 // Клиент никогда напрямую не пишет в баланс — только через функции этого файла,
 // вызванные из server.js после проверки initData.
 import Database from 'better-sqlite3';
 import { randomUUID } from 'crypto';
-import { PLAYERS_BY_ID } from './players-data.js';
+import { PLAYERS_BY_ID, getSellPrice } from './players-data.js';
 
 const db = new Database(process.env.DB_PATH || 'sportlive.db');
 db.pragma('journal_mode = WAL');
@@ -366,6 +366,40 @@ export function addPlayerToInventory({ telegramId, playerId }) {
   db.prepare('INSERT INTO inventory (inst_id, telegram_id, player_id, acquired_at) VALUES (?, ?, ?, ?)')
     .run(instId, telegramId, playerId, now());
   return { instId, ...PLAYERS_BY_ID[playerId] };
+}
+
+// Продажа ЛИШНЕЙ (дублирующейся) карты за фиксированную долю цены Маркета
+// (см. SELL_RATE/getSellPrice в players-data.js). Все проверки — только тут,
+// на сервере, клиент (sellDuplicate в index.html) их не может обойти:
+//   - not_owned      — карта не найдена в инвентаре ИМЕННО этого игрока
+//   - card_equipped  — карта прямо сейчас стоит в составе (squad), продавать нельзя
+//   - last_copy      — это единственный экземпляр игрока, продавать нельзя
+export async function sellCard({ telegramId, instId }) {
+  applyOfflineFarm(telegramId); // сначала фиксируем то, что накапало, потом уже меняем баланс
+
+  const tx = db.transaction(() => {
+    const inst = db.prepare('SELECT * FROM inventory WHERE inst_id = ?').get(instId);
+    if (!inst || inst.telegram_id !== telegramId) return { ok: false, reason: 'not_owned' };
+
+    const user = db.prepare('SELECT squad FROM users WHERE telegram_id = ?').get(telegramId);
+    const squad = JSON.parse(user?.squad || '{}');
+    const isEquipped = Object.values(squad).some(slotInstId => slotInstId === instId);
+    if (isEquipped) return { ok: false, reason: 'card_equipped' };
+
+    const { copies } = db
+      .prepare('SELECT COUNT(*) AS copies FROM inventory WHERE telegram_id = ? AND player_id = ?')
+      .get(telegramId, inst.player_id);
+    if (copies <= 1) return { ok: false, reason: 'last_copy' };
+
+    const gained = getSellPrice(inst.player_id);
+    db.prepare('DELETE FROM inventory WHERE inst_id = ?').run(instId);
+    db.prepare('UPDATE users SET slive_tokens = slive_tokens + ? WHERE telegram_id = ?').run(gained, telegramId);
+
+    const updated = db.prepare('SELECT slive_tokens FROM users WHERE telegram_id = ?').get(telegramId);
+    return { ok: true, balance: updated.slive_tokens, gained };
+  });
+
+  return tx();
 }
 
 // ---------- Состав ----------
