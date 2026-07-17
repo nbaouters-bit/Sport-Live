@@ -4,8 +4,6 @@ import fetch from 'node-fetch';
 import { validateInitData } from './telegramAuth.js';
 import {
   ensureUser,
-  getUser,
-  creditStarsFromPayment,
   spendStars,
   saveUserState,
   listUsers,
@@ -13,17 +11,10 @@ import {
   adjustStarsAdmin,
 } from './db.js';
 
-const { BOT_TOKEN, WEBHOOK_SECRET, ADMIN_TELEGRAM_ID, PORT = 3000 } = process.env;
+const { BOT_TOKEN, ADMIN_TELEGRAM_ID, PORT = 3000 } = process.env;
 
-if (!ADMIN_TELEGRAM_ID) {
-  console.warn(
-    'ADMIN_TELEGRAM_ID не задан в .env — админ-панель будет недоступна никому. ' +
-    'Узнайте свой Telegram ID через бота @userinfobot и впишите его в .env.'
-  );
-}
-
-if (!BOT_TOKEN || BOT_TOKEN.includes('PUT_YOUR_NEW_TOKEN_HERE')) {
-  console.error('BOT_TOKEN не задан в .env — заполните его перед запуском (см. .env.example).');
+if (!BOT_TOKEN) {
+  console.error('BOT_TOKEN не задан в .env!');
   process.exit(1);
 }
 
@@ -45,6 +36,7 @@ const GAME_PACKS = {
 const app = express();
 app.use(express.json());
 
+// --- Middleware ---
 function requireTelegramAuth(req, res, next) {
   const initData = req.body.initData || req.query.initData;
   const result = validateInitData(initData, BOT_TOKEN);
@@ -56,21 +48,20 @@ function requireTelegramAuth(req, res, next) {
 }
 
 function requireAdmin(req, res, next) {
-  if (!ADMIN_TELEGRAM_ID) {
-    return res.status(403).json({ error: 'admin_not_configured' });
-  }
-  if (String(req.telegramUser.id) !== String(ADMIN_TELEGRAM_ID)) {
+  if (!ADMIN_TELEGRAM_ID || String(req.telegramUser.id) !== String(ADMIN_TELEGRAM_ID)) {
     return res.status(403).json({ error: 'forbidden' });
   }
   next();
 }
 
+// --- Маршруты ---
 app.post('/api/me', requireTelegramAuth, async (req, res) => {
   const user = await ensureUser(String(req.telegramUser.id));
   const isAdmin = Boolean(ADMIN_TELEGRAM_ID) && String(req.telegramUser.id) === String(ADMIN_TELEGRAM_ID);
   res.json({ user, isAdmin });
 });
 
+// Единый исправленный маршрут для инвойсов
 app.post('/api/create-invoice', requireTelegramAuth, async (req, res) => {
   const { packageId } = req.body;
   const pack = STAR_PACKAGES[packageId];
@@ -91,7 +82,6 @@ app.post('/api/create-invoice', requireTelegramAuth, async (req, res) => {
         description: pack.description,
         payload: payload,
         currency: 'XTR',
-        // Убеждаемся, что amount — это число
         prices: [{ label: pack.title, amount: Number(pack.amount) }],
       }),
     });
@@ -109,16 +99,13 @@ app.post('/api/create-invoice', requireTelegramAuth, async (req, res) => {
     res.status(500).json({ error: 'internal_error' });
   }
 });
-  }
-});
 
 app.post('/api/buy-pack', requireTelegramAuth, async (req, res) => {
   const { packType } = req.body;
   const pack = GAME_PACKS[packType];
   if (!pack) return res.status(400).json({ error: 'unknown_pack' });
 
-  const telegramId = String(req.telegramUser.id);
-  const result = await spendStars({ telegramId, amount: pack.price });
+  const result = await spendStars({ telegramId: String(req.telegramUser.id), amount: pack.price });
   if (!result.ok) {
     return res.status(402).json({ error: result.reason, balance: result.balance });
   }
@@ -127,11 +114,11 @@ app.post('/api/buy-pack', requireTelegramAuth, async (req, res) => {
 
 app.post('/api/save-state', requireTelegramAuth, async (req, res) => {
   const { squad, myClub, sliveTokens } = req.body;
-  const telegramId = String(req.telegramUser.id);
-  const user = await saveUserState({ telegramId, patch: { squad, myClub, sliveTokens } });
+  const user = await saveUserState({ telegramId: String(req.telegramUser.id), patch: { squad, myClub, sliveTokens } });
   res.json({ ok: true, user });
 });
 
+// --- Админ-маршруты ---
 app.post('/api/admin/stats', requireTelegramAuth, requireAdmin, async (req, res) => {
   const stats = await getStats();
   res.json({ stats });
@@ -150,45 +137,13 @@ app.post('/api/admin/adjust-stars', requireTelegramAuth, requireAdmin, async (re
     return res.status(400).json({ error: 'invalid_input' });
   }
 
-  const result = await adjustStarsAdmin({ telegramId: String(telegramId), amount: numAmount, reason });
-  res.json(result);
-});
-
-app.post('/api/create-invoice', requireTelegramAuth, async (req, res) => {
-  const { packageId } = req.body;
-  const pack = STAR_PACKAGES[packageId];
-  if (!pack) {
-    return res.status(400).json({ error: 'unknown_package' });
-  }
-
-  const telegramId = String(req.telegramUser.id);
-  const payload = JSON.stringify({ telegramId, packageId, ts: Date.now() });
-
   try {
-    const tgRes = await fetch(`${TG_API}/createInvoiceLink`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: pack.title,
-        description: pack.description,
-        payload: payload,
-        currency: 'XTR',
-        // Исправлено: привели amount к числу и убрали provider_token
-        prices: [{ label: pack.title, amount: Number(pack.amount) }],
-      }),
-    });
-    
-    const data = await tgRes.json();
-    
-    // Если Telegram вернул ошибку, выводим её в консоль для дебага
-    if (!data.ok) {
-      console.error('Telegram API Error:', data.description);
-      return res.status(502).json({ error: 'telegram_api_error', details: data.description });
-    }
-    
-    res.json({ invoiceLink: data.result });
-  } catch (err) {
-    console.error('createInvoiceLink failed', err);
-    res.status(500).json({ error: 'internal_error' });
+    const result = await adjustStarsAdmin({ telegramId: String(telegramId), amount: numAmount, reason });
+    res.json(result);
+  } catch (e) {
+    console.error('Ошибка админ-корректировки:', e);
+    res.status(500).json({ error: e.message || 'Ошибка сервера' });
   }
 });
+
+app.listen(PORT, () => console.log(`Сервер запущен на порту ${PORT}`));
