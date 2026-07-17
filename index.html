@@ -187,7 +187,10 @@
                 <h3 class="font-black text-[#d7ccc8] text-sm">БРОНЗОВЫЙ ПАК 🥉</h3>
                 <p class="text-[10px] text-neutral-400 mt-0.5">Базовый фарм: ~1 $SLive/сек</p>
               </div>
-              <button onclick="buyPack('bronze', 500, 'SLive')" class="bg-neutral-800 text-emerald-400 text-[11px] font-black px-4 py-2 rounded-xl border border-neutral-700 hover:bg-neutral-700">🪙 500</button>
+              <div class="flex flex-col gap-1.5">
+                <button onclick="buyPack('bronze', 500, 'SLive')" class="bg-neutral-800 text-emerald-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 500</button>
+                <button onclick="buyPack('bronze', 20, 'Stars')" class="bg-amber-500 text-black text-[11px] font-black px-3 py-1.5 rounded-xl hover:bg-amber-400 text-center">⭐️ 20</button>
+              </div>
             </div>
             <!-- Витрина дропа -->
             <div class="bg-black/50 rounded-xl p-2 border border-[#5d4037]/50">
@@ -264,9 +267,25 @@
         </div>
       </div>
 
-      <!-- ТАБ 4: МАРКЕТ СПОРТПИТА -->
+      <!-- ТАБ 4: МАРКЕТ -->
       <div id="tab-market" class="tab-content hidden p-4">
-        <h2 class="text-xl font-black uppercase italic tracking-tight mb-2">Спортпит & VIP</h2>
+        <h2 class="text-xl font-black uppercase italic tracking-tight mb-2">Маркет игроков</h2>
+        <p class="text-[10px] text-neutral-400 mb-3 bg-neutral-900 p-2 rounded-lg border border-neutral-800">
+          Покупай конкретных игроков напрямую — без рандома пака, зато цена выше.
+        </p>
+
+        <div class="flex gap-1.5 mb-3" id="market-filters">
+          <button onclick="renderMarketCards('bronze')" data-tier="bronze" class="market-filter-btn bg-neutral-800 text-[10px] font-black px-3 py-1.5 rounded-lg border border-neutral-700">🥉 Бронза</button>
+          <button onclick="renderMarketCards('silver')" data-tier="silver" class="market-filter-btn bg-neutral-800 text-[10px] font-black px-3 py-1.5 rounded-lg border border-neutral-700">🥈 Серебро</button>
+          <button onclick="renderMarketCards('gold')" data-tier="gold" class="market-filter-btn bg-neutral-800 text-[10px] font-black px-3 py-1.5 rounded-lg border border-neutral-700">🥇 Золото</button>
+          <button onclick="renderMarketCards('legend')" data-tier="legend" class="market-filter-btn bg-neutral-800 text-[10px] font-black px-3 py-1.5 rounded-lg border border-neutral-700">🔮 Легенды</button>
+        </div>
+
+        <div id="market-cards-grid" class="grid grid-cols-3 gap-2 mb-6">
+          <div class="col-span-3 text-center text-neutral-500 text-xs py-6">Загрузка каталога...</div>
+        </div>
+
+        <h2 class="text-xl font-black uppercase italic tracking-tight mb-2 mt-2">Спортпит & VIP</h2>
         <p class="text-[10px] text-neutral-400 mb-4 bg-neutral-900 p-2 rounded-lg border border-neutral-800">
           Покупай наборы My Sportpit. При покупке ты становишься <span class="text-yellow-500 font-bold">VIP Инсайдером</span> и получаешь личный разбор рациона от тренера!
         </p>
@@ -447,6 +466,43 @@
     // /api/admin/* всё равно заново проверяется на сервере.
     let isAdmin = false;
 
+    // Переводит squad с плейсхолдерами полных объектов игроков ({slot: player|null})
+    // в формат, который понимает сервер: {slot: instId|null}.
+    function squadToInstIdMap(squadObj) {
+      const out = {};
+      Object.keys(squadObj).forEach(slot => {
+        out[slot] = squadObj[slot] ? squadObj[slot].instId : null;
+      });
+      return out;
+    }
+
+    // Обратное преобразование: {slot: instId|null} + массив карт -> {slot: player|null}
+    function instIdMapToSquad(instIdMap, club) {
+      const out = {};
+      Object.keys(instIdMap || {}).forEach(slot => {
+        const instId = instIdMap[slot];
+        out[slot] = instId ? (club.find(p => p.instId === instId) || null) : null;
+      });
+      return out;
+    }
+
+    let saveStateTimer = null;
+    function saveSquadToServer() {
+      if (!tg?.initData) return; // вне Telegram сервер недоступен — состав живёт только локально
+      // Небольшой дебаунс, чтобы быстрые перестановки в составе не долбили API запросами.
+      clearTimeout(saveStateTimer);
+      saveStateTimer = setTimeout(async () => {
+        try {
+          await apiPost('/api/save-state', { squad: squadToInstIdMap(squad) });
+        } catch (e) {
+          console.error('Не удалось сохранить состав на сервере', e);
+        }
+      }, 300);
+    }
+
+    // Баланс $SLive, tgStars, состав и инвентарь — источник правды сервер.
+    // Локальные копии (localStorage) используются только как demo-fallback,
+    // когда приложение открыто вне Telegram (нет initData).
     async function syncBalanceFromServer() {
       if (!tg?.initData) {
         // Приложение открыто не из Telegram (например, просто в браузере для теста верстки) —
@@ -456,6 +512,13 @@
       try {
         const { user, isAdmin: adminFlag } = await apiPost('/api/me');
         tgStars = user.tgStars;
+        sliveTokens = user.sliveTokens;
+        myClub = user.myClub; // карты — только те, что реально есть в инвентаре на сервере
+        squad = instIdMapToSquad(user.squad, myClub);
+        passiveIncome = user.farmRate;
+
+        renderSquad();
+        renderPackDrops();
         updateHeader();
 
         isAdmin = Boolean(adminFlag);
@@ -568,7 +631,7 @@
       ]
     };
 
-    const FLAGS = {'UKR':'🇺🇦', 'ARG':'🇦🇷', 'ESP':'🇪🇸', 'ENG':'🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'FRA':'🇫🇷', 'BRA':'🇧🇷'};
+    const FLAGS = {'UKR':'🇺🇦', 'ARG':'🇦🇷', 'ESP':'🇪🇸', 'ENG':'🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'FRA':'🇫🇷', 'BRA':'🇧🇷', 'NED':'🇳🇱', 'BEL':'🇧🇪', 'GER':'🇩🇪', 'NOR':'🇳🇴', 'POR':'🇵🇹'};
 
     let myClub = JSON.parse(localStorage.getItem('myClub')) || [
       { id: 'b1', name: 'Zinchenko', rating: 79, pos: 'DEF', nation: 'UKR', type: 'bronze', income: 1, instId: '1' }
@@ -582,6 +645,7 @@
       updateHeader();
       checkVip();
       renderPackDrops(); // Рендер витрины дропа
+      loadMarketCatalog(); // Каталог карточек для прямой покупки в Маркете
       syncBalanceFromServer(); // Баланс Stars — с сервера, не из localStorage
       
       setInterval(() => {
@@ -715,6 +779,7 @@
           squad[targetSlot] = null;
           closeBench();
           renderSquad();
+          saveSquadToServer();
         };
         list.appendChild(removeBtn);
       }
@@ -727,52 +792,53 @@
       squad[slotToFill] = p;
       closeBench();
       renderSquad();
+      saveSquadToServer();
     }
 
     function closeBench() {
       document.getElementById('bench-modal').classList.add('hidden');
     }
 
-    // ПАКИ
-    async function buyPack(type, price, currency) {
-      if (currency === 'SLive') {
-        // $SLive — внутриигровая валюта без денежной ценности, тут достаточно клиентской проверки.
-        if (sliveTokens < price) return alertMsg(`Не хватает токенов! Цена: 🪙 ${price}`);
-        sliveTokens -= price;
-        updateHeader();
-        openPackAnim(type);
-        return;
-      }
-
-      // Stars — реальные деньги, списание должно быть подтверждено сервером,
-      // иначе баланс легко подделать через консоль браузера.
+    // ПАКИ / "ДРАФТ"
+    // Рандом карты и списание баланса теперь ПОЛНОСТЬЮ на сервере — клиент только
+    // просит открыть пак и рисует то, что сервер реально положил в инвентарь.
+    // currency: 'Stars' -> тратим tgStars, 'SLive' -> тратим внутриигровой sliveTokens.
+    async function buyPack(type, price, currencyLabel) {
       if (!tg?.initData) {
-        return alertMsg('Покупка за Stars работает только внутри Telegram.');
+        return alertMsg('Открытие паков работает только внутри Telegram.');
       }
+      const currency = currencyLabel === 'SLive' ? 'slive' : 'stars';
+
       try {
-        const { balance } = await apiPost('/api/buy-pack', { packType: type });
-        tgStars = balance;
+        const { balance, card } = await apiPost('/api/buy-pack', { packType: type, currency });
+        if (currency === 'slive') {
+          sliveTokens = balance;
+        } else {
+          tgStars = balance;
+        }
         updateHeader();
-        openPackAnim(type);
+        myClub.push(card);
+        openPackAnim(card);
       } catch (e) {
         if (e.message === 'insufficient_funds') {
-          alertMsg('Не хватает Stars! Нажми "Пополнить" вверху.');
+          const msg = currency === 'slive'
+            ? `Не хватает $SLive! Цена: 🪙 ${price}`
+            : 'Не хватает Stars! Нажми "Пополнить" вверху.';
+          alertMsg(msg);
         } else {
-          alertMsg('Не удалось списать Stars. Попробуй ещё раз.');
+          alertMsg('Не удалось открыть пак. Попробуй ещё раз.');
         }
       }
     }
 
-    function openPackAnim(type) {
+    function openPackAnim(card) {
       const loader = document.getElementById('pack-loader');
       loader.classList.remove('hidden');
-      
+
       setTimeout(() => {
         loader.classList.add('hidden');
-        const pool = PLAYER_POOL[type];
-        const p = pool[Math.floor(Math.random() * pool.length)];
-        tempOpened = { ...p, instId: Date.now().toString() };
-        
+        tempOpened = card;
+
         document.getElementById('revealed-card-container').innerHTML = genCardHTML(tempOpened, true);
         document.getElementById('reveal-income').innerText = `+${tempOpened.income}/сек`;
         document.getElementById('pack-reveal').classList.remove('hidden');
@@ -780,11 +846,9 @@
     }
 
     function closeReveal() {
-      if (tempOpened) {
-        myClub.push(tempOpened);
-        tempOpened = null;
-        saveData();
-      }
+      // Карта уже записана в инвентарь на сервере в момент buyPack() — тут только UI.
+      tempOpened = null;
+      saveData();
       document.getElementById('pack-reveal').classList.add('hidden');
       alertMsg('Игрок добавлен в твой Клуб! Зайди в "Состав" и нажми на пустое место, чтобы выпустить его на поле.');
     }
@@ -807,6 +871,70 @@
       });
 
       if (tabId === 'admin') loadAdminPanel();
+    }
+
+    // МАРКЕТ ИГРОКОВ (покупка конкретной карточки, без рандома)
+    let marketCatalog = { players: [], prices: {} };
+    let marketTier = 'bronze';
+
+    async function loadMarketCatalog() {
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/market-catalog`);
+        marketCatalog = await res.json();
+        renderMarketCards(marketTier);
+      } catch (e) {
+        console.error('Не удалось загрузить каталог маркета', e);
+        document.getElementById('market-cards-grid').innerHTML =
+          '<div class="col-span-3 text-center text-red-400 text-xs py-6">Каталог недоступен. Проверь соединение с сервером.</div>';
+      }
+    }
+
+    function renderMarketCards(tier) {
+      marketTier = tier;
+      document.querySelectorAll('.market-filter-btn').forEach(b => {
+        const active = b.dataset.tier === tier;
+        b.classList.toggle('bg-emerald-500', active);
+        b.classList.toggle('text-black', active);
+        b.classList.toggle('bg-neutral-800', !active);
+      });
+
+      const grid = document.getElementById('market-cards-grid');
+      const players = marketCatalog.players.filter(p => p.type === tier);
+      const price = marketCatalog.prices[tier];
+      if (!price) {
+        grid.innerHTML = '<div class="col-span-3 text-center text-neutral-500 text-xs py-6">Загрузка...</div>';
+        return;
+      }
+
+      grid.innerHTML = players.map(p => `
+        <div class="flex flex-col items-center gap-1">
+          ${genCardHTML(p, false)}
+          <div class="flex gap-1 w-full">
+            <button onclick="buyPlayerCard('${p.id}', 'stars')" class="flex-1 bg-amber-500 text-black text-[8px] font-black py-1 rounded">⭐️${price.stars}</button>
+            <button onclick="buyPlayerCard('${p.id}', 'slive')" class="flex-1 bg-neutral-800 text-emerald-400 text-[8px] font-black py-1 rounded border border-neutral-700">🪙${price.slive}</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function buyPlayerCard(playerId, currency) {
+      if (!tg?.initData) {
+        return alertMsg('Покупка карточек работает только внутри Telegram.');
+      }
+      try {
+        const { balance, card } = await apiPost('/api/buy-player', { playerId, currency });
+        if (currency === 'slive') sliveTokens = balance; else tgStars = balance;
+        updateHeader();
+        myClub.push(card);
+        saveData();
+        alertMsg(`Куплен ${card.name}! Он уже в твоём Клубе — выставь его в состав.`);
+      } catch (e) {
+        if (e.message === 'insufficient_funds') {
+          alertMsg(currency === 'slive' ? 'Не хватает $SLive на балансе.' : 'Не хватает Stars! Нажми "Пополнить" вверху.');
+        } else {
+          alertMsg('Не удалось купить карточку. Попробуй ещё раз.');
+        }
+      }
     }
 
     function triggerPurchase(name) {
@@ -835,16 +963,28 @@
       document.getElementById('stars-modal').classList.add('hidden');
       try {
         const { invoiceLink } = await apiPost('/api/create-invoice', { packageId });
-        tg.openInvoice(invoiceLink, (status) => {
-          // status: 'paid' | 'cancelled' | 'failed' | 'pending'
-          if (status === 'paid') {
-            // Баланс уже начислен на сервере через webhook — просто перечитываем его.
-            syncBalanceFromServer();
-            alertMsg('Оплата прошла! Баланс Stars обновлён.');
-          } else if (status === 'failed') {
-            alertMsg('Платёж не прошёл. Попробуй ещё раз.');
-          }
-        });
+
+        // tg.openInvoice — это и есть официальный магазин Stars внутри Mini App:
+        // Telegram открывает свой нативный платёжный лист, а если у юзера не
+        // хватает Stars на балансе, сам предложит их докупить перед оплатой.
+        if (typeof tg?.openInvoice === 'function') {
+          tg.openInvoice(invoiceLink, (status) => {
+            // status: 'paid' | 'cancelled' | 'failed' | 'pending'
+            if (status === 'paid') {
+              // Баланс уже начислен на сервере через webhook — просто перечитываем его.
+              syncBalanceFromServer();
+              alertMsg('Оплата прошла! Баланс Stars обновлён.');
+            } else if (status === 'failed') {
+              alertMsg('Платёж не прошёл. Попробуй ещё раз.');
+            }
+          });
+        } else if (typeof tg?.openTelegramLink === 'function') {
+          // Старый клиент Telegram без поддержки openInvoice — открываем счёт
+          // как обычную ссылку t.me/invoice/..., Telegram сам покажет магазин Stars.
+          tg.openTelegramLink(invoiceLink);
+        } else {
+          window.open(invoiceLink, '_blank');
+        }
       } catch (e) {
         console.error(e);
         alertMsg('Не удалось создать счёт на оплату. Попробуй позже.');
