@@ -147,57 +147,41 @@ app.post('/api/admin/adjust-stars', requireTelegramAuth, requireAdmin, async (re
   res.json(result);
 });
 
-app.post('/webhook', async (req, res) => {
-  const secretHeader = req.header('X-Telegram-Bot-Api-Secret-Token');
-  if (secretHeader !== WEBHOOK_SECRET) {
-    return res.status(401).end();
+app.post('/api/create-invoice', requireTelegramAuth, async (req, res) => {
+  const { packageId } = req.body;
+  const pack = STAR_PACKAGES[packageId];
+  if (!pack) {
+    return res.status(400).json({ error: 'unknown_package' });
   }
 
-  const update = req.body;
+  const telegramId = String(req.telegramUser.id);
+  const payload = JSON.stringify({ telegramId, packageId, ts: Date.now() });
 
   try {
-    if (update.pre_checkout_query) {
-      const pcq = update.pre_checkout_query;
-      let ok = true;
-      try {
-        const payload = JSON.parse(pcq.invoice_payload);
-        ok = Boolean(STAR_PACKAGES[payload.packageId]);
-      } catch {
-        ok = false;
-      }
-
-      await fetch(`${TG_API}/answerPreCheckoutQuery`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          pre_checkout_query_id: pcq.id,
-          ok,
-          ...(ok ? {} : { error_message: 'Пакет недоступен, попробуйте снова.' }),
-        }),
-      });
+    const tgRes = await fetch(`${TG_API}/createInvoiceLink`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: pack.title,
+        description: pack.description,
+        payload: payload,
+        currency: 'XTR',
+        // Исправлено: привели amount к числу и убрали provider_token
+        prices: [{ label: pack.title, amount: Number(pack.amount) }],
+      }),
+    });
+    
+    const data = await tgRes.json();
+    
+    // Если Telegram вернул ошибку, выводим её в консоль для дебага
+    if (!data.ok) {
+      console.error('Telegram API Error:', data.description);
+      return res.status(502).json({ error: 'telegram_api_error', details: data.description });
     }
-
-    if (update.message?.successful_payment) {
-      const payment = update.message.successful_payment;
-      const payload = JSON.parse(payment.invoice_payload);
-      const pack = STAR_PACKAGES[payload.packageId];
-
-      if (pack) {
-        await creditStarsFromPayment({
-          telegramId: payload.telegramId,
-          amount: pack.amount,
-          paymentChargeId: payment.telegram_payment_charge_id,
-        });
-      }
-    }
-
-    res.status(200).end();
+    
+    res.json({ invoiceLink: data.result });
   } catch (err) {
-    console.error('webhook handling failed', err);
-    res.status(200).end();
+    console.error('createInvoiceLink failed', err);
+    res.status(500).json({ error: 'internal_error' });
   }
-});
-
-app.listen(PORT, () => {
-  console.log(`Sport Live FC backend listening on :${PORT}`);
 });
