@@ -76,9 +76,14 @@
             <div id="status-badge" class="text-[9px] font-black uppercase text-neutral-400">Тариф: Игрок</div>
           </div>
         </div>
-        <button onclick="openStarsModal()" class="bg-amber-500/10 text-amber-400 border border-amber-500/30 text-[10px] font-black px-2 py-1.5 rounded-lg flex items-center gap-1">
-          ⭐️ Пополнить
-        </button>
+        <div class="flex items-center gap-1.5">
+          <button onclick="openStarsModal()" class="bg-amber-500/10 text-amber-400 border border-amber-500/30 text-[10px] font-black px-2 py-1.5 rounded-lg flex items-center gap-1">
+            ⭐️ Пополнить
+          </button>
+          <button onclick="openWithdrawModal()" class="bg-neutral-800 text-neutral-300 border border-neutral-700 text-[10px] font-black px-2 py-1.5 rounded-lg flex items-center gap-1">
+            💵 Вывод
+          </button>
+        </div>
       </div>
 
       <div class="grid grid-cols-2 gap-2">
@@ -408,6 +413,53 @@
         <div id="draft-last-result" class="hidden mt-4 bg-neutral-900 border border-neutral-800 rounded-xl p-3"></div>
       </div>
 
+      <!-- ТАБ СТАВКИ: ивенты создаёт и подводит итог ТОЛЬКО админ (см. tab-admin
+           ниже) — здесь игрок только смотрит открытые ивенты и ставит $SLive.
+           Полосы процентов/коэффициентов в духе Binance/Fanton — см. renderBetEvents(). -->
+      <div id="tab-bets" class="tab-content hidden p-4">
+        <h2 class="text-xl font-black uppercase italic tracking-tight mb-2">Ставки</h2>
+        <p class="text-[10px] text-neutral-400 mb-3 bg-neutral-900 p-2 rounded-lg border border-neutral-800">
+          Ставь $SLive на исход ивентов. Коэффициент фиксируется в момент ставки — правки процентов админом дальше на неё не влияют.
+        </p>
+
+        <div class="flex gap-2 mb-3">
+          <button onclick="switchBetsView('events')" id="bets-view-events-btn" class="flex-1 bg-emerald-500 text-black text-[10px] font-black py-2 rounded-lg">Ивенты</button>
+          <button onclick="switchBetsView('mine')" id="bets-view-mine-btn" class="flex-1 bg-neutral-800 text-neutral-300 text-[10px] font-black py-2 rounded-lg border border-neutral-700">Мои ставки</button>
+        </div>
+
+        <div id="bets-events-list" class="space-y-3"></div>
+        <div id="bets-mine-list" class="hidden space-y-2"></div>
+      </div>
+
+      <!-- Модалка выбора суммы ставки, открывается по тапу на вариант исхода -->
+      <div id="bet-amount-modal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-end">
+        <div class="bg-[#111] border-t border-neutral-800 rounded-t-2xl w-full p-4">
+          <div class="flex justify-between items-center mb-3">
+            <div>
+              <div class="text-[10px] text-neutral-500">Ставка на исход:</div>
+              <div id="bet-modal-option-label" class="text-sm font-black text-emerald-400"></div>
+            </div>
+            <div class="text-right">
+              <div class="text-[10px] text-neutral-500">Коэффициент</div>
+              <div id="bet-modal-multiplier" class="text-sm font-black text-white"></div>
+            </div>
+          </div>
+          <div class="grid grid-cols-4 gap-2 mb-2">
+            <button onclick="setBetAmount(100)" class="bg-neutral-800 border border-neutral-700 rounded-lg py-2 text-[10px] font-black">100</button>
+            <button onclick="setBetAmount(500)" class="bg-neutral-800 border border-neutral-700 rounded-lg py-2 text-[10px] font-black">500</button>
+            <button onclick="setBetAmount(1000)" class="bg-neutral-800 border border-neutral-700 rounded-lg py-2 text-[10px] font-black">1000</button>
+            <button onclick="setBetAmountMax()" class="bg-neutral-800 border border-neutral-700 rounded-lg py-2 text-[10px] font-black">MAX</button>
+          </div>
+          <input id="bet-amount-input" type="number" min="10" placeholder="Сумма $SLive" oninput="updateBetPotential()"
+            class="w-full bg-black border border-neutral-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-neutral-600 mb-2">
+          <div id="bet-modal-potential" class="text-[10px] text-neutral-400 mb-3">Возможный выигрыш: <span class="text-emerald-400 font-black">—</span></div>
+          <div class="flex gap-2">
+            <button onclick="closeBetModal()" class="flex-1 bg-neutral-800 text-white text-[11px] font-black py-2.5 rounded-lg border border-neutral-700">Отмена</button>
+            <button onclick="confirmPlaceBet()" class="flex-1 bg-emerald-500 text-black text-[11px] font-black py-2.5 rounded-lg">Поставить</button>
+          </div>
+        </div>
+      </div>
+
       <!-- ТАБ АДМИН (существует в разметке для всех, но вкладка внизу скрыта
            у обычных игроков и сам запрос данных всё равно упадёт с 403
            на сервере, если открыть эту вкладку в обход интерфейса) -->
@@ -480,6 +532,31 @@
           </div>
         </div>
 
+        <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-3 mb-4">
+          <div class="text-[10px] font-bold text-neutral-300 mb-2">Создать ивент ставок</div>
+          <input id="admin-bet-title" type="text" placeholder="Название (напр. Матч А — Б)"
+            class="w-full bg-black border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 mb-2">
+          <input id="admin-bet-description" type="text" placeholder="Описание (необязательно)"
+            class="w-full bg-black border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 mb-2">
+
+          <div id="admin-bet-options" class="space-y-2 mb-2"></div>
+          <div class="flex gap-2 mb-3">
+            <button onclick="adminAddBetOption()" class="flex-1 bg-neutral-800 text-white text-[10px] font-black py-2 rounded-lg border border-neutral-700">+ Вариант исхода</button>
+          </div>
+          <p class="text-[9px] text-neutral-500 mb-2">Проценты — это шанс на вариант (как полосы в Binance/Fanton). Коэффициент выплаты считается автоматически как 100/процент.</p>
+          <button onclick="adminCreateBetEvent()" class="w-full bg-emerald-500 text-black text-[11px] font-black py-2.5 rounded-lg">Создать ивент</button>
+        </div>
+
+        <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-3 mb-4">
+          <div class="flex justify-between items-center mb-2">
+            <div class="text-[10px] font-bold text-neutral-300">Ивенты ставок</div>
+            <button onclick="loadAdminBetEvents()" class="text-[9px] text-emerald-400 font-bold">↻ Обновить</button>
+          </div>
+          <div id="admin-bet-events-list" class="space-y-2">
+            <div class="text-neutral-500 text-xs">Загрузка...</div>
+          </div>
+        </div>
+
         <div class="flex justify-between items-center mb-2">
           <div class="text-[10px] font-bold text-neutral-300">Игроки</div>
           <button onclick="loadAdminPanel()" class="text-[9px] text-emerald-400 font-bold">↻ Обновить</button>
@@ -514,6 +591,9 @@
       </button>
       <button onclick="switchTab('draft')" id="nav-draft" class="flex flex-col items-center gap-1 text-[9px] font-black text-neutral-500">
         <span class="text-xl">⚔️</span> ДРАФТ
+      </button>
+      <button onclick="switchTab('bets')" id="nav-bets" class="flex flex-col items-center gap-1 text-[9px] font-black text-neutral-500">
+        <span class="text-xl">📈</span> СТАВКИ
       </button>
       <!-- Кнопка админки скрыта по умолчанию (class="hidden") и показывается
            только если сервер подтвердил isAdmin: true в ответе /api/me.
@@ -553,7 +633,7 @@
     </div>
 
     <div id="stars-modal" class="hidden absolute inset-0 bg-black/90 z-50 flex flex-col justify-center items-center p-6">
-      <div class="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 w-full max-w-xs text-center shadow-2xl">
+      <div class="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 w-full max-w-xs text-center shadow-2xl max-h-[90%] overflow-y-auto">
         <div class="text-3xl mb-2">⭐️</div>
         <h3 class="font-black text-lg mb-1">Пополнить Stars</h3>
         <p class="text-[10px] text-neutral-400 mb-4">Оплата через официальный платёж Telegram Stars.</p>
@@ -570,7 +650,45 @@
             <button onclick="purchaseCustomStars()" class="bg-amber-500 text-black font-black px-4 rounded-lg text-xs">OK</button>
           </div>
         </div>
+
+        <!-- Обмен ⭐️ -> 🪙 уже РАБОТАЕТ (в отличие от вывода ниже в withdraw-modal) —
+             курс приходит с сервера в /api/me (starsToSliveRate), чтобы не дублировать
+             магическое число на клиенте. -->
+        <div class="border-t border-neutral-800 pt-3 mt-3">
+          <div class="text-[10px] text-neutral-400 mb-2 text-left">Обменять ⭐️ на 🪙 $SLive (курс: 1 ⭐️ = <span id="exchange-rate-label">—</span> 🪙):</div>
+          <div class="flex gap-2 mb-2">
+            <input id="exchange-stars-amount" type="number" min="1" placeholder="Сколько ⭐️ обменять" oninput="updateExchangePreview()"
+              class="flex-1 bg-black border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600">
+          </div>
+          <div class="text-[10px] text-neutral-400 mb-2 text-left">Получишь: <span id="exchange-preview" class="text-emerald-400 font-black">0 🪙</span></div>
+          <button onclick="exchangeStarsToSliveClick()" class="w-full bg-emerald-500 text-black font-black py-2.5 rounded-xl text-sm">Обменять</button>
+        </div>
+
         <button onclick="document.getElementById('stars-modal').classList.add('hidden')" class="mt-4 text-neutral-500 text-xs font-bold">Отмена</button>
+      </div>
+    </div>
+
+    <!-- ВЫВОД: интерфейс уже есть (в духе обменника выше), но сама выплата
+         реальных денег/звёзд ещё не подключена — кнопка нарочно задизейблена
+         и подписана "Скоро", чтобы не создавать у игрока ложных ожиданий. -->
+    <div id="withdraw-modal" class="hidden absolute inset-0 bg-black/90 z-50 flex flex-col justify-center items-center p-6">
+      <div class="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 w-full max-w-xs text-center shadow-2xl">
+        <div class="text-3xl mb-2">💵</div>
+        <h3 class="font-black text-lg mb-1">Вывод</h3>
+        <p class="text-[10px] text-neutral-400 mb-4">Обмен 🪙 $SLive обратно на ⭐️ Stars.</p>
+
+        <div class="text-left mb-2">
+          <div class="text-[10px] text-neutral-400 mb-2">Сумма $SLive:</div>
+          <input id="withdraw-slive-amount" type="number" min="1" placeholder="Сколько 🪙 вывести" disabled
+            class="w-full bg-black border border-neutral-800 rounded-lg px-3 py-2 text-xs text-neutral-500 placeholder-neutral-700 mb-2 cursor-not-allowed">
+        </div>
+
+        <button disabled class="w-full bg-neutral-800 text-neutral-500 font-black py-2.5 rounded-xl text-sm cursor-not-allowed border border-neutral-700">
+          Обменять — Скоро
+        </button>
+        <p class="text-[9px] text-neutral-500 mt-3">Эта функция появится в одном из следующих обновлений.</p>
+
+        <button onclick="document.getElementById('withdraw-modal').classList.add('hidden')" class="mt-4 text-neutral-500 text-xs font-bold">Закрыть</button>
       </div>
     </div>
 
@@ -674,7 +792,7 @@
       try {
         // start_param мини-аппы — это telegram_id пригласившего, если ссылка реферальная.
         const startParam = tg?.initDataUnsafe?.start_param || '';
-        const { user, isAdmin: adminFlag } = await apiPost('/api/me', { startParam });
+        const { user, isAdmin: adminFlag, starsToSliveRate } = await apiPost('/api/me', { startParam });
         tgStars = user.tgStars;
         sliveTokens = user.sliveTokens;
         isVip = user.isVip;
@@ -682,6 +800,11 @@
         myClub = user.myClub; // карты — только те, что реально есть в инвентаре на сервере
         squad = instIdMapToSquad(user.squad, myClub);
         passiveIncome = user.farmRate;
+        if (starsToSliveRate) {
+          exchangeRate = starsToSliveRate;
+          const rateLabel = document.getElementById('exchange-rate-label');
+          if (rateLabel) rateLabel.innerText = exchangeRate;
+        }
 
         renderSquad();
         renderPackDrops();
@@ -710,6 +833,13 @@
         ]);
         document.getElementById('admin-referral-channel').value = link || '';
         loadReferralRequests();
+        loadAdminBetEvents();
+        // Затравка формы создания ивента двумя пустыми вариантами — но только
+        // при первом открытии, иначе каждое "↻ Обновить" дублировало бы строки.
+        if (document.getElementById('admin-bet-options').children.length === 0) {
+          adminAddBetOption();
+          adminAddBetOption();
+        }
 
         document.getElementById('stat-total-users').innerText = stats.totalUsers;
         document.getElementById('stat-total-stars').innerText = stats.totalStarsBalance.toLocaleString();
@@ -726,6 +856,13 @@
           // (tg://user?id=... открывается только внутри самого Telegram).
           const link = u.username ? `https://t.me/${u.username}` : `tg://user?id=${u.telegramId}`;
           const label = u.username ? '@' + u.username : `ID ${u.telegramId}`;
+          const rarity = u.rarityCounts || {};
+          const rarityLine = [
+            rarity.bronze ? `🥉${rarity.bronze}` : '',
+            rarity.silver ? `🥈${rarity.silver}` : '',
+            rarity.gold ? `🥇${rarity.gold}` : '',
+            rarity.legend ? `⭐${rarity.legend}` : '',
+          ].filter(Boolean).join(' ') || '— карт нет';
           return `
           <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-2.5 flex justify-between items-center gap-2">
             <div class="min-w-0">
@@ -738,6 +875,13 @@
                 <span class="text-neutral-400">👥 ${u.invited}</span>
                 &nbsp;·&nbsp;
                 <span class="text-neutral-400">⚡ ${u.energy}</span>
+              </div>
+              <div class="text-[9px] text-neutral-500 mt-0.5">
+                <span class="text-sky-400 font-bold">📈 +${u.farmRate}/день</span>
+                &nbsp;·&nbsp;
+                <span class="text-neutral-400">💪 ${u.clubPower} OVR</span>
+                &nbsp;·&nbsp;
+                <span class="text-neutral-400">${rarityLine}</span>
               </div>
             </div>
             <button onclick="prefillAdjust('${u.telegramId}')" class="shrink-0 text-[9px] font-black text-neutral-400 border border-neutral-700 rounded-lg px-2 py-1">Изменить</button>
@@ -814,6 +958,117 @@
       } catch (e) {
         console.error(e);
         alertMsg('Не удалось отклонить заявку.');
+      }
+    }
+
+    // ---------- АДМИН: СТАВКИ ----------
+    let adminBetOptionSeq = 0;
+
+    function adminAddBetOption() {
+      const id = ++adminBetOptionSeq;
+      const wrap = document.createElement('div');
+      wrap.className = 'flex gap-2';
+      wrap.id = `admin-bet-option-${id}`;
+      wrap.innerHTML = `
+        <input type="text" placeholder="Вариант (напр. Победа А)" data-role="label"
+          class="flex-1 bg-black border border-neutral-700 rounded-lg px-2 py-2 text-[11px] text-white placeholder-neutral-600">
+        <input type="number" placeholder="%" min="1" max="95" data-role="percent"
+          class="w-16 bg-black border border-neutral-700 rounded-lg px-2 py-2 text-[11px] text-white placeholder-neutral-600">
+        <button onclick="document.getElementById('admin-bet-option-${id}').remove()" class="text-red-400 text-[11px] font-black px-2">✕</button>
+      `;
+      document.getElementById('admin-bet-options').appendChild(wrap);
+    }
+
+    async function adminCreateBetEvent() {
+      const title = document.getElementById('admin-bet-title').value.trim();
+      const description = document.getElementById('admin-bet-description').value.trim();
+      const optionRows = Array.from(document.querySelectorAll('#admin-bet-options > div'));
+      const options = optionRows.map(row => ({
+        label: row.querySelector('[data-role="label"]').value.trim(),
+        percent: Number(row.querySelector('[data-role="percent"]').value),
+      })).filter(o => o.label && o.percent > 0);
+
+      if (!title) return alertMsg('Впиши название ивента.');
+      if (options.length < 2) return alertMsg('Нужно минимум 2 варианта исхода с процентом.');
+
+      try {
+        await apiPost('/api/admin/bets/create', { title, description, options });
+        alertMsg('Ивент создан!');
+        document.getElementById('admin-bet-title').value = '';
+        document.getElementById('admin-bet-description').value = '';
+        document.getElementById('admin-bet-options').innerHTML = '';
+        adminAddBetOption();
+        adminAddBetOption();
+        loadAdminBetEvents();
+      } catch (e) {
+        console.error(e);
+        alertMsg('Не удалось создать ивент. Проверь проценты (1–95 на вариант).');
+      }
+    }
+
+    async function loadAdminBetEvents() {
+      const listEl = document.getElementById('admin-bet-events-list');
+      listEl.innerHTML = '<div class="text-neutral-500 text-xs">Загрузка...</div>';
+      try {
+        const { events } = await apiPost('/api/admin/bets/list');
+        if (events.length === 0) {
+          listEl.innerHTML = '<div class="text-neutral-500 text-xs">Пока нет ивентов.</div>';
+          return;
+        }
+        listEl.innerHTML = events.map(ev => {
+          const optionsHtml = ev.options.map(opt => `
+            <div class="flex justify-between items-center text-[10px] py-0.5">
+              <span class="text-neutral-300">${opt.label} <span class="text-neutral-500">(${opt.percent}%, x${opt.multiplier})</span></span>
+              <span class="text-neutral-500">🪙 ${opt.pool.toLocaleString()} · ${opt.betsCount} ставок</span>
+            </div>
+          `).join('');
+
+          const resolveControls = ev.status !== 'resolved' ? `
+            <div class="flex gap-2 mt-2">
+              <select id="admin-bet-resolve-${ev.id}" class="flex-1 bg-black border border-neutral-700 rounded-lg px-2 py-1.5 text-[10px] text-white">
+                ${ev.options.map(o => `<option value="${o.id}">${o.label}</option>`).join('')}
+              </select>
+              <button onclick="adminResolveBetEvent('${ev.id}')" class="bg-emerald-500 text-black text-[10px] font-black px-3 rounded-lg">Подтвердить исход</button>
+            </div>
+            ${ev.status === 'open' ? `<button onclick="adminCloseBetEvent('${ev.id}')" class="w-full mt-1.5 bg-neutral-800 text-white text-[10px] font-black py-1.5 rounded-lg border border-neutral-700">Остановить приём ставок</button>` : ''}
+          ` : `<div class="text-[10px] text-amber-400 font-bold mt-1.5">Исход: ${ev.options.find(o => o.id === ev.resolvedOptionId)?.label || '—'}</div>`;
+
+          return `
+          <div class="bg-black/40 border border-neutral-800 rounded-xl p-2.5">
+            <div class="flex justify-between items-center mb-1">
+              <div class="text-[11px] font-bold text-white">${ev.title}</div>
+              <span class="text-[8px] font-black text-neutral-400 border border-neutral-700 rounded-full px-2 py-0.5">${ev.status.toUpperCase()}</span>
+            </div>
+            ${optionsHtml}
+            ${resolveControls}
+          </div>
+        `}).join('');
+      } catch (e) {
+        console.error(e);
+        listEl.innerHTML = '<div class="text-red-400 text-xs">Не удалось загрузить ивенты.</div>';
+      }
+    }
+
+    async function adminCloseBetEvent(eventId) {
+      try {
+        await apiPost('/api/admin/bets/close', { eventId });
+        loadAdminBetEvents();
+      } catch (e) {
+        console.error(e);
+        alertMsg('Не удалось остановить приём ставок.');
+      }
+    }
+
+    async function adminResolveBetEvent(eventId) {
+      const winningOptionId = document.getElementById(`admin-bet-resolve-${eventId}`).value;
+      if (!confirm('Подтвердить исход? Это выплатит победителям и действие нельзя отменить.')) return;
+      try {
+        await apiPost('/api/admin/bets/resolve', { eventId, winningOptionId });
+        alertMsg('Исход подтверждён, победители получили выплату.');
+        loadAdminBetEvents();
+      } catch (e) {
+        console.error(e);
+        alertMsg('Не удалось подтвердить исход.');
       }
     }
 
@@ -1010,6 +1265,42 @@
       document.getElementById('stars-modal').classList.remove('hidden');
     }
 
+    function openWithdrawModal() {
+      if (!tg?.initData) {
+        return alertMsg('Доступно только внутри Telegram.');
+      }
+      document.getElementById('withdraw-modal').classList.remove('hidden');
+    }
+
+    // ---------- Обмен ⭐️ Stars -> 🪙 $SLive ----------
+    // Курс приходит с сервера (см. syncBalanceFromServer) — здесь значение
+    // только на случай, если /api/me ещё не успел ответить.
+    let exchangeRate = 25;
+
+    function updateExchangePreview() {
+      const amount = Number(document.getElementById('exchange-stars-amount').value) || 0;
+      document.getElementById('exchange-preview').innerText = `${(amount * exchangeRate).toLocaleString()} 🪙`;
+    }
+
+    async function exchangeStarsToSliveClick() {
+      const amount = Math.floor(Number(document.getElementById('exchange-stars-amount').value));
+      if (!amount || amount <= 0) return alertMsg('Укажи, сколько ⭐️ обменять.');
+      if (amount > tgStars) return alertMsg('Недостаточно ⭐️ Stars на балансе.');
+
+      try {
+        const result = await apiPost('/api/exchange-stars', { amount });
+        tgStars = result.starsBalance;
+        sliveTokens = result.sliveBalance;
+        updateHeader();
+        document.getElementById('exchange-stars-amount').value = '';
+        updateExchangePreview();
+        alertMsg(`Готово! +${result.gained.toLocaleString()} 🪙 $SLive.`);
+      } catch (e) {
+        console.error(e);
+        alertMsg('Не удалось обменять. Проверь баланс Stars.');
+      }
+    }
+
     function purchaseCustomStars() {
       const amount = Number(document.getElementById('stars-custom-amount').value);
       if (!Number.isFinite(amount) || amount < 50) {
@@ -1195,11 +1486,18 @@
             const whole = Math.floor(farmAccumulator);
             sliveTokens += whole;
             farmAccumulator -= whole;
-            spawnMiningCoins();
           }
         }
         updateHeader();
       }, 1000);
+
+      // Монетки над картами состава — ЧИСТО визуальный эффект ("жизнь" в
+      // интерфейсе), намеренно НЕ привязан к моменту, когда реально
+      // накопился целый $SLive (для маленького состава это могло бы занимать
+      // много минут между анимациями и выглядело бы мёртвым). Каждая карта
+      // "капает" монетками со своим небольшим случайным сдвигом по времени —
+      // получается органичный, не синхронный дождь монет по всему составу.
+      setInterval(spawnMiningCoins, 2600);
 
       // Периодически подтягиваем авторитетный баланс/энергию с сервера —
       // так цифры не расходятся даже при долгой открытой сессии.
@@ -1347,14 +1645,22 @@
 
     function spawnMiningCoins() {
       Object.keys(squad).forEach(slot => {
-        if (squad[slot]) {
+        if (!squad[slot]) return;
+        // Небольшой случайный сдвиг на карту — иначе все монетки выпрыгивали
+        // бы синхронно, что выглядит статично. Так карты "капают" вразнобой.
+        const delay = Math.random() * 1400;
+        setTimeout(() => {
           const container = document.getElementById(`slot-container-${slot}`);
+          if (!container) return; // состав мог перерисоваться/измениться за время задержки
           const coin = document.createElement('div');
           coin.className = 'mining-coin';
-          coin.innerText = `+${Math.floor(squad[slot].income)}`;
+          // Показываем дневной доход карты (income/день), округлённый вверх до
+          // хотя бы 1 — это чисто визуальная подсказка "эта карта фармит",
+          // а не точная сумма, которая реально зачислилась именно в этот момент.
+          coin.innerText = `+${Math.max(1, Math.round(squad[slot].income))}`;
           container.appendChild(coin);
-          setTimeout(() => coin.remove(), 1400);
-        }
+          setTimeout(() => coin.remove(), 1500);
+        }, delay);
       });
     }
 
@@ -1481,7 +1787,7 @@
       document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
       document.getElementById(`tab-${tabId}`).classList.remove('hidden');
 
-      ['squad', 'club', 'tap', 'packs', 'market', 'leaderboard', 'draft', 'admin'].forEach(t => {
+      ['squad', 'club', 'tap', 'packs', 'market', 'leaderboard', 'draft', 'bets', 'admin'].forEach(t => {
         const el = document.getElementById(`nav-${t}`);
         if (!el) return;
         const isHiddenAdmin = t === 'admin' && !isAdmin;
@@ -1493,6 +1799,7 @@
       if (tabId === 'market') loadReferralInfo();
       if (tabId === 'club') renderClubInventory();
       if (tabId === 'draft') loadDraftState();
+      if (tabId === 'bets') loadBetEvents();
     }
 
     // МАРКЕТ ИГРОКОВ (покупка конкретной карточки, без рандома)
@@ -1716,6 +2023,167 @@
       } catch (e) {
         console.error(e);
         listEl.innerHTML = '<div class="text-red-400 text-xs">Не удалось загрузить рейтинг драфта.</div>';
+      }
+    }
+
+    // ---------- СТАВКИ ----------
+    // Ивенты и проценты полностью управляются админом (см. АДМИН-ПАНЕЛЬ ниже) —
+    // здесь только отрисовка Binance/Fanton-style полос и оформление ставки.
+    let betsView = 'events';
+    let betModalState = { eventId: null, optionId: null, multiplier: 1 };
+
+    function switchBetsView(view) {
+      betsView = view;
+      document.getElementById('bets-events-list').classList.toggle('hidden', view !== 'events');
+      document.getElementById('bets-mine-list').classList.toggle('hidden', view !== 'mine');
+      document.getElementById('bets-view-events-btn').className =
+        `flex-1 text-[10px] font-black py-2 rounded-lg ${view === 'events' ? 'bg-emerald-500 text-black' : 'bg-neutral-800 text-neutral-300 border border-neutral-700'}`;
+      document.getElementById('bets-view-mine-btn').className =
+        `flex-1 text-[10px] font-black py-2 rounded-lg ${view === 'mine' ? 'bg-emerald-500 text-black' : 'bg-neutral-800 text-neutral-300 border border-neutral-700'}`;
+      if (view === 'events') loadBetEvents(); else loadMyBets();
+    }
+
+    // Цвета полос по индексу варианта — как разноцветные шкалы в Binance/Fanton.
+    const BET_BAR_COLORS = ['bg-emerald-500', 'bg-red-500', 'bg-amber-400', 'bg-sky-400', 'bg-fuchsia-400'];
+
+    async function loadBetEvents() {
+      const listEl = document.getElementById('bets-events-list');
+      if (!tg?.initData) {
+        listEl.innerHTML = '<div class="text-neutral-500 text-xs">Доступно только внутри Telegram.</div>';
+        return;
+      }
+      listEl.innerHTML = '<div class="text-neutral-500 text-xs">Загрузка...</div>';
+      try {
+        const { events } = await apiPost('/api/bets/events');
+        renderBetEvents(events);
+      } catch (e) {
+        console.error(e);
+        listEl.innerHTML = '<div class="text-red-400 text-xs">Не удалось загрузить ивенты.</div>';
+      }
+    }
+
+    function renderBetEvents(events) {
+      const listEl = document.getElementById('bets-events-list');
+      if (events.length === 0) {
+        listEl.innerHTML = '<div class="text-neutral-500 text-xs text-center py-6">Пока нет ни одного ивента.</div>';
+        return;
+      }
+      listEl.innerHTML = events.map(ev => {
+        const isOpen = ev.status === 'open';
+        const statusBadge = ev.status === 'open'
+          ? '<span class="text-[8px] font-black text-emerald-400 border border-emerald-500/40 rounded-full px-2 py-0.5">ОТКРЫТО</span>'
+          : ev.status === 'closed'
+            ? '<span class="text-[8px] font-black text-amber-400 border border-amber-500/40 rounded-full px-2 py-0.5">ПРИЁМ ЗАКРЫТ</span>'
+            : '<span class="text-[8px] font-black text-neutral-400 border border-neutral-600 rounded-full px-2 py-0.5">ЗАВЕРШЁН</span>';
+
+        const optionsHtml = ev.options.map((opt, i) => {
+          const color = BET_BAR_COLORS[i % BET_BAR_COLORS.length];
+          const isWinner = ev.resolvedOptionId === opt.id;
+          const clickable = isOpen ? `onclick="openBetModal('${ev.id}','${opt.id}','${opt.label.replace(/'/g, "\\'")}',${opt.multiplier})"` : '';
+          return `
+            <div class="relative ${isOpen ? 'cursor-pointer' : ''}" ${clickable}>
+              <div class="flex justify-between items-center text-[9px] mb-0.5">
+                <span class="font-bold text-white flex items-center gap-1">${opt.label}${isWinner ? ' 🏆' : ''}</span>
+                <span class="text-neutral-400">${opt.percent}% · x${opt.multiplier}</span>
+              </div>
+              <div class="w-full bg-neutral-800 rounded-full h-3 overflow-hidden">
+                <div class="${isWinner ? 'bg-amber-400' : color} h-3 rounded-full transition-all" style="width:${Math.min(100, opt.percent)}%"></div>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        return `
+        <div class="bg-neutral-900 border ${ev.status === 'resolved' ? 'border-neutral-800' : 'border-emerald-500/20'} rounded-2xl p-3">
+          <div class="flex justify-between items-start gap-2 mb-1">
+            <div class="text-xs font-black text-white">${ev.title}</div>
+            ${statusBadge}
+          </div>
+          ${ev.description ? `<p class="text-[9px] text-neutral-500 mb-2">${ev.description}</p>` : ''}
+          <div class="space-y-2 mb-2">${optionsHtml}</div>
+          <div class="text-[9px] text-neutral-500">Банк: <span class="text-emerald-400 font-bold">🪙 ${ev.totalPool.toLocaleString()}</span></div>
+          ${ev.status === 'resolved' ? `<div class="text-[9px] text-amber-400 font-bold mt-1">Исход: ${ev.options.find(o => o.id === ev.resolvedOptionId)?.label || '—'}</div>` : ''}
+        </div>
+      `}).join('');
+    }
+
+    function openBetModal(eventId, optionId, label, multiplier) {
+      betModalState = { eventId, optionId, multiplier };
+      document.getElementById('bet-modal-option-label').innerText = label;
+      document.getElementById('bet-modal-multiplier').innerText = `x${multiplier}`;
+      document.getElementById('bet-amount-input').value = '';
+      updateBetPotential();
+      document.getElementById('bet-amount-modal').classList.remove('hidden');
+    }
+
+    function closeBetModal() {
+      document.getElementById('bet-amount-modal').classList.add('hidden');
+    }
+
+    function setBetAmount(v) {
+      document.getElementById('bet-amount-input').value = v;
+      updateBetPotential();
+    }
+
+    function setBetAmountMax() {
+      document.getElementById('bet-amount-input').value = sliveTokens;
+      updateBetPotential();
+    }
+
+    function updateBetPotential() {
+      const amount = Number(document.getElementById('bet-amount-input').value) || 0;
+      const potential = Math.floor(amount * betModalState.multiplier);
+      document.querySelector('#bet-modal-potential span').innerText = `🪙 ${potential.toLocaleString()}`;
+    }
+
+    async function confirmPlaceBet() {
+      const amount = Math.floor(Number(document.getElementById('bet-amount-input').value));
+      if (!amount || amount < 10) return alertMsg('Минимальная ставка — 10 $SLive.');
+      if (amount > sliveTokens) return alertMsg('Недостаточно $SLive.');
+      try {
+        const result = await apiPost('/api/bets/place', {
+          eventId: betModalState.eventId,
+          optionId: betModalState.optionId,
+          amount,
+        });
+        sliveTokens = result.balance;
+        updateHeader();
+        closeBetModal();
+        alertMsg('Ставка принята!');
+        loadBetEvents();
+      } catch (e) {
+        console.error(e);
+        alertMsg('Не удалось поставить. Возможно, приём ставок уже закрыт.');
+      }
+    }
+
+    async function loadMyBets() {
+      const listEl = document.getElementById('bets-mine-list');
+      listEl.innerHTML = '<div class="text-neutral-500 text-xs">Загрузка...</div>';
+      try {
+        const { bets } = await apiPost('/api/bets/mine');
+        if (bets.length === 0) {
+          listEl.innerHTML = '<div class="text-neutral-500 text-xs text-center py-6">Пока нет ставок.</div>';
+          return;
+        }
+        listEl.innerHTML = bets.map(b => {
+          const statusLabel = b.status === 'won'
+            ? `<span class="text-emerald-400 font-black">🏆 +${b.payout}</span>`
+            : b.status === 'lost'
+              ? '<span class="text-red-400 font-black">Проигрыш</span>'
+              : '<span class="text-amber-400 font-black">Ожидание</span>';
+          return `
+          <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-2.5 flex justify-between items-center">
+            <div class="min-w-0">
+              <div class="text-[11px] font-bold text-white truncate">${b.eventTitle}</div>
+              <div class="text-[9px] text-neutral-500">${b.optionLabel} · x${b.multiplier} · 🪙 ${b.amount.toLocaleString()}</div>
+            </div>
+            <div class="text-[11px] shrink-0">${statusLabel}</div>
+          </div>
+        `}).join('');
+      } catch (e) {
+        console.error(e);
+        listEl.innerHTML = '<div class="text-red-400 text-xs">Не удалось загрузить ставки.</div>';
       }
     }
 
