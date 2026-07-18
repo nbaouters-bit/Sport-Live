@@ -485,6 +485,14 @@
           </div>
         </div>
 
+        <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-3 mb-4 flex items-center justify-between gap-2">
+          <div>
+            <div class="text-[10px] font-bold text-neutral-300">Резервная копия базы</div>
+            <div class="text-[9px] text-neutral-500">Бот пришлёт файл базы тебе в личку в Telegram</div>
+          </div>
+          <button onclick="adminBackupNow()" id="admin-backup-btn" class="bg-neutral-800 text-white text-[10px] font-black px-3 py-2 rounded-lg border border-neutral-700 whitespace-nowrap">Бэкап сейчас</button>
+        </div>
+
         <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-3 mb-4">
           <div class="text-[10px] font-bold text-neutral-300 mb-2">Ручная корректировка Stars</div>
           <div class="flex flex-col gap-2">
@@ -893,6 +901,22 @@
       }
     }
 
+    async function adminBackupNow() {
+      const btn = document.getElementById('admin-backup-btn');
+      btn.disabled = true;
+      btn.textContent = 'Отправка...';
+      try {
+        await apiPost('/api/admin/backup-now');
+        alertMsg('Бэкап отправлен тебе в личку боту.');
+      } catch (e) {
+        console.error(e);
+        alertMsg('Не удалось отправить бэкап.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Бэкап сейчас';
+      }
+    }
+
     async function adminSetReferralChannel() {
       const link = document.getElementById('admin-referral-channel').value.trim();
       try {
@@ -1017,8 +1041,17 @@
         }
         listEl.innerHTML = events.map(ev => {
           const optionsHtml = ev.options.map(opt => `
-            <div class="flex justify-between items-center text-[10px] py-0.5">
-              <span class="text-neutral-300">${opt.label} <span class="text-neutral-500">(${opt.percent}%, x${opt.multiplier})</span></span>
+            <div class="flex justify-between items-center gap-2 text-[10px] py-1 border-b border-neutral-900 last:border-b-0">
+              <span class="text-neutral-300 flex-1">${opt.label}</span>
+              ${ev.status === 'open' ? `
+                <div class="flex items-center gap-1">
+                  <input type="number" min="1" max="95" value="${opt.percent}"
+                    id="admin-odds-${opt.id}" data-event="${ev.id}" data-option="${opt.id}"
+                    class="w-14 bg-black border border-neutral-700 rounded-lg px-1.5 py-1 text-[10px] text-white text-center">
+                  <span class="text-neutral-500">%</span>
+                  <button onclick="adminUpdateOdds('${ev.id}', '${opt.id}')" class="bg-emerald-500 text-black text-[9px] font-black px-2 py-1 rounded-lg">x${opt.multiplier}</button>
+                </div>
+              ` : `<span class="text-neutral-500">(${opt.percent}%, x${opt.multiplier})</span>`}
               <span class="text-neutral-500">🪙 ${opt.pool.toLocaleString()} · ${opt.betsCount} ставок</span>
             </div>
           `).join('');
@@ -1046,6 +1079,25 @@
       } catch (e) {
         console.error(e);
         listEl.innerHTML = '<div class="text-red-400 text-xs">Не удалось загрузить ивенты.</div>';
+      }
+    }
+
+    // Меняет кэф "вживую": уже сделанные ставки остаются с прежним
+    // коэффициентом (он зафиксирован в момент ставки), новый % действует
+    // только на ставки, сделанные после этого.
+    async function adminUpdateOdds(eventId, optionId) {
+      const input = document.getElementById(`admin-odds-${optionId}`);
+      const percent = Number(input.value);
+      if (!Number.isFinite(percent) || percent < 1 || percent > 95) {
+        alertMsg('Процент должен быть от 1 до 95.');
+        return;
+      }
+      try {
+        await apiPost('/api/admin/bets/update-odds', { eventId, optionId, percent });
+        loadAdminBetEvents();
+      } catch (e) {
+        console.error(e);
+        alertMsg('Не удалось изменить кэф.');
       }
     }
 
