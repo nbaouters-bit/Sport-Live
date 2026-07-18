@@ -323,16 +323,22 @@
         <div class="bg-neutral-900 border border-neutral-800 rounded-2xl p-4">
           <p class="text-[10px] text-neutral-400 mb-3">За каждого друга, который впервые откроет игру по твоей ссылке, ты получишь <span class="text-emerald-400 font-bold">🪙 <span id="referral-reward-amount">—</span> $SLive</span>.</p>
 
-          <!-- Показывается, пока игрок ещё не запросил статус реферала -->
-          <div id="referral-gate">
+          <!-- status: 'none' — заявки ещё не было -->
+          <div id="referral-state-none">
             <div id="referral-channel-block" class="hidden bg-black/40 border border-neutral-800 rounded-lg px-3 py-2 text-[10px] text-neutral-300 mb-2">
               Сначала подпишись: <a id="referral-channel-link" href="#" target="_blank" class="text-emerald-400 underline break-all">ссылка</a>
             </div>
             <button onclick="requestReferralAccess()" class="w-full bg-emerald-500 text-black text-[10px] font-black py-2.5 rounded-lg">Я подписался — получить ссылку</button>
           </div>
 
-          <!-- Показывается после успешного запроса (referral_unlocked = 1 на сервере) -->
-          <div id="referral-unlocked-block" class="hidden">
+          <!-- status: 'pending' — заявка отправлена, ждём подтверждения админом -->
+          <div id="referral-state-pending" class="hidden bg-black/40 border border-yellow-500/30 rounded-lg px-3 py-3 text-center">
+            <div class="text-yellow-400 text-[11px] font-black mb-1">⏳ Ожидай подтверждения</div>
+            <div class="text-[10px] text-neutral-400">Заявка отправлена администратору. Как только он подтвердит её, здесь появится твоя ссылка, а бот пришлёт уведомление.</div>
+          </div>
+
+          <!-- status: 'approved' — админ вставил ссылку и подтвердил заявку -->
+          <div id="referral-state-approved" class="hidden">
             <div id="referral-link" class="bg-black/40 border border-neutral-800 rounded-lg px-3 py-2 text-[10px] text-neutral-300 break-all mb-2">Загрузка...</div>
             <div class="flex gap-2">
               <button onclick="copyReferralLink()" class="flex-1 bg-neutral-800 text-white text-[10px] font-black py-2 rounded-lg border border-neutral-700">Скопировать</button>
@@ -343,6 +349,7 @@
           <div class="text-[10px] text-neutral-400 mt-3">Приглашено друзей: <span id="referral-count" class="text-white font-bold">0</span></div>
         </div>
       </div>
+
 
       <!-- ТАБ 5: ЛИДЕРБОРД -->
       <div id="tab-leaderboard" class="tab-content hidden p-4">
@@ -462,6 +469,17 @@
           </div>
         </div>
 
+        <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-3 mb-4">
+          <div class="flex justify-between items-center mb-2">
+            <div class="text-[10px] font-bold text-neutral-300">Заявки на реферальную ссылку</div>
+            <button onclick="loadReferralRequests()" class="text-[9px] text-emerald-400 font-bold">↻ Обновить</button>
+          </div>
+          <p class="text-[9px] text-neutral-500 mb-2">Впиши ссылку (можно поправить подсказанную) и подтверди — игрок сразу увидит её у себя, и бот пришлёт ему уведомление.</p>
+          <div id="admin-referral-requests" class="space-y-2">
+            <div class="text-neutral-500 text-xs">Загрузка...</div>
+          </div>
+        </div>
+
         <div class="flex justify-between items-center mb-2">
           <div class="text-[10px] font-bold text-neutral-300">Игроки</div>
           <button onclick="loadAdminPanel()" class="text-[9px] text-emerald-400 font-bold">↻ Обновить</button>
@@ -470,6 +488,7 @@
           <div class="text-neutral-500 text-xs">Загрузка...</div>
         </div>
       </div>
+
 
     </div>
 
@@ -690,6 +709,7 @@
           apiPost('/api/admin/referral-channel/get'),
         ]);
         document.getElementById('admin-referral-channel').value = link || '';
+        loadReferralRequests();
 
         document.getElementById('stat-total-users').innerText = stats.totalUsers;
         document.getElementById('stat-total-stars').innerText = stats.totalStarsBalance.toLocaleString();
@@ -737,6 +757,63 @@
       } catch (e) {
         console.error(e);
         alertMsg('Не удалось сохранить ссылку.');
+      }
+    }
+
+    // Список заявок на реферальную ссылку, ожидающих подтверждения. Для
+    // каждой — поле ввода, предзаполненное подсказанной ссылкой
+    // (t.me/bot?startapp=id), которую админ может поправить перед подтверждением.
+    async function loadReferralRequests() {
+      const listEl = document.getElementById('admin-referral-requests');
+      try {
+        const { requests } = await apiPost('/api/admin/referral-requests');
+        if (requests.length === 0) {
+          listEl.innerHTML = '<div class="text-neutral-500 text-xs">Нет новых заявок.</div>';
+          return;
+        }
+        listEl.innerHTML = requests.map(r => {
+          const label = r.username ? '@' + r.username : `ID ${r.telegramId}`;
+          const inputId = `referral-req-link-${r.telegramId}`;
+          return `
+          <div class="bg-black/40 border border-neutral-800 rounded-xl p-2.5">
+            <div class="text-[11px] font-bold text-emerald-400 mb-1.5">${label}</div>
+            <div class="flex gap-2">
+              <input id="${inputId}" type="text" value="${(r.suggestedLink || '').replace(/"/g, '&quot;')}" placeholder="Ссылка для этого игрока"
+                class="flex-1 bg-black border border-neutral-700 rounded-lg px-2 py-1.5 text-[10px] text-white placeholder-neutral-600">
+            </div>
+            <div class="flex gap-2 mt-1.5">
+              <button onclick="adminApproveReferral('${r.telegramId}', '${inputId}')" class="flex-1 bg-emerald-500 text-black text-[10px] font-black py-1.5 rounded-lg">Подтвердить</button>
+              <button onclick="adminRejectReferral('${r.telegramId}')" class="flex-1 bg-neutral-800 text-white text-[10px] font-black py-1.5 rounded-lg border border-neutral-700">Отклонить</button>
+            </div>
+          </div>
+        `}).join('');
+      } catch (e) {
+        console.error(e);
+        listEl.innerHTML = '<div class="text-red-400 text-xs">Не удалось загрузить заявки.</div>';
+      }
+    }
+
+    async function adminApproveReferral(telegramId, inputId) {
+      const link = document.getElementById(inputId).value.trim();
+      if (!link) return alertMsg('Впиши ссылку перед подтверждением.');
+      try {
+        await apiPost('/api/admin/referral-approve', { telegramId, link });
+        alertMsg('Заявка подтверждена! Игрок получил уведомление.');
+        loadReferralRequests();
+      } catch (e) {
+        console.error(e);
+        alertMsg('Не удалось подтвердить заявку.');
+      }
+    }
+
+    async function adminRejectReferral(telegramId) {
+      try {
+        await apiPost('/api/admin/referral-reject', { telegramId });
+        alertMsg('Заявка отклонена.');
+        loadReferralRequests();
+      } catch (e) {
+        console.error(e);
+        alertMsg('Не удалось отклонить заявку.');
       }
     }
 
@@ -816,28 +893,28 @@
     }
 
     // ---------- РЕФЕРАЛКА ----------
-    // Ссылка теперь появляется только после явного запроса игрока (кнопка
-    // "Я подписался — получить ссылку") — до этого показываем ссылку на
-    // канал (если админ её задал) и саму кнопку запроса. Источник правды —
-    // поле unlocked из /api/referral-info / /api/referral-request.
+    // Флоу: none -> (кнопка) -> pending -> (админ подтверждает в панели,
+    // вписав ссылку) -> approved. Сама ссылка приходит с сервера (её вписал
+    // админ вручную) — клиент её больше не собирает сам из botUsername.
     let referralLink = '';
-    function renderReferralState({ invited, rewardPerFriend, channelLink, unlocked, botUsername, telegramId }) {
-      referralLink = (unlocked && botUsername) ? `https://t.me/${botUsername}?startapp=${telegramId}` : '';
+    function renderReferralState({ invited, rewardPerFriend, channelLink, status, link }) {
+      referralLink = status === 'approved' ? (link || '') : '';
       document.getElementById('referral-reward-amount').innerText = rewardPerFriend.toLocaleString();
       document.getElementById('referral-count').innerText = invited;
 
-      document.getElementById('referral-gate').classList.toggle('hidden', Boolean(unlocked));
-      document.getElementById('referral-unlocked-block').classList.toggle('hidden', !unlocked);
+      document.getElementById('referral-state-none').classList.toggle('hidden', status !== 'none');
+      document.getElementById('referral-state-pending').classList.toggle('hidden', status !== 'pending');
+      document.getElementById('referral-state-approved').classList.toggle('hidden', status !== 'approved');
 
       const channelBlock = document.getElementById('referral-channel-block');
-      if (channelLink) {
+      if (status === 'none' && channelLink) {
         document.getElementById('referral-channel-link').href = channelLink;
         channelBlock.classList.remove('hidden');
       } else {
         channelBlock.classList.add('hidden');
       }
 
-      if (unlocked) {
+      if (status === 'approved') {
         document.getElementById('referral-link').innerText = referralLink || 'Ссылка временно недоступна.';
       }
     }
@@ -860,7 +937,9 @@
       try {
         const info = await apiPost('/api/referral-request');
         renderReferralState(info);
-        alertMsg('Готово! Твоя реферальная ссылка открыта.');
+        if (info.status === 'pending') {
+          alertMsg('Заявка отправлена! Жди подтверждения от администратора.');
+        }
       } catch (e) {
         console.error('Не удалось запросить статус реферала', e);
         alertMsg('Не удалось оформить запрос. Попробуй ещё раз.');
@@ -1125,6 +1204,10 @@
       // Периодически подтягиваем авторитетный баланс/энергию с сервера —
       // так цифры не расходятся даже при долгой открытой сессии.
       setInterval(syncBalanceFromServer, 30000);
+      // Пока заявка на рефералку висит в статусе 'pending', игрок может не
+      // переоткрывать вкладку, чтобы увидеть, что админ её подтвердил —
+      // подтягиваем статус в фоне вместе с балансом.
+      setInterval(loadReferralInfo, 30000);
     };
 
     // Рендер витрины (Возможный дроп)
