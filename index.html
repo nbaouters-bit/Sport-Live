@@ -1047,9 +1047,11 @@
                 <div class="flex items-center gap-1">
                   <input type="number" min="1" max="95" value="${opt.percent}"
                     id="admin-odds-${opt.id}" data-event="${ev.id}" data-option="${opt.id}"
+                    oninput="adminPreviewOdds('${opt.id}')"
                     class="w-14 bg-black border border-neutral-700 rounded-lg px-1.5 py-1 text-[10px] text-white text-center">
                   <span class="text-neutral-500">%</span>
-                  <button onclick="adminUpdateOdds('${ev.id}', '${opt.id}')" class="bg-emerald-500 text-black text-[9px] font-black px-2 py-1 rounded-lg">x${opt.multiplier}</button>
+                  <span id="admin-odds-preview-${opt.id}" class="text-neutral-500 text-[9px] w-10 text-center">x${opt.multiplier}</span>
+                  <button onclick="adminUpdateOdds('${ev.id}', '${opt.id}')" class="bg-emerald-500 text-black text-[9px] font-black px-2 py-1 rounded-lg whitespace-nowrap">Сохранить</button>
                 </div>
               ` : `<span class="text-neutral-500">(${opt.percent}%, x${opt.multiplier})</span>`}
               <span class="text-neutral-500">🪙 ${opt.pool.toLocaleString()} · ${opt.betsCount} ставок</span>
@@ -1063,7 +1065,12 @@
               </select>
               <button onclick="adminResolveBetEvent('${ev.id}')" class="bg-emerald-500 text-black text-[10px] font-black px-3 rounded-lg">Подтвердить исход</button>
             </div>
-            ${ev.status === 'open' ? `<button onclick="adminCloseBetEvent('${ev.id}')" class="w-full mt-1.5 bg-neutral-800 text-white text-[10px] font-black py-1.5 rounded-lg border border-neutral-700">Остановить приём ставок</button>` : ''}
+            <div class="flex gap-2 mt-1.5">
+              ${ev.status === 'open'
+                ? `<button onclick="adminCloseBetEvent('${ev.id}')" class="flex-1 bg-neutral-800 text-white text-[10px] font-black py-1.5 rounded-lg border border-neutral-700">Остановить приём ставок</button>`
+                : `<button onclick="adminOpenBetEvent('${ev.id}')" class="flex-1 bg-emerald-500 text-black text-[10px] font-black py-1.5 rounded-lg">Открыть приём ставок</button>`}
+              <button onclick="adminDeleteBetEvent('${ev.id}')" class="bg-red-500/20 text-red-400 border border-red-500/40 text-[10px] font-black py-1.5 px-3 rounded-lg">Удалить</button>
+            </div>
           ` : `<div class="text-[10px] text-amber-400 font-bold mt-1.5">Исход: ${ev.options.find(o => o.id === ev.resolvedOptionId)?.label || '—'}</div>`;
 
           return `
@@ -1082,9 +1089,25 @@
       }
     }
 
+    // Пересчитывает превью коэффициента (x...) рядом с полем процента прямо
+    // во время ввода — до нажатия "Сохранить" ничего не уходит на сервер,
+    // это просто локальная подсказка, что получится после сохранения.
+    function adminPreviewOdds(optionId) {
+      const input = document.getElementById(`admin-odds-${optionId}`);
+      const preview = document.getElementById(`admin-odds-preview-${optionId}`);
+      if (!input || !preview) return;
+      const percent = Number(input.value);
+      if (!Number.isFinite(percent) || percent < 1 || percent > 95) {
+        preview.innerText = '—';
+        return;
+      }
+      preview.innerText = `x${Math.round((100 / percent) * 100) / 100}`;
+    }
+
     // Меняет кэф "вживую": уже сделанные ставки остаются с прежним
     // коэффициентом (он зафиксирован в момент ставки), новый % действует
-    // только на ставки, сделанные после этого.
+    // только на ставки, сделанные после этого. Нажатие кнопки "Сохранить" —
+    // единственный момент, когда правка реально уходит на сервер.
     async function adminUpdateOdds(eventId, optionId) {
       const input = document.getElementById(`admin-odds-${optionId}`);
       const percent = Number(input.value);
@@ -1094,6 +1117,7 @@
       }
       try {
         await apiPost('/api/admin/bets/update-odds', { eventId, optionId, percent });
+        alertMsg('Коэффициент сохранён.');
         loadAdminBetEvents();
       } catch (e) {
         console.error(e);
@@ -1108,6 +1132,31 @@
       } catch (e) {
         console.error(e);
         alertMsg('Не удалось остановить приём ставок.');
+      }
+    }
+
+    // Возобновляет приём ставок у остановленного ('closed') ивента.
+    async function adminOpenBetEvent(eventId) {
+      try {
+        await apiPost('/api/admin/bets/open', { eventId });
+        loadAdminBetEvents();
+      } catch (e) {
+        console.error(e);
+        alertMsg('Не удалось открыть приём ставок.');
+      }
+    }
+
+    // Полностью удаляет ивент. Если по нему были незавершённые ставки — сумма
+    // автоматически вернётся игрокам на баланс (см. deleteBetEvent в db.js).
+    async function adminDeleteBetEvent(eventId) {
+      if (!confirm('Удалить ивент? Незавершённые ставки по нему будут возвращены игрокам. Действие нельзя отменить.')) return;
+      try {
+        await apiPost('/api/admin/bets/delete', { eventId });
+        alertMsg('Ивент удалён.');
+        loadAdminBetEvents();
+      } catch (e) {
+        console.error(e);
+        alertMsg('Не удалось удалить ивент.');
       }
     }
 
@@ -1585,6 +1634,20 @@
     // потратилось и сколько $SLive реально начислено (см. /api/tap).
     let pendingTaps = 0;
     let tapSyncTimer = null;
+    // Сколько тапов можно отправить за один запрос — ЗЕРКАЛИТ серверный
+    // MAX_TAP_PER_REQUEST (см. db.js). Раньше клиент копил ВСЕ тапы, накопленные
+    // за время дебаунса (даже если их было 100+, потому что таймер сбрасывался
+    // каждым новым тапом), и слал их одним запросом — сервер молча обрезал всё,
+    // что выше 50, "теряя" остаток. Клиент при этом уже оптимистично показал
+    // игроку полный прогресс, поэтому после ответа сервера энергия/баланс
+    // визуально "откатывались назад" — как будто тапы отменились сами по себе.
+    // Теперь клиент сам режет каждый запрос на такие же по размеру пачки.
+    const TAP_BATCH_LIMIT = 50;
+    // Не даём двум flushTaps() уйти в сеть одновременно — иначе ответы могут
+    // прийти не в том порядке, в котором ушли запросы, и более старый ответ
+    // перезапишет уже обновлённое состояние более новым сверху вниз (тот же
+    // эффект "энергия вернулась").
+    let tapFlushInFlight = false;
 
     const tapBall = document.getElementById('tap-ball');
     tapBall.addEventListener('pointerdown', (e) => {
@@ -1608,14 +1671,25 @@
 
     function scheduleTapSync() {
       if (!tg?.initData) return; // вне Telegram сервер недоступен — прогресс тапалки не сохранится
+      // Если накопилось уже достаточно тапов на полную пачку — не ждём паузы
+      // в кликах (при активном тапе таймер ниже постоянно сбрасывается новыми
+      // кликами и мог бы не сработать очень долго), а шлём сразу.
+      if (pendingTaps >= TAP_BATCH_LIMIT) {
+        clearTimeout(tapSyncTimer);
+        flushTaps();
+        return;
+      }
       clearTimeout(tapSyncTimer);
       tapSyncTimer = setTimeout(flushTaps, 600);
     }
 
     async function flushTaps() {
-      if (pendingTaps <= 0) return;
-      const count = pendingTaps;
-      pendingTaps = 0;
+      if (pendingTaps <= 0 || tapFlushInFlight) return;
+      tapFlushInFlight = true;
+      // Отправляем не больше TAP_BATCH_LIMIT за раз — остаток остаётся в
+      // pendingTaps и уйдёт следующей пачкой, а не пропадёт молча.
+      const count = Math.min(pendingTaps, TAP_BATCH_LIMIT);
+      pendingTaps -= count;
       try {
         const result = await apiPost('/api/tap', { count });
         // Сервер — источник правды: подтягиваем то, что он реально записал
@@ -1625,8 +1699,16 @@
         updateHeader();
       } catch (e) {
         console.error('Не удалось сохранить прогресс тапалки', e);
-        // При ошибке подтягиваем актуальный баланс, чтобы не разойтись с сервером.
-        syncBalanceFromServer();
+        // Сетевая ошибка НЕ должна стирать уже показанный игроку прогресс —
+        // возвращаем эту пачку обратно в очередь и попробуем отправить снова
+        // чуть позже (см. finally ниже), а не откатываем экран синком с сервера.
+        pendingTaps += count;
+      } finally {
+        tapFlushInFlight = false;
+        if (pendingTaps > 0) {
+          clearTimeout(tapSyncTimer);
+          tapSyncTimer = setTimeout(flushTaps, 800);
+        }
       }
     }
 
@@ -1640,14 +1722,21 @@
       clearTimeout(tapSyncTimer);
       if (pendingTaps <= 0) return;
       if (!tg?.initData || typeof navigator.sendBeacon !== 'function') return;
-      const count = pendingTaps;
+      // Как и в flushTaps(), режем на пачки по TAP_BATCH_LIMIT — иначе сервер
+      // примет только первые 50 из большого хвоста, а остальное потеряется
+      // навсегда (страница уже закрывается, повторной попытки не будет).
+      let remaining = pendingTaps;
       pendingTaps = 0;
       try {
-        const blob = new Blob(
-          [JSON.stringify({ count, initData: tg.initData })],
-          { type: 'application/json' }
-        );
-        navigator.sendBeacon(`${BACKEND_URL}/api/tap`, blob);
+        while (remaining > 0) {
+          const count = Math.min(remaining, TAP_BATCH_LIMIT);
+          remaining -= count;
+          const blob = new Blob(
+            [JSON.stringify({ count, initData: tg.initData })],
+            { type: 'application/json' }
+          );
+          navigator.sendBeacon(`${BACKEND_URL}/api/tap`, blob);
+        }
       } catch (e) {
         console.error('Не удалось отправить тапы через sendBeacon', e);
       }
