@@ -6,8 +6,16 @@ import Database from 'better-sqlite3';
 import { randomUUID } from 'crypto';
 import { PLAYERS_BY_ID, getSellPrice } from './players-data.js';
 
-const db = new Database(process.env.DB_PATH || 'sportlive.db');
+export const DB_PATH = process.env.DB_PATH || 'sportlive.db';
+const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
+
+// Форсирует запись всего WAL-журнала в основной файл базы. Обязательно перед
+// тем, как копировать db-файл для бэкапа — иначе часть свежих данных может
+// остаться только в -wal файле и не попасть в копию.
+export function checkpointForBackup() {
+  db.pragma('wal_checkpoint(TRUNCATE)');
+}
 
 // Награда рефереру за каждого друга, который впервые открыл приложение по его ссылке.
 const REFERRAL_REWARD_SLIVE = 1000;
@@ -981,6 +989,29 @@ export async function createBetEvent({ title, description, options, closesAt }) 
   });
   tx();
 
+  return { ok: true, event: getBetEventFull(eventId) };
+}
+
+// Живое изменение кэфа админом: правит percent конкретного варианта у
+// ОТКРЫТОГО ивента. Это безопасно для уже сделанных ставок — их multiplier
+// зафиксирован в момент ставки (см. placeBet) и не пересчитывается задним
+// числом. Новый percent действует только для ставок, сделанных ПОСЛЕ правки.
+// Нельзя менять кэф у закрытого/подтверждённого ивента — там ставки уже не
+// принимаются либо итог уже подведён.
+export async function updateBetOptionPercent({ eventId, optionId, percent }) {
+  const numPercent = Number(percent);
+  if (!Number.isFinite(numPercent) || numPercent < MIN_OPTION_PERCENT || numPercent > MAX_OPTION_PERCENT) {
+    return { ok: false, reason: 'invalid_percent' };
+  }
+
+  const event = db.prepare('SELECT * FROM bet_events WHERE id = ?').get(eventId);
+  if (!event) return { ok: false, reason: 'no_event' };
+  if (event.status !== 'open') return { ok: false, reason: 'event_not_open' };
+
+  const option = db.prepare('SELECT * FROM bet_options WHERE id = ? AND event_id = ?').get(optionId, eventId);
+  if (!option) return { ok: false, reason: 'invalid_option' };
+
+  db.prepare('UPDATE bet_options SET percent = ? WHERE id = ?').run(numPercent, optionId);
   return { ok: true, event: getBetEventFull(eventId) };
 }
 
