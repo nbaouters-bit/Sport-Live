@@ -33,6 +33,15 @@ import {
   playDraftBattle,
   getDraftLeaderboard,
   payoutDraftTopIfNeeded,
+  createBetEvent,
+  closeBetEvent,
+  resolveBetEvent,
+  getAdminBetEvents,
+  getVisibleBetEvents,
+  placeBet,
+  getMyBets,
+  exchangeStarsToSlive,
+  STARS_TO_SLIVE_RATE,
 } from './db.js';
 import { getRandomPlayer, PLAYERS_BY_ID, MARKET_PRICE, SELL_RATE } from './players-data.js';
 
@@ -212,7 +221,7 @@ app.post('/api/me', requireTelegramAuth, async (req, res) => {
 
   const user = await ensureUser(telegramId, req.telegramUser.username || null, referrerId);
   const isAdmin = Boolean(ADMIN_TELEGRAM_ID) && telegramId === String(ADMIN_TELEGRAM_ID);
-  res.json({ user, isAdmin });
+  res.json({ user, isAdmin, starsToSliveRate: STARS_TO_SLIVE_RATE });
 });
 
 // ---------- Тапалка ----------
@@ -244,6 +253,21 @@ app.post('/api/buy-vip', requireTelegramAuth, async (req, res) => {
 
   notifyUser(telegramId, `🏆 Поздравляем! Ты получил VIP-статус за ${VIP_PRICE_STARS} ⭐️!`);
   res.json({ ok: true, balance: result.balance, price: VIP_PRICE_STARS });
+});
+
+// ---------- Обмен Stars -> $SLive ----------
+// Курс фиксированный (см. STARS_TO_SLIVE_RATE в db.js). Обратного обмена
+// ($SLive -> Stars, вывод) пока нет — см. плашку "Вывод" на клиенте.
+app.post('/api/exchange-stars', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  const { amount } = req.body;
+
+  const result = await exchangeStarsToSlive({ telegramId, starsAmount: amount });
+  if (!result.ok) {
+    return res.status(409).json({ error: result.reason, balance: result.balance });
+  }
+
+  res.json({ ok: true, starsBalance: result.starsBalance, sliveBalance: result.sliveBalance, gained: result.gained });
 });
 
 // ---------- Рефералка ----------
@@ -514,6 +538,34 @@ app.post('/api/draft/leaderboard', requireTelegramAuth, async (req, res) => {
   res.json({ leaderboard });
 });
 
+// ---------- Ставки за $SLive ----------
+// Всё содержимое (ивенты, варианты, проценты/коэффициенты) полностью
+// управляется админом — см. /api/admin/bets/* ниже. Игрок только смотрит
+// открытые ивенты и ставит.
+app.post('/api/bets/events', requireTelegramAuth, async (req, res) => {
+  const events = await getVisibleBetEvents();
+  res.json({ events });
+});
+
+app.post('/api/bets/place', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  const { eventId, optionId, amount } = req.body;
+  if (!eventId || !optionId) {
+    return res.status(400).json({ error: 'invalid_input' });
+  }
+  const result = await placeBet({ telegramId, eventId, optionId, amount });
+  if (!result.ok) {
+    return res.status(409).json({ error: result.reason, balance: result.balance });
+  }
+  res.json(result);
+});
+
+app.post('/api/bets/mine', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  const bets = await getMyBets(telegramId);
+  res.json({ bets });
+});
+
 // ---------- АДМИН-ПАНЕЛЬ ----------
 app.post('/api/admin/stats', requireTelegramAuth, requireAdmin, async (req, res) => {
   const stats = await getStats();
@@ -609,6 +661,57 @@ app.post('/api/admin/referral-reject', requireTelegramAuth, requireAdmin, async 
   }
   notifyUser(String(telegramId), '❌ Заявка на реферальную ссылку отклонена. Ты можешь подать её ещё раз.');
   res.json({ ok: true });
+});
+
+// ---------- Админка: ставки за $SLive ----------
+// Ивент = заголовок + 2+ варианта исхода, у каждого варианта — процент
+// (шанс), который вручную задаёт админ (как полосы в Binance/Fanton).
+app.post('/api/admin/bets/create', requireTelegramAuth, requireAdmin, async (req, res) => {
+  const { title, description, options, closesAt } = req.body;
+  const result = await createBetEvent({
+    title: typeof title === 'string' ? title.trim() : '',
+    description: typeof description === 'string' ? description.trim() : '',
+    options: Array.isArray(options)
+      ? options.map(o => ({ label: String(o.label || '').trim(), percent: Number(o.percent) }))
+      : [],
+    closesAt: closesAt ? Number(closesAt) : null,
+  });
+  if (!result.ok) {
+    return res.status(400).json({ error: result.reason });
+  }
+  res.json(result);
+});
+
+app.post('/api/admin/bets/list', requireTelegramAuth, requireAdmin, async (req, res) => {
+  const events = await getAdminBetEvents();
+  res.json({ events });
+});
+
+// Останавливает приём новых ставок без подведения итога.
+app.post('/api/admin/bets/close', requireTelegramAuth, requireAdmin, async (req, res) => {
+  const { eventId } = req.body;
+  if (!eventId) return res.status(400).json({ error: 'invalid_input' });
+  const result = await closeBetEvent(eventId);
+  if (!result.ok) return res.status(409).json({ error: result.reason });
+  res.json(result);
+});
+
+// Подтверждение исхода — выплачивает победителям и шлёт им уведомление ботом.
+app.post('/api/admin/bets/resolve', requireTelegramAuth, requireAdmin, async (req, res) => {
+  const { eventId, winningOptionId } = req.body;
+  if (!eventId || !winningOptionId) return res.status(400).json({ error: 'invalid_input' });
+
+  const result = await resolveBetEvent({ eventId, winningOptionId });
+  if (!result.ok) return res.status(409).json({ error: result.reason });
+
+  for (const winner of result.winners) {
+    notifyUser(
+      winner.telegramId,
+      `🎉 Ивент "${result.event.title}" завершён! Твой исход "${result.winningLabel}" сыграл — выигрыш +${winner.payout} 🪙 SLive.`
+    );
+  }
+
+  res.json(result);
 });
 
 // ---------- Webhook от Telegram ----------
