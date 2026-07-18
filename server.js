@@ -14,6 +14,9 @@ import {
   buyVip,
   getReferralInfo,
   requestReferralAccess,
+  getPendingReferralRequests,
+  approveReferralRequest,
+  rejectReferralRequest,
   getReferralChannelLink,
   setReferralChannelLink,
   addPlayerToInventory,
@@ -244,18 +247,20 @@ app.post('/api/buy-vip', requireTelegramAuth, async (req, res) => {
 });
 
 // ---------- Рефералка ----------
-// Отдаёт invited/rewardPerFriend/unlocked/channelLink. Ссылка на приглашение
-// (t.me/bot?startapp=id) собирается на клиенте из botUsername+telegramId,
-// но показывается ТОЛЬКО если unlocked === true (см. /api/referral-request).
+// Отдаёт invited/rewardPerFriend/status/link/channelLink. status: 'none' —
+// заявки не было, 'pending' — ждёт подтверждения админом, 'approved' —
+// ссылка (link) вписана админом и видна игроку (см. /api/referral-request
+// и /api/admin/referral-approve).
 app.post('/api/referral-info', requireTelegramAuth, async (req, res) => {
   const telegramId = String(req.telegramUser.id);
   const info = await getReferralInfo(telegramId);
   res.json({ ...info, telegramId, botUsername: BOT_USERNAME || null });
 });
 
-// Игрок явно запрашивает статус реферала (обычно после того, как увидел
-// ссылку на канал в channelLink и подписался на него) — только после этого
-// ему открывается собственная реферальная ссылка.
+// Игрок отправляет заявку на реферальную ссылку (обычно после того, как
+// увидел ссылку на канал в channelLink и подписался на него). Статус сразу
+// становится 'pending' — саму ссылку выдаёт только админ через
+// /api/admin/referral-approve, до этого клиент показывает "Ожидай подтверждения".
 app.post('/api/referral-request', requireTelegramAuth, async (req, res) => {
   const telegramId = String(req.telegramUser.id);
   const result = await requestReferralAccess(telegramId);
@@ -555,6 +560,55 @@ app.post('/api/admin/referral-channel', requireTelegramAuth, requireAdmin, async
 app.post('/api/admin/referral-channel/get', requireTelegramAuth, requireAdmin, async (req, res) => {
   const link = await getReferralChannelLink();
   res.json({ link: link || '' });
+});
+
+// Список заявок игроков, ожидающих подтверждения (см. /api/referral-request).
+// Заодно подсказываем админу дефолтную ссылку вида t.me/bot?startapp=id —
+// её можно поправить перед подтверждением, если нужна другая ссылка.
+app.post('/api/admin/referral-requests', requireTelegramAuth, requireAdmin, async (req, res) => {
+  const requests = await getPendingReferralRequests();
+  const withSuggestion = requests.map(r => ({
+    ...r,
+    suggestedLink: BOT_USERNAME ? `https://t.me/${BOT_USERNAME}?startapp=${r.telegramId}` : '',
+  }));
+  res.json({ requests: withSuggestion });
+});
+
+// Админ вписывает ссылку и подтверждает заявку — игроку сразу открывается
+// ссылка в интерфейсе, и бот присылает ему уведомление в личку.
+app.post('/api/admin/referral-approve', requireTelegramAuth, requireAdmin, async (req, res) => {
+  const { telegramId, link } = req.body;
+  const trimmedLink = typeof link === 'string' ? link.trim() : '';
+
+  if (!telegramId || !trimmedLink) {
+    return res.status(400).json({ error: 'invalid_input' });
+  }
+
+  const result = await approveReferralRequest({ telegramId: String(telegramId), link: trimmedLink });
+  if (!result.ok) {
+    return res.status(409).json({ error: result.reason });
+  }
+
+  notifyUser(
+    String(telegramId),
+    `✅ Твоя заявка на реферальную ссылку одобрена!\nТвоя ссылка: ${trimmedLink}`
+  );
+
+  res.json({ ok: true });
+});
+
+// Отклонить заявку — статус игрока возвращается в 'none', он сможет подать заявку заново.
+app.post('/api/admin/referral-reject', requireTelegramAuth, requireAdmin, async (req, res) => {
+  const { telegramId } = req.body;
+  if (!telegramId) {
+    return res.status(400).json({ error: 'invalid_input' });
+  }
+  const result = await rejectReferralRequest(String(telegramId));
+  if (!result.ok) {
+    return res.status(409).json({ error: result.reason });
+  }
+  notifyUser(String(telegramId), '❌ Заявка на реферальную ссылку отклонена. Ты можешь подать её ещё раз.');
+  res.json({ ok: true });
 });
 
 // ---------- Webhook от Telegram ----------
