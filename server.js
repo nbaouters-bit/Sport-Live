@@ -13,6 +13,9 @@ import {
   tap,
   buyVip,
   getReferralInfo,
+  requestReferralAccess,
+  getReferralChannelLink,
+  setReferralChannelLink,
   addPlayerToInventory,
   sellCard,
   saveUserState,
@@ -30,7 +33,7 @@ import {
 } from './db.js';
 import { getRandomPlayer, PLAYERS_BY_ID, MARKET_PRICE, SELL_RATE } from './players-data.js';
 
-const { BOT_TOKEN, WEBHOOK_SECRET, ADMIN_TELEGRAM_ID, BOT_USERNAME, PORT = 3000 } = process.env;
+const { BOT_TOKEN, WEBHOOK_SECRET, ADMIN_TELEGRAM_ID, BOT_USERNAME, MINI_APP_URL, PORT = 3000 } = process.env;
 
 if (!ADMIN_TELEGRAM_ID) {
   console.warn(
@@ -146,6 +149,43 @@ async function notifyUser(telegramId, text) {
   }
 }
 
+// Приветственное сообщение с краткой инструкцией — отправляется по команде
+// /start (см. обработку update.message в /webhook ниже). Если задан
+// MINI_APP_URL — добавляем кнопку, которая сразу открывает мини-приложение
+// (тип web_app), иначе просто просим воспользоваться кнопкой меню бота.
+async function sendWelcomeMessage(chatId) {
+  const text =
+    '👋 <b>Добро пожаловать в Sport Live FC!</b>\n\n' +
+    'Это футбольный клуб-менеджер прямо в Telegram:\n' +
+    '⚽️ <b>Тапай</b> — зарабатывай $SLive за каждый клик (энергия обновляется раз в сутки).\n' +
+    '🎁 <b>Открывай паки</b> — получай карточки игроков от бронзы до легенды.\n' +
+    '🧩 <b>Собирай состав</b> — карточки в составе приносят пассивный доход, игроки одной национальности дают бонус к доходу (химия).\n' +
+    '🛒 <b>Маркет</b> — покупай конкретного игрока напрямую или продавай дубликаты карт.\n' +
+    '⚔️ <b>Драфт</b> — собери состав из 5 карт и бейся с другими игроками за очки и награды.\n' +
+    '🏆 <b>Топ</b> — соревнуйся в лидерборде по балансу и по очкам Драфта.\n' +
+    '👥 <b>Реферальная программа</b> — приглашай друзей и получай награду за каждого.\n\n' +
+    'Жми кнопку ниже (или кнопку меню), чтобы открыть игру 👇';
+
+  const replyMarkup = MINI_APP_URL
+    ? { inline_keyboard: [[{ text: '🎮 Играть', web_app: { url: MINI_APP_URL } }]] }
+    : undefined;
+
+  try {
+    await fetch(`${TG_API}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        parse_mode: 'HTML',
+        ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+      }),
+    });
+  } catch (err) {
+    console.error('sendWelcomeMessage failed', err);
+  }
+}
+
 // ---------- Каталог маркета (публичный, для отрисовки витрины) ----------
 app.get('/api/market-catalog', async (req, res) => {
   const sellPrices = Object.fromEntries(
@@ -204,10 +244,26 @@ app.post('/api/buy-vip', requireTelegramAuth, async (req, res) => {
 });
 
 // ---------- Рефералка ----------
+// Отдаёт invited/rewardPerFriend/unlocked/channelLink. Ссылка на приглашение
+// (t.me/bot?startapp=id) собирается на клиенте из botUsername+telegramId,
+// но показывается ТОЛЬКО если unlocked === true (см. /api/referral-request).
 app.post('/api/referral-info', requireTelegramAuth, async (req, res) => {
   const telegramId = String(req.telegramUser.id);
   const info = await getReferralInfo(telegramId);
   res.json({ ...info, telegramId, botUsername: BOT_USERNAME || null });
+});
+
+// Игрок явно запрашивает статус реферала (обычно после того, как увидел
+// ссылку на канал в channelLink и подписался на него) — только после этого
+// ему открывается собственная реферальная ссылка.
+app.post('/api/referral-request', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  const result = await requestReferralAccess(telegramId);
+  if (!result.ok) {
+    return res.status(409).json({ error: result.reason });
+  }
+  const info = await getReferralInfo(telegramId);
+  res.json({ ok: true, ...info, telegramId, botUsername: BOT_USERNAME || null });
 });
 
 // ---------- Создание счёта на пополнение Stars ----------
@@ -488,6 +544,19 @@ app.post('/api/admin/adjust-slive', requireTelegramAuth, requireAdmin, async (re
   res.json(result);
 });
 
+// Ссылка на канал/чат для подписки перед тем, как стать рефералом. Хранится
+// в БД (settings), а не в .env — так админ может поменять её без передеплоя.
+app.post('/api/admin/referral-channel', requireTelegramAuth, requireAdmin, async (req, res) => {
+  const { link } = req.body;
+  const result = await setReferralChannelLink(typeof link === 'string' ? link.trim() : '');
+  res.json(result);
+});
+
+app.post('/api/admin/referral-channel/get', requireTelegramAuth, requireAdmin, async (req, res) => {
+  const link = await getReferralChannelLink();
+  res.json({ link: link || '' });
+});
+
 // ---------- Webhook от Telegram ----------
 app.post('/webhook', async (req, res) => {
   const secretHeader = req.header('X-Telegram-Bot-Api-Secret-Token');
@@ -498,6 +567,14 @@ app.post('/webhook', async (req, res) => {
   const update = req.body;
 
   try {
+    // Приветственное сообщение по команде /start (в т.ч. с реферальным
+    // параметром вида "/start 12345" — payload нам не нужен, реферальная
+    // привязка обрабатывается через start_param мини-аппы в /api/me).
+    const text = update.message?.text;
+    if (typeof text === 'string' && (text === '/start' || text.startsWith('/start '))) {
+      await sendWelcomeMessage(update.message.chat.id);
+    }
+
     if (update.pre_checkout_query) {
       const pcq = update.pre_checkout_query;
       let ok = true;
