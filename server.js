@@ -1,5 +1,6 @@
 // server.js
 import 'dotenv/config';
+import fs from 'fs';
 import express from 'express';
 import cors from 'cors';
 import fetch from 'node-fetch';
@@ -36,12 +37,15 @@ import {
   createBetEvent,
   closeBetEvent,
   resolveBetEvent,
+  updateBetOptionPercent,
   getAdminBetEvents,
   getVisibleBetEvents,
   placeBet,
   getMyBets,
   exchangeStarsToSlive,
   STARS_TO_SLIVE_RATE,
+  DB_PATH,
+  checkpointForBackup,
 } from './db.js';
 import { getRandomPlayer, PLAYERS_BY_ID, MARKET_PRICE, SELL_RATE } from './players-data.js';
 
@@ -687,6 +691,20 @@ app.post('/api/admin/bets/list', requireTelegramAuth, requireAdmin, async (req, 
   res.json({ events });
 });
 
+// Живое изменение кэфа: правит процент/шанс конкретного варианта в открытом
+// ивенте. Уже сделанные ставки не трогает — их коэффициент зафиксирован
+// в момент ставки (см. db.js:placeBet), новый процент влияет только на
+// ставки, сделанные после правки.
+app.post('/api/admin/bets/update-odds', requireTelegramAuth, requireAdmin, async (req, res) => {
+  const { eventId, optionId, percent } = req.body;
+  if (!eventId || !optionId || percent === undefined) {
+    return res.status(400).json({ error: 'invalid_input' });
+  }
+  const result = await updateBetOptionPercent({ eventId, optionId, percent });
+  if (!result.ok) return res.status(409).json({ error: result.reason });
+  res.json(result);
+});
+
 // Останавливает приём новых ставок без подведения итога.
 app.post('/api/admin/bets/close', requireTelegramAuth, requireAdmin, async (req, res) => {
   const { eventId } = req.body;
@@ -783,6 +801,58 @@ app.post('/webhook', async (req, res) => {
     res.status(200).end();
   }
 });
+
+// ---------- Резервные копии базы данных ----------
+// Подстраховка на случай, если DB_PATH ещё указывает на эфемерный диск
+// (см. .env.example / инструкцию по Render Disks): бот сам присылает файл
+// базы админу в личку по расписанию. Даже если диск сотрётся при передеплое,
+// у админа всегда будет под рукой свежая копия для восстановления вручную.
+// ГЛАВНЫЙ фикс всё равно — постоянный Disk на Render + DB_PATH на него,
+// это лишь дополнительная сетка безопасности.
+const BACKUP_INTERVAL_MS = 6 * 60 * 60 * 1000; // раз в 6 часов
+
+async function sendDatabaseBackup(caption) {
+  if (!ADMIN_TELEGRAM_ID) return { ok: false, reason: 'admin_not_configured' };
+  try {
+    // Сбрасываем WAL-журнал в основной файл, чтобы в копии были все свежие
+    // записи, а не только то, что уже попало в sportlive.db на диске.
+    checkpointForBackup();
+
+    if (!fs.existsSync(DB_PATH)) {
+      console.error('backup: DB_PATH не существует', DB_PATH);
+      return { ok: false, reason: 'no_db_file' };
+    }
+
+    const buffer = fs.readFileSync(DB_PATH);
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const form = new FormData();
+    form.append('chat_id', String(ADMIN_TELEGRAM_ID));
+    form.append('caption', caption || `Бэкап базы · ${new Date().toLocaleString('ru-RU')}`);
+    form.append('document', new Blob([buffer]), `sportlive-backup-${stamp}.db`);
+
+    const resp = await fetch(`${TG_API}/sendDocument`, { method: 'POST', body: form });
+    const data = await resp.json();
+    if (!data.ok) {
+      console.error('backup: sendDocument failed', data);
+      return { ok: false, reason: 'telegram_error' };
+    }
+    return { ok: true };
+  } catch (err) {
+    console.error('backup: failed', err);
+    return { ok: false, reason: 'exception' };
+  }
+}
+
+// Ручной бэкап по кнопке из админ-панели — например, прямо перед рискованной
+// операцией (правка кэфов, массовая выплата и т.п.).
+app.post('/api/admin/backup-now', requireTelegramAuth, requireAdmin, async (req, res) => {
+  const result = await sendDatabaseBackup('Бэкап по запросу из админ-панели');
+  if (!result.ok) return res.status(500).json(result);
+  res.json(result);
+});
+
+setTimeout(() => sendDatabaseBackup('Бэкап при старте сервера'), 30 * 1000);
+setInterval(() => sendDatabaseBackup(), BACKUP_INTERVAL_MS);
 
 // ---------- Ежедневная награда лидеру Драфт-рейтинга ----------
 // Проверяем не по таймеру от момента старта процесса, а по фактической смене
