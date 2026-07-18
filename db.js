@@ -1028,6 +1028,47 @@ export async function closeBetEvent(eventId) {
   return { ok: true, event: getBetEventFull(eventId) };
 }
 
+// Возобновляет приём ставок у ивента, который был остановлен через
+// closeBetEvent (status 'closed' -> 'open'). Подтверждённый (resolved)
+// ивент открыть обратно нельзя — по нему уже подведён итог и выплачены деньги.
+export async function openBetEvent(eventId) {
+  const event = db.prepare('SELECT status FROM bet_events WHERE id = ?').get(eventId);
+  if (!event) return { ok: false, reason: 'no_event' };
+  if (event.status === 'resolved') return { ok: false, reason: 'already_resolved' };
+  if (event.status === 'open') return { ok: false, reason: 'already_open' };
+  db.prepare("UPDATE bet_events SET status = 'open' WHERE id = ?").run(eventId);
+  return { ok: true, event: getBetEventFull(eventId) };
+}
+
+// Полностью удаляет ивент вместе с вариантами и ставками. Разрешено только
+// пока ивент НЕ подтверждён (resolved) — после подтверждения деньги уже
+// выплачены победителям, и стирать историю нельзя. Если по ивенту были
+// сделаны ставки (pending, ещё не сыгравшие), их сумму возвращаем игрокам —
+// иначе удаление ивента админом просто украло бы деньги у игроков.
+export async function deleteBetEvent(eventId) {
+  const event = db.prepare('SELECT * FROM bet_events WHERE id = ?').get(eventId);
+  if (!event) return { ok: false, reason: 'no_event' };
+  if (event.status === 'resolved') return { ok: false, reason: 'already_resolved' };
+
+  const refunds = [];
+  const tx = db.transaction(() => {
+    const pendingBets = db
+      .prepare("SELECT * FROM bets WHERE event_id = ? AND status = 'pending'")
+      .all(eventId);
+    for (const bet of pendingBets) {
+      db.prepare('UPDATE users SET slive_tokens = slive_tokens + ? WHERE telegram_id = ?')
+        .run(bet.amount, bet.telegram_id);
+      refunds.push({ telegramId: bet.telegram_id, amount: bet.amount });
+    }
+    db.prepare('DELETE FROM bets WHERE event_id = ?').run(eventId);
+    db.prepare('DELETE FROM bet_options WHERE event_id = ?').run(eventId);
+    db.prepare('DELETE FROM bet_events WHERE id = ?').run(eventId);
+  });
+  tx();
+
+  return { ok: true, refunds, title: event.title };
+}
+
 // Подтверждение исхода. Возвращает список победителей (telegramId + payout),
 // чтобы server.js разослал уведомления ботом.
 export async function resolveBetEvent({ eventId, winningOptionId }) {
