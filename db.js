@@ -105,9 +105,16 @@ tryAlter('ALTER TABLE users ADD COLUMN is_vip INTEGER NOT NULL DEFAULT 0');
 tryAlter('ALTER TABLE users ADD COLUMN energy INTEGER NOT NULL DEFAULT 1000');
 tryAlter('ALTER TABLE users ADD COLUMN energy_day INTEGER NOT NULL DEFAULT 0');
 tryAlter('ALTER TABLE users ADD COLUMN referred_by TEXT');
-// referral_unlocked: игрок получает свою реферальную ссылку только ПОСЛЕ
-// явного запроса ("Стать рефералом" в интерфейсе) — см. requestReferralAccess().
+// referral_unlocked: устаревшее поле старой (авто-открывающейся) версии
+// рефералки, оставлено ради обратной совместимости со старыми БД, но больше
+// не используется — теперь статус хранится в referral_status.
 tryAlter('ALTER TABLE users ADD COLUMN referral_unlocked INTEGER NOT NULL DEFAULT 0');
+// Новый флоу заявок на рефералку: 'none' | 'pending' | 'approved'.
+tryAlter("ALTER TABLE users ADD COLUMN referral_status TEXT NOT NULL DEFAULT 'none'");
+// Ссылку сюда вручную вписывает админ при подтверждении заявки (см.
+// approveReferralRequest) — не обязательно t.me/bot?startapp=id.
+tryAlter('ALTER TABLE users ADD COLUMN referral_link TEXT');
+tryAlter('ALTER TABLE users ADD COLUMN referral_requested_at INTEGER');
 
 // Служебная таблица key/value для настроек, которые задаёт админ из панели
 // (сейчас — ссылка на канал/чат, на который нужно подписаться перед тем как
@@ -389,28 +396,77 @@ export async function buyVip({ telegramId, amount }) {
 }
 
 // ---------- Рефералка ----------
-// Ссылку получает не любой открывший вкладку игрок, а только тот, кто явно
-// нажал "Стать рефералом" (см. requestReferralAccess) — обычно после того,
-// как увидел ссылку на канал, которую задаёт админ (см. getReferralChannelLink).
+// Флоу теперь трёхстадийный:
+//   none     — игрок ещё не запрашивал ссылку (видит канал для подписки + кнопку запроса)
+//   pending  — запрос отправлен, ждёт подтверждения админом ("Ожидай подтверждения")
+//   approved — админ вставил ссылку и подтвердил, игрок видит её (и получает уведомление от бота)
+// referral_link — САМА ссылка, которую вручную вписывает админ при подтверждении
+// (см. approveReferralRequest) — это НЕ обязательно t.me/bot?startapp=id,
+// админ может вписать любую нужную ссылку.
 
 export async function getReferralInfo(telegramId) {
   const { cnt } = db.prepare('SELECT COUNT(*) AS cnt FROM users WHERE referred_by = ?').get(telegramId);
-  const user = db.prepare('SELECT referral_unlocked FROM users WHERE telegram_id = ?').get(telegramId);
+  const user = db
+    .prepare('SELECT referral_status, referral_link FROM users WHERE telegram_id = ?')
+    .get(telegramId);
   return {
     invited: cnt,
     rewardPerFriend: REFERRAL_REWARD_SLIVE,
-    unlocked: Boolean(user?.referral_unlocked),
+    status: user?.referral_status || 'none',
+    link: user?.referral_status === 'approved' ? (user.referral_link || null) : null,
     channelLink: getSetting(REFERRAL_CHANNEL_LINK_KEY) || null,
   };
 }
 
-// Запрос игрока на получение реферальной ссылки. Идемпотентно — повторный
-// вызов просто подтверждает, что доступ уже открыт.
+// Игрок отправляет заявку на получение реферальной ссылки (обычно после
+// того, как подписался на канал из channelLink). Переводит статус в
+// 'pending' — саму ссылку выдаёт только админ через approveReferralRequest.
+// Идемпотентно: повторный запрос уже одобренной заявки ничего не ломает.
 export async function requestReferralAccess(telegramId) {
-  const existing = db.prepare('SELECT 1 FROM users WHERE telegram_id = ?').get(telegramId);
+  const existing = db.prepare('SELECT referral_status FROM users WHERE telegram_id = ?').get(telegramId);
   if (!existing) return { ok: false, reason: 'no_user' };
-  db.prepare('UPDATE users SET referral_unlocked = 1 WHERE telegram_id = ?').run(telegramId);
-  return { ok: true, unlocked: true };
+  if (existing.referral_status === 'approved') return { ok: true, status: 'approved' };
+  if (existing.referral_status === 'pending') return { ok: true, status: 'pending' };
+
+  db.prepare('UPDATE users SET referral_status = ?, referral_requested_at = ? WHERE telegram_id = ?')
+    .run('pending', now(), telegramId);
+  return { ok: true, status: 'pending' };
+}
+
+// ---------- Админка: заявки на рефералку ----------
+
+// Список заявок, ожидающих подтверждения — показывается в админ-панели.
+export async function getPendingReferralRequests() {
+  return db
+    .prepare(
+      `SELECT telegram_id AS telegramId, username, referral_requested_at AS requestedAt
+       FROM users
+       WHERE referral_status = 'pending'
+       ORDER BY referral_requested_at ASC`
+    )
+    .all();
+}
+
+// Админ вписывает ссылку и подтверждает заявку — только после этого у игрока
+// в интерфейсе появляется ссылка (см. server.js: после успешного вызова этой
+// функции сервер ещё и шлёт игроку уведомление ботом).
+export async function approveReferralRequest({ telegramId, link }) {
+  const user = db.prepare('SELECT referral_status FROM users WHERE telegram_id = ?').get(telegramId);
+  if (!user) return { ok: false, reason: 'no_user' };
+  if (user.referral_status !== 'pending') return { ok: false, reason: 'not_pending' };
+  if (!link) return { ok: false, reason: 'invalid_link' };
+
+  db.prepare('UPDATE users SET referral_status = ?, referral_link = ? WHERE telegram_id = ?')
+    .run('approved', link, telegramId);
+  return { ok: true };
+}
+
+// Отклонить заявку — статус возвращается в 'none', игрок может запросить снова.
+export async function rejectReferralRequest(telegramId) {
+  const user = db.prepare('SELECT referral_status FROM users WHERE telegram_id = ?').get(telegramId);
+  if (!user) return { ok: false, reason: 'no_user' };
+  db.prepare('UPDATE users SET referral_status = ? WHERE telegram_id = ?').run('none', telegramId);
+  return { ok: true };
 }
 
 // ---------- Настройки (админка) ----------
