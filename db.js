@@ -105,6 +105,11 @@ tryAlter('ALTER TABLE users ADD COLUMN is_vip INTEGER NOT NULL DEFAULT 0');
 tryAlter('ALTER TABLE users ADD COLUMN energy INTEGER NOT NULL DEFAULT 1000');
 tryAlter('ALTER TABLE users ADD COLUMN energy_day INTEGER NOT NULL DEFAULT 0');
 tryAlter('ALTER TABLE users ADD COLUMN referred_by TEXT');
+// Дробный "хвост" пассивного фарма, который ещё не набежал на целый $SLive
+// (см. applyOfflineFarm) — без него дробная часть терялась бы при каждом
+// вызове applyOfflineFarm, а он вызывается ОЧЕНЬ часто (на каждый тап,
+// каждое действие, и even просто при просмотре списка игроков в админке).
+tryAlter('ALTER TABLE users ADD COLUMN slive_farm_remainder REAL NOT NULL DEFAULT 0');
 // referral_unlocked: устаревшее поле старой (авто-открывающейся) версии
 // рефералки, оставлено ради обратной совместимости со старыми БД, но больше
 // не используется — теперь статус хранится в referral_status.
@@ -233,11 +238,27 @@ function applyOfflineFarm(telegramId) {
   const farmRate = computeFarmRate(telegramId, squad, inventoryByInstId); // SLive/сутки
   const t = now();
   const deltaSeconds = Math.max(0, (t - user.last_update_at) / 1000);
-  const earned = Math.floor((deltaSeconds / 86400) * farmRate);
 
-  if (earned > 0 || t !== user.last_update_at) {
-    db.prepare('UPDATE users SET slive_tokens = slive_tokens + ?, last_update_at = ? WHERE telegram_id = ?')
-      .run(earned, t, telegramId);
+  // БАГ, который чинит remainder: applyOfflineFarm вызывается на КАЖДЫЙ тап,
+  // каждую покупку, каждое открытие вкладки — то есть очень часто, с очень
+  // маленькими deltaSeconds между вызовами. Если дробную часть заработанного
+  // просто отбрасывать (как было раньше — Math.floor(...) без остатка), то
+  // при активной игре почти весь пассивный доход стирается в ноль ещё до
+  // того, как накопится хотя бы 1 целый $SLive: заработанное "сгорает"
+  // между вызовами, а не копится. Игрок видел рост баланса только за счёт
+  // визуального тикера на клиенте — а после ближайшей синхронизации с
+  // сервером (раз в 30 сек или после любого действия) баланс откатывался
+  // на настоящее, сильно меньшее серверное значение — выглядело так, будто
+  // "очки пропадают". Здесь мы явно копим дробный остаток в
+  // slive_farm_remainder и переносим его в следующий вызов, а не теряем.
+  const rawEarned = (deltaSeconds / 86400) * farmRate + user.slive_farm_remainder;
+  const earned = Math.floor(rawEarned);
+  const remainder = rawEarned - earned;
+
+  if (earned > 0 || remainder !== user.slive_farm_remainder || t !== user.last_update_at) {
+    db.prepare(
+      'UPDATE users SET slive_tokens = slive_tokens + ?, slive_farm_remainder = ?, last_update_at = ? WHERE telegram_id = ?'
+    ).run(earned, remainder, t, telegramId);
   }
 
   return { farmRate, earned };
