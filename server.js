@@ -45,7 +45,6 @@ import {
   exchangeStarsToSlive,
   STARS_TO_SLIVE_RATE,
   DB_PATH,
-  checkpointForBackup,
 } from './db.js';
 import { getRandomPlayer, PLAYERS_BY_ID, MARKET_PRICE, SELL_RATE } from './players-data.js';
 
@@ -814,10 +813,6 @@ const BACKUP_INTERVAL_MS = 6 * 60 * 60 * 1000; // раз в 6 часов
 async function sendDatabaseBackup(caption) {
   if (!ADMIN_TELEGRAM_ID) return { ok: false, reason: 'admin_not_configured' };
   try {
-    // Сбрасываем WAL-журнал в основной файл, чтобы в копии были все свежие
-    // записи, а не только то, что уже попало в sportlive.db на диске.
-    checkpointForBackup();
-
     if (!fs.existsSync(DB_PATH)) {
       console.error('backup: DB_PATH не существует', DB_PATH);
       return { ok: false, reason: 'no_db_file' };
