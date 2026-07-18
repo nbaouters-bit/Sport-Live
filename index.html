@@ -2,18 +2,30 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Sport Live FC - TWA Game</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
   <style>
+    html {
+      touch-action: manipulation;
+    }
     body {
       font-family: 'Inter', sans-serif;
       -webkit-tap-highlight-color: transparent;
       background-color: #050505;
       color: white;
       user-select: none;
+      touch-action: manipulation;
+      overscroll-behavior: none;
+    }
+    /* Тапалка кликается очень часто и очень быстро — именно на ней браузер
+       чаще всего распознаёт "двойной тап" как жест зума. touch-action:
+       manipulation отключает жесты зума/двойного тапа для этого элемента,
+       оставляя обычный tap/click. */
+    #tap-ball {
+      touch-action: manipulation;
     }
     @keyframes floatUp {
       0% { transform: translateY(0) scale(1); opacity: 1; }
@@ -309,12 +321,25 @@
 
         <h2 class="text-xl font-black uppercase italic tracking-tight mb-2 mt-6">Пригласи друга</h2>
         <div class="bg-neutral-900 border border-neutral-800 rounded-2xl p-4">
-          <p class="text-[10px] text-neutral-400 mb-3">За каждого друга, который впервые откроет игру по твоей ссылке, ты получишь <span class="text-emerald-400 font-bold">🪙 500 $SLive</span>.</p>
-          <div id="referral-link" class="bg-black/40 border border-neutral-800 rounded-lg px-3 py-2 text-[10px] text-neutral-300 break-all mb-2">Загрузка...</div>
-          <div class="flex gap-2">
-            <button onclick="copyReferralLink()" class="flex-1 bg-neutral-800 text-white text-[10px] font-black py-2 rounded-lg border border-neutral-700">Скопировать</button>
-            <button onclick="shareReferralLink()" class="flex-1 bg-emerald-500 text-black text-[10px] font-black py-2 rounded-lg">Поделиться</button>
+          <p class="text-[10px] text-neutral-400 mb-3">За каждого друга, который впервые откроет игру по твоей ссылке, ты получишь <span class="text-emerald-400 font-bold">🪙 <span id="referral-reward-amount">—</span> $SLive</span>.</p>
+
+          <!-- Показывается, пока игрок ещё не запросил статус реферала -->
+          <div id="referral-gate">
+            <div id="referral-channel-block" class="hidden bg-black/40 border border-neutral-800 rounded-lg px-3 py-2 text-[10px] text-neutral-300 mb-2">
+              Сначала подпишись: <a id="referral-channel-link" href="#" target="_blank" class="text-emerald-400 underline break-all">ссылка</a>
+            </div>
+            <button onclick="requestReferralAccess()" class="w-full bg-emerald-500 text-black text-[10px] font-black py-2.5 rounded-lg">Я подписался — получить ссылку</button>
           </div>
+
+          <!-- Показывается после успешного запроса (referral_unlocked = 1 на сервере) -->
+          <div id="referral-unlocked-block" class="hidden">
+            <div id="referral-link" class="bg-black/40 border border-neutral-800 rounded-lg px-3 py-2 text-[10px] text-neutral-300 break-all mb-2">Загрузка...</div>
+            <div class="flex gap-2">
+              <button onclick="copyReferralLink()" class="flex-1 bg-neutral-800 text-white text-[10px] font-black py-2 rounded-lg border border-neutral-700">Скопировать</button>
+              <button onclick="shareReferralLink()" class="flex-1 bg-emerald-500 text-black text-[10px] font-black py-2 rounded-lg">Поделиться</button>
+            </div>
+          </div>
+
           <div class="text-[10px] text-neutral-400 mt-3">Приглашено друзей: <span id="referral-count" class="text-white font-bold">0</span></div>
         </div>
       </div>
@@ -427,6 +452,16 @@
           </div>
         </div>
 
+        <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-3 mb-4">
+          <div class="text-[10px] font-bold text-neutral-300 mb-2">Ссылка для подписки (реферальная программа)</div>
+          <p class="text-[9px] text-neutral-500 mb-2">Показывается игрокам во вкладке "Пригласи друга" перед тем, как они запросят свою реферальную ссылку.</p>
+          <div class="flex gap-2">
+            <input id="admin-referral-channel" type="text" placeholder="https://t.me/your_channel"
+              class="flex-1 bg-black border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600">
+            <button onclick="adminSetReferralChannel()" class="bg-emerald-500 text-black text-[11px] font-black px-4 rounded-lg">Сохранить</button>
+          </div>
+        </div>
+
         <div class="flex justify-between items-center mb-2">
           <div class="text-[10px] font-bold text-neutral-300">Игроки</div>
           <button onclick="loadAdminPanel()" class="text-[9px] text-emerald-400 font-bold">↻ Обновить</button>
@@ -535,6 +570,20 @@
       tg.expand();
     }
 
+    // Доп. защита от "прыжков" масштаба при частых тапах: viewport
+    // (maximum-scale=1, user-scalable=no) и touch-action: manipulation в CSS
+    // отключают зум в большинстве WebView, но Safari/некоторые Android-вебвью
+    // всё равно шлют жест масштабирования при быстрых повторных тапах —
+    // здесь мы явно гасим его на уровне document.
+    document.addEventListener('gesturestart', (e) => e.preventDefault());
+    document.addEventListener('gesturechange', (e) => e.preventDefault());
+    let lastTouchEndAt = 0;
+    document.addEventListener('touchend', (e) => {
+      const nowTs = Date.now();
+      if (nowTs - lastTouchEndAt <= 300) e.preventDefault();
+      lastTouchEndAt = nowTs;
+    }, { passive: false });
+
     async function apiPost(path, body = {}) {
       const initData = tg?.initData || '';
       const res = await fetch(`${BACKEND_URL}${path}`, {
@@ -635,10 +684,12 @@
       const listEl = document.getElementById('admin-users-list');
       listEl.innerHTML = '<div class="text-neutral-500 text-xs">Загрузка...</div>';
       try {
-        const [{ stats }, { users }] = await Promise.all([
+        const [{ stats }, { users }, { link }] = await Promise.all([
           apiPost('/api/admin/stats'),
           apiPost('/api/admin/users'),
+          apiPost('/api/admin/referral-channel/get'),
         ]);
+        document.getElementById('admin-referral-channel').value = link || '';
 
         document.getElementById('stat-total-users').innerText = stats.totalUsers;
         document.getElementById('stat-total-stars').innerText = stats.totalStarsBalance.toLocaleString();
@@ -675,6 +726,17 @@
       } catch (e) {
         console.error(e);
         listEl.innerHTML = '<div class="text-red-400 text-xs">Не удалось загрузить данные. Открой эту вкладку под админ-аккаунтом.</div>';
+      }
+    }
+
+    async function adminSetReferralChannel() {
+      const link = document.getElementById('admin-referral-channel').value.trim();
+      try {
+        await apiPost('/api/admin/referral-channel', { link });
+        alertMsg('Ссылка для подписки сохранена!');
+      } catch (e) {
+        console.error(e);
+        alertMsg('Не удалось сохранить ссылку.');
       }
     }
 
@@ -754,19 +816,54 @@
     }
 
     // ---------- РЕФЕРАЛКА ----------
+    // Ссылка теперь появляется только после явного запроса игрока (кнопка
+    // "Я подписался — получить ссылку") — до этого показываем ссылку на
+    // канал (если админ её задал) и саму кнопку запроса. Источник правды —
+    // поле unlocked из /api/referral-info / /api/referral-request.
     let referralLink = '';
+    function renderReferralState({ invited, rewardPerFriend, channelLink, unlocked, botUsername, telegramId }) {
+      referralLink = (unlocked && botUsername) ? `https://t.me/${botUsername}?startapp=${telegramId}` : '';
+      document.getElementById('referral-reward-amount').innerText = rewardPerFriend.toLocaleString();
+      document.getElementById('referral-count').innerText = invited;
+
+      document.getElementById('referral-gate').classList.toggle('hidden', Boolean(unlocked));
+      document.getElementById('referral-unlocked-block').classList.toggle('hidden', !unlocked);
+
+      const channelBlock = document.getElementById('referral-channel-block');
+      if (channelLink) {
+        document.getElementById('referral-channel-link').href = channelLink;
+        channelBlock.classList.remove('hidden');
+      } else {
+        channelBlock.classList.add('hidden');
+      }
+
+      if (unlocked) {
+        document.getElementById('referral-link').innerText = referralLink || 'Ссылка временно недоступна.';
+      }
+    }
+
     async function loadReferralInfo() {
       if (!tg?.initData) {
         document.getElementById('referral-link').innerText = 'Доступно только внутри Telegram.';
         return;
       }
       try {
-        const { invited, botUsername, telegramId } = await apiPost('/api/referral-info');
-        referralLink = botUsername ? `https://t.me/${botUsername}?startapp=${telegramId}` : '';
-        document.getElementById('referral-link').innerText = referralLink || 'Ссылка временно недоступна.';
-        document.getElementById('referral-count').innerText = invited;
+        const info = await apiPost('/api/referral-info');
+        renderReferralState(info);
       } catch (e) {
         console.error('Не удалось загрузить реферальные данные', e);
+      }
+    }
+
+    async function requestReferralAccess() {
+      if (!tg?.initData) return alertMsg('Доступно только внутри Telegram.');
+      try {
+        const info = await apiPost('/api/referral-request');
+        renderReferralState(info);
+        alertMsg('Готово! Твоя реферальная ссылка открыта.');
+      } catch (e) {
+        console.error('Не удалось запросить статус реферала', e);
+        alertMsg('Не удалось оформить запрос. Попробуй ещё раз.');
       }
     }
 
@@ -1099,6 +1196,33 @@
         syncBalanceFromServer();
       }
     }
+
+    // Обычный flushTaps() ждёт fetch-ответ, а при закрытии/сворачивании
+    // мини-аппы страница может быть убита до того, как fetch успеет уйти —
+    // тогда накопленные тапы (pendingTaps) просто терялись бы. sendBeacon
+    // гарантированно ставит запрос в очередь браузера "на выход", даже если
+    // страница уже выгружается — это единственный надёжный способ не терять
+    // прогресс тапалки при закрытии приложения.
+    function flushTapsOnExit() {
+      clearTimeout(tapSyncTimer);
+      if (pendingTaps <= 0) return;
+      if (!tg?.initData || typeof navigator.sendBeacon !== 'function') return;
+      const count = pendingTaps;
+      pendingTaps = 0;
+      try {
+        const blob = new Blob(
+          [JSON.stringify({ count, initData: tg.initData })],
+          { type: 'application/json' }
+        );
+        navigator.sendBeacon(`${BACKEND_URL}/api/tap`, blob);
+      } catch (e) {
+        console.error('Не удалось отправить тапы через sendBeacon', e);
+      }
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') flushTapsOnExit();
+    });
+    window.addEventListener('pagehide', flushTapsOnExit);
 
     // ЛОГИКА СОСТАВА
     function renderSquad() {
