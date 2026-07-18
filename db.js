@@ -1,4 +1,4 @@
-  // db.js
+// db.js
 // Вся денежная и игровая экономика живёт только тут (SQLite через better-sqlite3).
 // Клиент никогда напрямую не пишет в баланс — только через функции этого файла,
 // вызванные из server.js после проверки initData.
@@ -105,6 +105,34 @@ tryAlter('ALTER TABLE users ADD COLUMN is_vip INTEGER NOT NULL DEFAULT 0');
 tryAlter('ALTER TABLE users ADD COLUMN energy INTEGER NOT NULL DEFAULT 1000');
 tryAlter('ALTER TABLE users ADD COLUMN energy_day INTEGER NOT NULL DEFAULT 0');
 tryAlter('ALTER TABLE users ADD COLUMN referred_by TEXT');
+// referral_unlocked: игрок получает свою реферальную ссылку только ПОСЛЕ
+// явного запроса ("Стать рефералом" в интерфейсе) — см. requestReferralAccess().
+tryAlter('ALTER TABLE users ADD COLUMN referral_unlocked INTEGER NOT NULL DEFAULT 0');
+
+// Служебная таблица key/value для настроек, которые задаёт админ из панели
+// (сейчас — ссылка на канал/чат, на который нужно подписаться перед тем как
+// стать рефералом). Не хардкодим в .env, чтобы админ мог менять её на лету,
+// не передеплоивая сервер.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS settings (
+    key    TEXT PRIMARY KEY,
+    value  TEXT
+  );
+`);
+
+function getSetting(key) {
+  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
+  return row ? row.value : null;
+}
+
+function setSetting(key, value) {
+  db.prepare(
+    `INSERT INTO settings (key, value) VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+  ).run(key, value);
+}
+
+const REFERRAL_CHANNEL_LINK_KEY = 'referral_channel_link';
 
 // ---------- helpers ----------
 
@@ -143,7 +171,7 @@ function refreshEnergyIfNeeded(telegramId) {
   }
 }
 
-// Ставка фарма в SLive/сек — сумма income карт в составе, с той же бустной
+// Ставка фарма в SLive/СУТКИ — сумма income карт в составе, с той же бустной
 // "химией" за одинаковую nation, что и в клиентском renderSquad() (иначе
 // офлайн-начисление на сервере тихо не совпадало бы с тем, что игрок видит
 // на экране, пока приложение открыто). Состав валидируется против
@@ -187,10 +215,18 @@ function applyOfflineFarm(telegramId) {
     inventoryByInstId = new Map(rows.map(r => [r.inst_id, r]));
   }
 
-  const farmRate = computeFarmRate(telegramId, squad, inventoryByInstId); // SLive/сек
+  // ВАЖНО: farmRate — это SLive/СУТКИ (см. комментарий в players-data.js и
+  // computeFarmRate ниже), а не SLive/секунду. Раньше earned считался как
+  // deltaSeconds * farmRate напрямую — то есть карта с income=500/сутки в
+  // составе приносила бы 500 SLive КАЖДУЮ секунду (легенду можно было
+  // окупить быстрее, чем открывался следующий пак). Здесь мы явно переводим
+  // прошедшее время в долю суток, прежде чем умножать на суточную ставку —
+  // это единственное место в игре, где начисляется реальный (не визуальный)
+  // баланс, поэтому именно тут должна жить правильная единица измерения.
+  const farmRate = computeFarmRate(telegramId, squad, inventoryByInstId); // SLive/сутки
   const t = now();
   const deltaSeconds = Math.max(0, (t - user.last_update_at) / 1000);
-  const earned = Math.floor(deltaSeconds * farmRate);
+  const earned = Math.floor((deltaSeconds / 86400) * farmRate);
 
   if (earned > 0 || t !== user.last_update_at) {
     db.prepare('UPDATE users SET slive_tokens = slive_tokens + ?, last_update_at = ? WHERE telegram_id = ?')
@@ -353,10 +389,39 @@ export async function buyVip({ telegramId, amount }) {
 }
 
 // ---------- Рефералка ----------
+// Ссылку получает не любой открывший вкладку игрок, а только тот, кто явно
+// нажал "Стать рефералом" (см. requestReferralAccess) — обычно после того,
+// как увидел ссылку на канал, которую задаёт админ (см. getReferralChannelLink).
 
 export async function getReferralInfo(telegramId) {
   const { cnt } = db.prepare('SELECT COUNT(*) AS cnt FROM users WHERE referred_by = ?').get(telegramId);
-  return { invited: cnt, rewardPerFriend: REFERRAL_REWARD_SLIVE };
+  const user = db.prepare('SELECT referral_unlocked FROM users WHERE telegram_id = ?').get(telegramId);
+  return {
+    invited: cnt,
+    rewardPerFriend: REFERRAL_REWARD_SLIVE,
+    unlocked: Boolean(user?.referral_unlocked),
+    channelLink: getSetting(REFERRAL_CHANNEL_LINK_KEY) || null,
+  };
+}
+
+// Запрос игрока на получение реферальной ссылки. Идемпотентно — повторный
+// вызов просто подтверждает, что доступ уже открыт.
+export async function requestReferralAccess(telegramId) {
+  const existing = db.prepare('SELECT 1 FROM users WHERE telegram_id = ?').get(telegramId);
+  if (!existing) return { ok: false, reason: 'no_user' };
+  db.prepare('UPDATE users SET referral_unlocked = 1 WHERE telegram_id = ?').run(telegramId);
+  return { ok: true, unlocked: true };
+}
+
+// ---------- Настройки (админка) ----------
+
+export async function getReferralChannelLink() {
+  return getSetting(REFERRAL_CHANNEL_LINK_KEY) || null;
+}
+
+export async function setReferralChannelLink(link) {
+  setSetting(REFERRAL_CHANNEL_LINK_KEY, link || '');
+  return { ok: true, link: link || '' };
 }
 
 // ---------- Инвентарь / драфт ----------
