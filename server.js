@@ -36,6 +36,8 @@ import {
   payoutDraftTopIfNeeded,
   createBetEvent,
   closeBetEvent,
+  openBetEvent,
+  deleteBetEvent,
   resolveBetEvent,
   updateBetOptionPercent,
   getAdminBetEvents,
@@ -711,6 +713,33 @@ app.post('/api/admin/bets/close', requireTelegramAuth, requireAdmin, async (req,
   const result = await closeBetEvent(eventId);
   if (!result.ok) return res.status(409).json({ error: result.reason });
   res.json(result);
+});
+
+// Возобновляет приём ставок у ранее остановленного ('closed') ивента.
+app.post('/api/admin/bets/open', requireTelegramAuth, requireAdmin, async (req, res) => {
+  const { eventId } = req.body;
+  if (!eventId) return res.status(400).json({ error: 'invalid_input' });
+  const result = await openBetEvent(eventId);
+  if (!result.ok) return res.status(409).json({ error: result.reason });
+  res.json(result);
+});
+
+// Полностью удаляет ивент (нельзя для уже подтверждённых). Если по ивенту
+// были незавершённые ставки — деньги игрокам возвращаются автоматически.
+app.post('/api/admin/bets/delete', requireTelegramAuth, requireAdmin, async (req, res) => {
+  const { eventId } = req.body;
+  if (!eventId) return res.status(400).json({ error: 'invalid_input' });
+  const result = await deleteBetEvent(eventId);
+  if (!result.ok) return res.status(409).json({ error: result.reason });
+
+  for (const refund of result.refunds) {
+    notifyUser(
+      refund.telegramId,
+      `↩️ Ивент "${result.title}" отменён админом. Твоя ставка ${refund.amount} 🪙 SLive возвращена на баланс.`
+    );
+  }
+
+  res.json({ ok: true });
 });
 
 // Подтверждение исхода — выплачивает победителям и шлёт им уведомление ботом.
