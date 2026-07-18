@@ -11,6 +11,10 @@ db.pragma('journal_mode = WAL');
 
 // Награда рефереру за каждого друга, который впервые открыл приложение по его ссылке.
 const REFERRAL_REWARD_SLIVE = 1000;
+// Курс обмена Telegram Stars -> $SLive (кнопка "Обменять" в плашке пополнения).
+// Ориентировался на цену бронзового пака (20 ⭐️ = 500 $SLive = 25 $SLive за 1 ⭐️),
+// чтобы обмен не был ни выгоднее, ни хуже покупки паков напрямую за звёзды.
+export const STARS_TO_SLIVE_RATE = 25;
 // Максимум энергии в сутки (см. refreshEnergyIfNeeded) — 1 клик = 1 единица энергии.
 const DAILY_ENERGY = 1000;
 // Не даём одним запросом /api/tap списать больше, чем можно нафармить за
@@ -29,6 +33,12 @@ const DRAFT_WIN_POINTS = 3;
 const DRAFT_ELO_SCALE = 12;
 // Ежедневная награда игроку №1 в лидерборде драфта (по total_points).
 const DRAFT_TOP_REWARD_SLIVE = 1000;
+
+// ---------- Ставки: константы ----------
+const MIN_BET_AMOUNT = 10;
+const MAX_BET_AMOUNT = 1_000_000;
+const MIN_OPTION_PERCENT = 1;
+const MAX_OPTION_PERCENT = 95; // не даём поставить 100% — тогда коэффициент был бы x1, ставка не имела бы смысла
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
@@ -88,6 +98,49 @@ db.exec(`
     id                INTEGER PRIMARY KEY CHECK (id = 1),
     last_payout_day   INTEGER NOT NULL DEFAULT -1
   );
+
+  -- Ставки за $SLive (раздел "СТАВКИ") — полностью управляются админом:
+  -- он создаёт ивент с вариантами исхода и процентом (шансом) на каждый,
+  -- игроки ставят $SLive на вариант, админ подтверждает исход вручную.
+  CREATE TABLE IF NOT EXISTS bet_events (
+    id                  TEXT PRIMARY KEY,
+    title               TEXT NOT NULL,
+    description         TEXT,
+    status              TEXT NOT NULL DEFAULT 'open', -- open | closed | resolved
+    resolved_option_id  TEXT,
+    created_at          INTEGER NOT NULL,
+    closes_at           INTEGER,
+    resolved_at         INTEGER
+  );
+
+  -- percent — шанс/вероятность в %, который вручную задаёт админ при
+  -- создании ивента (как в Binance/Fanton — процентная полоса на каждый
+  -- исход). Коэффициент выплаты считается как 100/percent и ФИКСИРУЕТСЯ
+  -- в ставке (bets.multiplier) в момент, когда игрок ставит — так более
+  -- поздние ставки или правки процентов админом не задним числом меняют
+  -- выплату по уже сделанным ставкам.
+  CREATE TABLE IF NOT EXISTS bet_options (
+    id           TEXT PRIMARY KEY,
+    event_id     TEXT NOT NULL,
+    label        TEXT NOT NULL,
+    percent      REAL NOT NULL,
+    sort_order   INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_bet_options_event ON bet_options(event_id);
+
+  CREATE TABLE IF NOT EXISTS bets (
+    id           TEXT PRIMARY KEY,
+    event_id     TEXT NOT NULL,
+    option_id    TEXT NOT NULL,
+    telegram_id  TEXT NOT NULL,
+    amount       INTEGER NOT NULL,
+    multiplier   REAL NOT NULL,
+    status       TEXT NOT NULL DEFAULT 'pending', -- pending | won | lost
+    payout       INTEGER NOT NULL DEFAULT 0,
+    created_at   INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_bets_event ON bets(event_id);
+  CREATE INDEX IF NOT EXISTS idx_bets_user ON bets(telegram_id);
 `);
 db.prepare('INSERT OR IGNORE INTO draft_meta (id, last_payout_day) VALUES (1, -1)').run();
 
@@ -356,6 +409,36 @@ export async function spendStars({ telegramId, amount }) {
 
 // ---------- $SLive (внутриигровая валюта) ----------
 
+// Обмен Telegram Stars -> $SLive по фиксированному курсу STARS_TO_SLIVE_RATE.
+// Обратного обмена ($SLive -> Stars, вывод) пока НЕТ — кнопка "Обменять" в
+// блоке "Вывод" на клиенте намеренно задизейблена ("Скоро"), здесь для неё
+// сознательно нет функции, чтобы не создавать видимость рабочего API.
+export async function exchangeStarsToSlive({ telegramId, starsAmount }) {
+  const numStars = Math.floor(Number(starsAmount));
+  if (!Number.isFinite(numStars) || numStars <= 0) {
+    return { ok: false, reason: 'invalid_amount' };
+  }
+
+  applyOfflineFarm(telegramId); // фиксируем накапавшее ДО того, как баланс поменяется от обмена
+
+  const tx = db.transaction(() => {
+    const user = db.prepare('SELECT tg_stars, slive_tokens FROM users WHERE telegram_id = ?').get(telegramId);
+    if (!user) return { ok: false, reason: 'no_user' };
+    if (user.tg_stars < numStars) return { ok: false, reason: 'insufficient_funds', balance: user.tg_stars };
+
+    const gained = numStars * STARS_TO_SLIVE_RATE;
+    db.prepare('UPDATE users SET tg_stars = tg_stars - ?, slive_tokens = slive_tokens + ? WHERE telegram_id = ?')
+      .run(numStars, gained, telegramId);
+    db.prepare('INSERT INTO star_ledger (telegram_id, delta, reason, created_at) VALUES (?, ?, ?, ?)')
+      .run(telegramId, -numStars, 'exchange_to_slive', now());
+
+    const updated = db.prepare('SELECT tg_stars, slive_tokens FROM users WHERE telegram_id = ?').get(telegramId);
+    return { ok: true, starsBalance: updated.tg_stars, sliveBalance: updated.slive_tokens, gained };
+  });
+
+  return tx();
+}
+
 export async function spendSlive({ telegramId, amount }) {
   applyOfflineFarm(telegramId); // сначала зачисляем то, что накапало, потом списываем
   const tx = db.transaction(() => {
@@ -584,21 +667,53 @@ export async function getLeaderboard(limit = 10) {
 
 // ---------- Админка ----------
 
+// "База игроков" для админки — не просто баланс, а полный прогресс каждого:
+// пассивный доход состава (farmRate), сила всего клуба (сумма рейтингов ВСЕХ
+// купленных карт, как в getUser) и разбивка инвентаря по редкости. offline-farm
+// применяется через тот же remainder-safe applyOfflineFarm, что и везде —
+// значит открытие этого списка больше не может "съесть" дробный прогресс
+// игроков (см. slive_farm_remainder).
 export async function listUsers() {
   const rows = db.prepare('SELECT telegram_id FROM users').all();
   for (const r of rows) {
     applyOfflineFarm(r.telegram_id);
     refreshEnergyIfNeeded(r.telegram_id);
   }
-  return db
+
+  const baseRows = db
     .prepare(
       `SELECT u.telegram_id AS telegramId, u.username, u.tg_stars AS tgStars, u.slive_tokens AS sliveTokens,
-              u.is_vip AS isVip, u.energy AS energy,
+              u.is_vip AS isVip, u.energy AS energy, u.squad AS squadJson,
               (SELECT COUNT(*) FROM users r WHERE r.referred_by = u.telegram_id) AS invited
        FROM users u ORDER BY u.tg_stars DESC`
     )
-    .all()
-    .map(u => ({ ...u, isVip: Boolean(u.isVip) }));
+    .all();
+
+  return baseRows.map(u => {
+    const inventory = getInventory(u.telegramId);
+    const squad = JSON.parse(u.squadJson || '{}');
+    const inventoryByInstId = new Map(inventory.map(p => [p.instId, { telegram_id: u.telegramId, player_id: p.id }]));
+    const farmRate = computeFarmRate(u.telegramId, squad, inventoryByInstId); // SLive/сутки
+    const clubPower = inventory.reduce((sum, p) => sum + p.rating, 0);
+    const rarityCounts = inventory.reduce((acc, p) => {
+      acc[p.type] = (acc[p.type] || 0) + 1;
+      return acc;
+    }, {});
+
+    return {
+      telegramId: u.telegramId,
+      username: u.username,
+      tgStars: u.tgStars,
+      sliveTokens: u.sliveTokens,
+      isVip: Boolean(u.isVip),
+      energy: u.energy,
+      invited: u.invited,
+      farmRate,
+      clubPower,
+      cardsTotal: inventory.length,
+      rarityCounts,
+    };
+  });
 }
 
 export async function getStats() {
@@ -791,4 +906,202 @@ export async function payoutDraftTopIfNeeded() {
   return top ? { telegramId: top.telegram_id, reward: DRAFT_TOP_REWARD_SLIVE } : null;
 }
 
+// ---------- Ставки за $SLive ----------
+// Полностью управляются админом: он создаёт ивент с 2+ вариантами исхода,
+// на каждый вариант вручную задаёт процент (шанс) — как полосы в
+// Binance/Fanton. Игроки ставят $SLive на понравившийся вариант, коэффициент
+// выплаты (100/percent) фиксируется в bets.multiplier в момент ставки.
+// Когда ивент реально заканчивается, админ вручную выбирает исход — деньги
+// проигравших НЕ возвращаются (они уже списаны в момент ставки), победители
+// получают amount * multiplier.
+
+function rowToBetEvent(eventRow, optionRows, poolByOption) {
+  const totalPool = optionRows.reduce((sum, o) => sum + (poolByOption.get(o.id)?.total || 0), 0);
+  return {
+    id: eventRow.id,
+    title: eventRow.title,
+    description: eventRow.description,
+    status: eventRow.status,
+    resolvedOptionId: eventRow.resolved_option_id,
+    createdAt: eventRow.created_at,
+    closesAt: eventRow.closes_at,
+    resolvedAt: eventRow.resolved_at,
+    totalPool,
+    options: optionRows.map(o => ({
+      id: o.id,
+      label: o.label,
+      percent: o.percent,
+      multiplier: Math.round((100 / o.percent) * 100) / 100,
+      pool: poolByOption.get(o.id)?.total || 0,
+      betsCount: poolByOption.get(o.id)?.count || 0,
+    })),
+  };
+}
+
+function getBetEventFull(eventId) {
+  const eventRow = db.prepare('SELECT * FROM bet_events WHERE id = ?').get(eventId);
+  if (!eventRow) return null;
+  const optionRows = db
+    .prepare('SELECT * FROM bet_options WHERE event_id = ? ORDER BY sort_order ASC')
+    .all(eventId);
+  const poolRows = db
+    .prepare('SELECT option_id, SUM(amount) AS total, COUNT(*) AS count FROM bets WHERE event_id = ? GROUP BY option_id')
+    .all(eventId);
+  const poolByOption = new Map(poolRows.map(r => [r.option_id, r]));
+  return rowToBetEvent(eventRow, optionRows, poolByOption);
+}
+
+// ---------- Админка: создание/управление ивентами ----------
+
+// options: [{ label, percent }, ...] — минимум 2 варианта, percent у каждого
+// в диапазоне (MIN_OPTION_PERCENT..MAX_OPTION_PERCENT].
+export async function createBetEvent({ title, description, options, closesAt }) {
+  if (!title || !Array.isArray(options) || options.length < 2) {
+    return { ok: false, reason: 'invalid_input' };
+  }
+  for (const opt of options) {
+    if (!opt.label || typeof opt.percent !== 'number') return { ok: false, reason: 'invalid_option' };
+    if (opt.percent < MIN_OPTION_PERCENT || opt.percent > MAX_OPTION_PERCENT) {
+      return { ok: false, reason: 'invalid_percent' };
+    }
+  }
+
+  const eventId = randomUUID();
+  const tx = db.transaction(() => {
+    db.prepare(
+      `INSERT INTO bet_events (id, title, description, status, created_at, closes_at)
+       VALUES (?, ?, ?, 'open', ?, ?)`
+    ).run(eventId, title, description || null, now(), closesAt || null);
+
+    options.forEach((opt, i) => {
+      db.prepare(
+        `INSERT INTO bet_options (id, event_id, label, percent, sort_order) VALUES (?, ?, ?, ?, ?)`
+      ).run(randomUUID(), eventId, opt.label, opt.percent, i);
+    });
+  });
+  tx();
+
+  return { ok: true, event: getBetEventFull(eventId) };
+}
+
+// Останавливает приём новых ставок, не подводя итог — используется, если
+// админу нужно "заморозить" ивент перед тем, как объявить исход.
+export async function closeBetEvent(eventId) {
+  const event = db.prepare('SELECT status FROM bet_events WHERE id = ?').get(eventId);
+  if (!event) return { ok: false, reason: 'no_event' };
+  if (event.status === 'resolved') return { ok: false, reason: 'already_resolved' };
+  db.prepare("UPDATE bet_events SET status = 'closed' WHERE id = ?").run(eventId);
+  return { ok: true, event: getBetEventFull(eventId) };
+}
+
+// Подтверждение исхода. Возвращает список победителей (telegramId + payout),
+// чтобы server.js разослал уведомления ботом.
+export async function resolveBetEvent({ eventId, winningOptionId }) {
+  const event = db.prepare('SELECT * FROM bet_events WHERE id = ?').get(eventId);
+  if (!event) return { ok: false, reason: 'no_event' };
+  if (event.status === 'resolved') return { ok: false, reason: 'already_resolved' };
+
+  const option = db.prepare('SELECT * FROM bet_options WHERE id = ? AND event_id = ?').get(winningOptionId, eventId);
+  if (!option) return { ok: false, reason: 'invalid_option' };
+
+  const winners = [];
+  const tx = db.transaction(() => {
+    const allBets = db.prepare('SELECT * FROM bets WHERE event_id = ?').all(eventId);
+    for (const bet of allBets) {
+      if (bet.option_id === winningOptionId) {
+        const payout = Math.floor(bet.amount * bet.multiplier);
+        db.prepare("UPDATE bets SET status = 'won', payout = ? WHERE id = ?").run(payout, bet.id);
+        db.prepare('UPDATE users SET slive_tokens = slive_tokens + ? WHERE telegram_id = ?')
+          .run(payout, bet.telegram_id);
+        winners.push({ telegramId: bet.telegram_id, payout, amount: bet.amount });
+      } else {
+        db.prepare("UPDATE bets SET status = 'lost', payout = 0 WHERE id = ?").run(bet.id);
+      }
+    }
+    db.prepare(
+      "UPDATE bet_events SET status = 'resolved', resolved_option_id = ?, resolved_at = ? WHERE id = ?"
+    ).run(winningOptionId, now(), eventId);
+  });
+  tx();
+
+  return { ok: true, event: getBetEventFull(eventId), winningLabel: option.label, winners };
+}
+
+// Список ВСЕХ ивентов (любого статуса) для админ-панели, свежие сверху.
+export async function getAdminBetEvents() {
+  const rows = db.prepare('SELECT id FROM bet_events ORDER BY created_at DESC').all();
+  return rows.map(r => getBetEventFull(r.id));
+}
+
+// ---------- Игрок: просмотр ивентов и ставки ----------
+
+// Открытые (можно ставить) + недавно завершённые (последние 10, чтобы видеть
+// исход) — закрытые-без-резолва тоже показываем как "приём ставок окончен".
+export async function getVisibleBetEvents() {
+  const openIds = db.prepare("SELECT id FROM bet_events WHERE status IN ('open','closed') ORDER BY created_at DESC").all();
+  const resolvedIds = db
+    .prepare("SELECT id FROM bet_events WHERE status = 'resolved' ORDER BY resolved_at DESC LIMIT 10")
+    .all();
+  return [...openIds, ...resolvedIds].map(r => getBetEventFull(r.id));
+}
+
+export async function placeBet({ telegramId, eventId, optionId, amount }) {
+  const numAmount = Math.floor(Number(amount));
+  if (!Number.isFinite(numAmount) || numAmount < MIN_BET_AMOUNT || numAmount > MAX_BET_AMOUNT) {
+    return { ok: false, reason: 'invalid_amount' };
+  }
+
+  // Фиксируем то, что накапало от пассивного фарма, ПЕРЕД тем как списывать
+  // ставку — иначе можно было бы поставить на несуществующий ещё баланс.
+  applyOfflineFarm(telegramId);
+
+  const tx = db.transaction(() => {
+    const event = db.prepare('SELECT * FROM bet_events WHERE id = ?').get(eventId);
+    if (!event) return { ok: false, reason: 'no_event' };
+    if (event.status !== 'open') return { ok: false, reason: 'betting_closed' };
+
+    const option = db.prepare('SELECT * FROM bet_options WHERE id = ? AND event_id = ?').get(optionId, eventId);
+    if (!option) return { ok: false, reason: 'invalid_option' };
+
+    const user = db.prepare('SELECT slive_tokens FROM users WHERE telegram_id = ?').get(telegramId);
+    if (!user) return { ok: false, reason: 'no_user' };
+    if (user.slive_tokens < numAmount) return { ok: false, reason: 'insufficient_funds', balance: user.slive_tokens };
+
+    const multiplier = Math.round((100 / option.percent) * 100) / 100;
+    const betId = randomUUID();
+    db.prepare(
+      `INSERT INTO bets (id, event_id, option_id, telegram_id, amount, multiplier, status, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)`
+    ).run(betId, eventId, optionId, telegramId, numAmount, multiplier, now());
+    db.prepare('UPDATE users SET slive_tokens = slive_tokens - ? WHERE telegram_id = ?').run(numAmount, telegramId);
+
+    const updatedUser = db.prepare('SELECT slive_tokens FROM users WHERE telegram_id = ?').get(telegramId);
+    return { ok: true, balance: updatedUser.slive_tokens, betId, multiplier };
+  });
+
+  const result = tx();
+  if (!result.ok) return result;
+  return { ...result, event: getBetEventFull(eventId) };
+}
+
+// История ставок игрока (последние 30), с названием ивента/варианта — для
+// вкладки "Мои ставки".
+export async function getMyBets(telegramId) {
+  const rows = db
+    .prepare(
+      `SELECT b.id, b.amount, b.multiplier, b.status, b.payout, b.created_at AS createdAt,
+              e.title AS eventTitle, e.status AS eventStatus,
+              o.label AS optionLabel
+       FROM bets b
+       JOIN bet_events e ON e.id = b.event_id
+       JOIN bet_options o ON o.id = b.option_id
+       WHERE b.telegram_id = ?
+       ORDER BY b.created_at DESC
+       LIMIT 30`
+    )
+    .all(telegramId);
+  return rows;
+}
+
 export default db;
+
