@@ -1,0 +1,21 @@
+# litestream.yml
+# Настройка репликации базы sportlive.db в Cloudflare R2 (S3-совместимое
+# хранилище, бесплатный тариф). Litestream в фоне отслеживает WAL-файл
+# SQLite и стримит изменения в бакет почти в реальном времени, а при
+# старте контейнера (start.sh) сначала восстанавливает базу из бакета —
+# так даже полностью эфемерный диск Render Free перестаёт быть проблемой:
+# сам файл базы никогда не живёт только в контейнере.
+#
+# Все значения ниже подставляются из переменных окружения Render
+# (Environment -> Add Environment Variable), см. инструкцию в README-BACKUP.md.
+dbs:
+  - path: ${DB_PATH}
+    replicas:
+      - type: s3
+        bucket: ${R2_BUCKET}
+        path: db
+        endpoint: ${R2_ENDPOINT}
+        region: auto
+        access-key-id: ${R2_ACCESS_KEY_ID}
+        secret-access-key: ${R2_SECRET_ACCESS_KEY}
+        sync-interval: 10s
