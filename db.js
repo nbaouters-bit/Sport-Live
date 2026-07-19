@@ -388,19 +388,38 @@ export async function getUser(telegramId) {
 // ---------- Stars (реальные деньги) ----------
 
 export async function creditStarsFromPayment({ telegramId, amount, paymentChargeId }) {
-  // Идемпотентность: telegram_payment_charge_id уникален для каждого платежа.
-  const already = db.prepare('SELECT 1 FROM payments WHERE charge_id = ?').get(paymentChargeId);
-  if (already) return { ok: true, duplicate: true };
-
+  let creditedNow = false;
   const tx = db.transaction(() => {
-    db.prepare('INSERT INTO payments (charge_id, telegram_id, amount, created_at) VALUES (?, ?, ?, ?)')
-      .run(paymentChargeId, telegramId, amount, now());
+    // ВАЖНО (фикс бага "звёзды списались, а баланс не начислился"): раньше
+    // тут не было ensureUserSync(), и если строка пользователя в users ещё
+    // не была создана к моменту оплаты (например, инвойс оплачен раньше,
+    // чем /api/me успел создать профиль, либо после сброса БД) — UPDATE
+    // ниже молча обновлял 0 строк. Ошибки при этом НЕ возникает (better-sqlite3
+    // не бросает исключение на 0 affected rows), поэтому платёж тихо "терялся":
+    // запись в payments создавалась (платёж выглядел учтённым), а tg_stars
+    // никогда не увеличивался. ensureUserSync создаёт строку, если её ещё нет,
+    // — точно так же, как уже делают adjustStarsAdmin/adjustSliveAdmin ниже.
+    ensureUserSync(telegramId);
+
+    // Идемпотентность: telegram_payment_charge_id уникален для каждого платежа.
+    // Раньше проверка была отдельным SELECT ДО транзакции, а INSERT — внутри
+    // неё: между этими двумя шагами теоретически мог проскочить повторный
+    // вызов (Telegram повторно доставляет вебхук, если сервер не ответил
+    // достаточно быстро) — INSERT OR IGNORE прямо внутри транзакции убирает
+    // это окно гонки полностью: строка либо создаётся и мы начисляем один
+    // раз, либо (при повторе) insertResult.changes === 0 и мы просто выходим.
+    const insertResult = db.prepare(
+      'INSERT OR IGNORE INTO payments (charge_id, telegram_id, amount, created_at) VALUES (?, ?, ?, ?)'
+    ).run(paymentChargeId, telegramId, amount, now());
+    if (insertResult.changes === 0) return; // уже начислено по этому charge_id ранее
+
+    creditedNow = true;
     db.prepare('UPDATE users SET tg_stars = tg_stars + ? WHERE telegram_id = ?').run(amount, telegramId);
     db.prepare('INSERT INTO star_ledger (telegram_id, delta, reason, created_at) VALUES (?, ?, ?, ?)')
       .run(telegramId, amount, 'topup:' + paymentChargeId, now());
   });
   tx();
-  return { ok: true, duplicate: false };
+  return { ok: true, duplicate: !creditedNow };
 }
 
 export async function spendStars({ telegramId, amount }) {
