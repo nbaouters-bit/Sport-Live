@@ -55,6 +55,25 @@
       pointer-events: none;
       z-index: 50;
     }
+    @keyframes popIn {
+      0% { transform: scale(0.7); opacity: 0; }
+      60% { transform: scale(1.04); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    @keyframes confettiFall {
+      0% { transform: translateY(-10vh) rotate(0deg); opacity: 1; }
+      100% { transform: translateY(110vh) rotate(540deg); opacity: 0.9; }
+    }
+    .confetti-piece {
+      position: absolute;
+      top: 0;
+      width: 8px;
+      height: 14px;
+      animation-name: confettiFall;
+      animation-timing-function: ease-in;
+      animation-fill-mode: forwards;
+      pointer-events: none;
+    }
     .card-legend { box-shadow: 0 0 20px rgba(168, 85, 247, 0.5); border-color: #c084fc; }
     .card-gold { box-shadow: 0 0 15px rgba(250, 204, 21, 0.4); border-color: #fde047; }
     .card-silver { border-color: #cbd5e1; }
@@ -485,6 +504,15 @@
           </div>
         </div>
 
+        <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-3 mb-4">
+          <div class="text-[10px] font-bold text-neutral-300 mb-2">📣 Рассылка всем игрокам</div>
+          <p class="text-[9px] text-neutral-500 mb-2">Бот отправит это сообщение в личку каждому, кто хоть раз открывал приложение. HTML-теги (например &lt;b&gt;) поддерживаются, как в обычных уведомлениях бота.</p>
+          <textarea id="admin-broadcast-text" rows="4" placeholder="Текст рассылки..."
+            class="w-full bg-black border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 mb-2"></textarea>
+          <button onclick="adminSendBroadcast()" id="admin-broadcast-btn" class="w-full bg-amber-500 text-black font-black py-2.5 rounded-xl text-xs">Отправить рассылку</button>
+          <div id="admin-broadcast-status" class="text-[9px] text-neutral-500 mt-2"></div>
+        </div>
+
         <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-3 mb-4 flex items-center justify-between gap-2">
           <div>
             <div class="text-[10px] font-bold text-neutral-300">Резервная копия базы</div>
@@ -631,6 +659,37 @@
       <button onclick="closeReveal()" class="mt-8 bg-yellow-500 text-black font-black text-xs px-8 py-3 rounded-xl hover:scale-105 transition-all">
         ЗАБРАТЬ В КЛУБ
       </button>
+    </div>
+
+    <!-- Проигрыватель симулированного матча драфта: показывает события
+         (голы/промахи), сгенерированные simulateDraftMatch() на сервере,
+         по одному, прежде чем открыть итог боя (draft-last-result). -->
+    <div id="draft-match-overlay" class="hidden absolute inset-0 bg-black/95 z-50 flex flex-col justify-center items-center p-6">
+      <div class="text-[10px] uppercase tracking-widest text-neutral-500 font-black mb-1">Прямой эфир</div>
+      <div id="draft-match-score" class="text-4xl font-black mb-4 tabular-nums">0 : 0</div>
+      <div id="draft-match-feed" class="w-full max-w-xs h-56 overflow-y-auto bg-neutral-900 border border-neutral-800 rounded-2xl p-3"></div>
+    </div>
+
+    <!-- Показывается ПОСЛЕ того как мы дождались (см. waitForStarsCredit)
+         реального зачисления звёзд на сервере через /webhook — а не сразу
+         по колбэку tg.openInvoice('paid'), который приходит от клиента
+         Telegram раньше, чем наш вебхук успевает обработать платёж. -->
+    <div id="purchase-success-modal" class="hidden absolute inset-0 bg-black/90 z-50 flex flex-col justify-center items-center p-6 overflow-hidden">
+      <div id="confetti-layer" class="absolute inset-0 pointer-events-none"></div>
+      <div class="relative bg-neutral-900 border border-emerald-500/40 rounded-2xl p-6 w-full max-w-xs text-center shadow-2xl" style="animation: popIn 0.35s ease-out;">
+        <div class="text-5xl mb-2">✅</div>
+        <h3 class="font-black text-lg text-emerald-400 mb-1">Спасибо за покупку!</h3>
+        <p id="purchase-success-text" class="text-[11px] text-neutral-400 mb-4">Баланс уже обновлён.</p>
+        <button onclick="closePurchaseSuccess()" class="bg-emerald-500 text-black font-black py-2.5 px-6 rounded-xl text-xs w-full">Отлично!</button>
+      </div>
+    </div>
+
+    <!-- Пока ждём, что вебхук успел зачислить звёзды (см. waitForStarsCredit) —
+         короткий спиннер, чтобы не показать "Спасибо" раньше, чем баланс
+         реально обновился. -->
+    <div id="payment-wait-modal" class="hidden absolute inset-0 bg-black/90 z-50 flex flex-col justify-center items-center p-6">
+      <div class="w-16 h-16 border-4 border-neutral-700 border-t-emerald-400 rounded-full animate-spin mb-4"></div>
+      <div class="text-xs text-neutral-400 font-bold">Подтверждаем оплату...</div>
     </div>
 
     <div id="alert-modal" class="hidden absolute inset-0 bg-black/80 z-50 flex justify-center items-center p-6">
@@ -898,6 +957,37 @@
       } catch (e) {
         console.error(e);
         listEl.innerHTML = '<div class="text-red-400 text-xs">Не удалось загрузить данные. Открой эту вкладку под админ-аккаунтом.</div>';
+      }
+    }
+
+    async function adminSendBroadcast() {
+      const textEl = document.getElementById('admin-broadcast-text');
+      const statusEl = document.getElementById('admin-broadcast-status');
+      const btn = document.getElementById('admin-broadcast-btn');
+      const text = textEl.value.trim();
+
+      if (!text) {
+        return alertMsg('Введи текст рассылки.');
+      }
+      if (!confirm('Отправить это сообщение ВСЕМ игрокам?')) return;
+
+      btn.disabled = true;
+      btn.textContent = 'Ставим в очередь...';
+      try {
+        // Сервер отвечает сразу (сколько адресатов поставлено в очередь) и
+        // рассылает в фоне батчами — см. /api/admin/broadcast в server.js.
+        // Итоговую сводку (доставлено/не доставлено) админ получит личным
+        // сообщением от бота, когда рассылка закончится.
+        const result = await apiPost('/api/admin/broadcast', { text });
+        statusEl.innerText = `Поставлено в очередь: ${result.queued}. Итог придёт тебе в личку от бота.`;
+        textEl.value = '';
+        alertMsg(`Рассылка запущена для ${result.queued} игроков. Сводка о доставке придёт тебе в личку от бота.`);
+      } catch (e) {
+        console.error(e);
+        alertMsg('Не удалось запустить рассылку.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Отправить рассылку';
       }
     }
 
@@ -1420,12 +1510,29 @@
         // Telegram открывает свой нативный платёжный лист, а если у юзера не
         // хватает Stars на балансе, сам предложит их докупить перед оплатой.
         if (typeof tg?.openInvoice === 'function') {
-          tg.openInvoice(invoiceLink, (status) => {
+          const starsBefore = tgStars;
+          tg.openInvoice(invoiceLink, async (status) => {
             // status: 'paid' | 'cancelled' | 'failed' | 'pending'
             if (status === 'paid') {
-              // Баланс уже начислен на сервере через webhook — просто перечитываем его.
-              syncBalanceFromServer();
-              alertMsg('Оплата прошла! Баланс Stars обновлён.');
+              // ВАЖНО (фикс "оплата прошла, а баланс не обновился на экране"):
+              // status === 'paid' здесь означает только то, что клиент
+              // Telegram подтвердил платёж локально. Наш сервер узнаёт об
+              // этом отдельно — через /webhook (successful_payment), который
+              // может прийти на секунду-другую позже этого колбэка. Если
+              // сразу дёрнуть syncBalanceFromServer() и показать "Спасибо",
+              // можно один раз прочитать ЕЩЁ старый баланс и создать у
+              // игрока впечатление, что звёзды не зачислились. Поэтому здесь
+              // не один запрос, а короткий поллинг — ждём, пока баланс
+              // реально вырастет (см. waitForStarsCredit), и только потом
+              // показываем анимацию благодарности.
+              document.getElementById('payment-wait-modal').classList.remove('hidden');
+              const credited = await waitForStarsCredit(starsBefore);
+              document.getElementById('payment-wait-modal').classList.add('hidden');
+              showPurchaseSuccess(
+                credited
+                  ? `Баланс пополнен. Текущий баланс: ${tgStars.toLocaleString()} ⭐️.`
+                  : 'Платёж принят Telegram — зачисление может занять до минуты, баланс обновится автоматически.'
+              );
             } else if (status === 'failed') {
               alertMsg('Платёж не прошёл. Попробуй ещё раз.');
             }
@@ -1441,6 +1548,49 @@
         console.error(e);
         alertMsg('Не удалось создать счёт на оплату. Попробуй позже.');
       }
+    }
+
+    // Поллинг баланса после успешной оплаты: /webhook на сервере может
+    // обработать successful_payment на секунду-другую позже, чем клиент
+    // Telegram сообщит нам status === 'paid'. Опрашиваем /api/me с растущей
+    // паузой, пока звёзды реально не вырастут относительно starsBefore, либо
+    // пока не кончатся попытки (~12 секунд суммарно) — тогда всё равно
+    // отпускаем UI, просто с более осторожной формулировкой в тосте.
+    async function waitForStarsCredit(starsBefore, maxAttempts = 8) {
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        await sleep(300 + attempt * 350);
+        await syncBalanceFromServer();
+        if (tgStars > starsBefore) return true;
+      }
+      return false;
+    }
+
+    function showPurchaseSuccess(text) {
+      document.getElementById('purchase-success-text').innerText = text;
+      document.getElementById('purchase-success-modal').classList.remove('hidden');
+      spawnConfetti();
+      if (navigator.vibrate) navigator.vibrate(30);
+    }
+
+    function closePurchaseSuccess() {
+      document.getElementById('purchase-success-modal').classList.add('hidden');
+      document.getElementById('confetti-layer').innerHTML = '';
+    }
+
+    function spawnConfetti(count = 40) {
+      const layer = document.getElementById('confetti-layer');
+      layer.innerHTML = '';
+      const colors = ['#34d399', '#fbbf24', '#60a5fa', '#f472b6', '#c084fc'];
+      for (let i = 0; i < count; i++) {
+        const piece = document.createElement('div');
+        piece.className = 'confetti-piece';
+        piece.style.left = `${Math.random() * 100}%`;
+        piece.style.background = colors[i % colors.length];
+        piece.style.animationDuration = `${1.6 + Math.random() * 1.2}s`;
+        piece.style.animationDelay = `${Math.random() * 0.4}s`;
+        layer.appendChild(piece);
+      }
+      setTimeout(() => { layer.innerHTML = ''; }, 3200);
     }
 
     function updateHeader() {
@@ -1463,12 +1613,91 @@
       document.getElementById('alert-modal').classList.remove('hidden');
     }
 
+    // ---------- Процедурные пиксель-арт аватары карточек ----------
+    // Мы НЕ используем настоящие фотографии игроков — обкладывать реальных,
+    // узнаваемых людей на карточках, которые продаются за деньги (паки,
+    // маркет), — это чужие авторские права на фото + право на изображение
+    // самих футболистов, и без лицензии так делать нельзя. Вместо этого тут
+    // генератор детерминированного (по id карты) пиксельного "портрета" —
+    // всегда один и тот же для конкретной карты, с палитрой по редкости и
+    // лёгким глянцем поверх, чтобы карточка выглядела как premium NFT-арт,
+    // а не просто эмодзи.
+    const RARITY_AVATAR_PALETTE = {
+      bronze: ['#c2703a', '#8a4a22', '#f0b878', '#3a1d0c'],
+      silver: ['#cbd5e1', '#64748b', '#f1f5f9', '#1e293b'],
+      gold:   ['#f5c542', '#a16207', '#fff3b0', '#3a2900'],
+      legend: ['#a855f7', '#5b21b6', '#e9d5ff', '#170a2e'],
+    };
+
+    function hashSeed(str) {
+      let h = 2166136261;
+      for (let i = 0; i < str.length; i++) {
+        h ^= str.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+      }
+      return h >>> 0;
+    }
+
+    function mulberry32(seed) {
+      let a = seed;
+      return function () {
+        a |= 0; a = (a + 0x6D2B79F5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    const avatarSvgCache = {};
+    function pixelAvatarSVG(p) {
+      if (avatarSvgCache[p.id]) return avatarSvgCache[p.id];
+
+      const rand = mulberry32(hashSeed(p.id + '|' + p.name));
+      const palette = RARITY_AVATAR_PALETTE[p.type] || RARITY_AVATAR_PALETTE.bronze;
+      const cols = 6, rows = 8, cell = 16;
+      const halfCols = Math.ceil(cols / 2);
+      const vbW = cols * cell, vbH = rows * cell;
+      let rects = '';
+
+      for (let y = 0; y < rows; y++) {
+        // Верхние ряды гуще залиты — читается как "голова", нижние реже — как "плечи".
+        const density = y < 3 ? 0.68 : 0.4;
+        for (let xh = 0; xh < halfCols; xh++) {
+          if (rand() >= density) continue;
+          const color = palette[Math.floor(rand() * 3)]; // индексы 0-2, палитра[3] — фон
+          const xLeft = xh * cell;
+          const xRight = vbW - cell - xh * cell;
+          rects += `<rect x="${xLeft}" y="${y * cell}" width="${cell}" height="${cell}" fill="${color}"/>`;
+          if (xRight !== xLeft) {
+            rects += `<rect x="${xRight}" y="${y * cell}" width="${cell}" height="${cell}" fill="${color}"/>`;
+          }
+        }
+      }
+
+      const gradId = 'shine' + p.id;
+      const svg = `<svg viewBox="0 0 ${vbW} ${vbH}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice" class="w-full h-full">
+        <defs>
+          <linearGradient id="${gradId}" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#ffffff" stop-opacity="0.28"/>
+            <stop offset="45%" stop-color="#ffffff" stop-opacity="0"/>
+            <stop offset="100%" stop-color="#000000" stop-opacity="0.2"/>
+          </linearGradient>
+        </defs>
+        <rect width="${vbW}" height="${vbH}" fill="${palette[3]}"/>
+        ${rects}
+        <rect width="${vbW}" height="${vbH}" fill="url(#${gradId})"/>
+      </svg>`;
+      avatarSvgCache[p.id] = svg;
+      return svg;
+    }
+
     function genCardHTML(p, isLarge) {
       const cls = `card-${p.type}`;
       const bg = p.type === 'legend' ? 'from-purple-800 to-indigo-950' : 
                  p.type === 'gold' ? 'from-yellow-600 to-yellow-900' : 
                  p.type === 'silver' ? 'from-slate-400 to-slate-700' : 'from-orange-700 to-orange-950';
-      
+      const avatar = pixelAvatarSVG(p);
+
       if (isLarge) {
         return `
           <div class="relative w-48 h-72 bg-gradient-to-b ${bg} border-4 rounded-2xl p-3 flex flex-col justify-between ${cls} shadow-2xl">
@@ -1476,7 +1705,7 @@
               <div class="flex flex-col items-center leading-none"><span class="text-4xl">${p.rating}</span><span class="text-sm mt-1">${p.pos}</span></div>
               <span>${FLAGS[p.nation]}</span>
             </div>
-            <div class="text-8xl text-center">🏃‍♂️</div>
+            <div class="w-28 h-28 mx-auto rounded-xl overflow-hidden border border-white/25 shadow-inner">${avatar}</div>
             <div class="bg-black/60 p-2 rounded-lg text-center leading-tight">
               <div class="font-black text-lg uppercase truncate">${p.name}</div>
             </div>
@@ -1488,7 +1717,7 @@
               <div class="flex flex-col items-center"><span class="font-black text-sm">${p.rating}</span><span class="text-[7px] font-bold">${p.pos}</span></div>
               <span class="text-xs">${FLAGS[p.nation]}</span>
             </div>
-            <div class="text-2xl text-center mt-auto mb-auto">🏃‍♂️</div>
+            <div class="w-9 h-9 mx-auto rounded-md overflow-hidden border border-white/20">${avatar}</div>
             <div class="bg-black/60 rounded px-1 text-center">
               <div class="font-bold text-[7px] uppercase truncate">${p.name}</div>
             </div>
@@ -2097,12 +2326,61 @@
       }
     }
 
+    // Задержка между событиями симулированного матча — просто ощущение "живой"
+    // трансляции; сам исход уже посчитан на сервере (см. simulateDraftMatch
+    // в db.js), тут только проигрываем лог событий по одному.
+    const DRAFT_EVENT_DELAY_MS = 550;
+
+    function sleep(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    async function playMatchLog(matchLog, opponentLabel) {
+      const overlay = document.getElementById('draft-match-overlay');
+      const feed = document.getElementById('draft-match-feed');
+      const scoreEl = document.getElementById('draft-match-score');
+      feed.innerHTML = '';
+      let myScore = 0, theirScore = 0;
+      scoreEl.innerText = '0 : 0';
+      overlay.classList.remove('hidden');
+
+      for (const ev of matchLog) {
+        await sleep(DRAFT_EVENT_DELAY_MS);
+        const line = document.createElement('div');
+        line.className = 'text-[11px] py-1 border-b border-neutral-800 flex items-center gap-2';
+
+        if (ev.type === 'penalty_shootout') {
+          line.innerHTML = `<span class="text-neutral-500 w-8">${ev.minute}'</span><span>🥅 Ничья в основное время — решает серия пенальти...</span>`;
+        } else if (ev.type === 'goal') {
+          if (ev.side === 'attacker') myScore++; else theirScore++;
+          const who = ev.side === 'attacker' ? 'Твоя команда' : opponentLabel;
+          line.innerHTML = `<span class="text-neutral-500 w-8">${ev.minute}'</span><span class="text-emerald-400 font-bold">⚽ ГОЛ! ${who} забивает!</span>`;
+        } else {
+          const who = ev.side === 'attacker' ? 'Твоя команда' : opponentLabel;
+          line.innerHTML = `<span class="text-neutral-500 w-8">${ev.minute}'</span><span class="text-neutral-400">${who} бьёт... мимо!</span>`;
+        }
+        feed.appendChild(line);
+        feed.scrollTop = feed.scrollHeight;
+        scoreEl.innerText = `${myScore} : ${theirScore}`;
+      }
+      await sleep(600);
+      overlay.classList.add('hidden');
+    }
+
     async function playDraftBattleClick() {
       if (!tg?.initData) {
         return alertMsg('Бои драфта работают только внутри Telegram.');
       }
+      const battleBtn = document.getElementById('draft-battle-btn');
       try {
+        battleBtn.disabled = true;
         const result = await apiPost('/api/draft/battle');
+        const opponentLabel = result.opponent.username ? '@' + result.opponent.username : 'соперник';
+
+        if (Array.isArray(result.matchLog) && result.matchLog.length) {
+          await playMatchLog(result.matchLog, opponentLabel);
+        }
+
         draftState.squad = result.squad;
         renderDraftUI();
 
@@ -2111,15 +2389,18 @@
           updateHeader();
         }
 
+        const scoreLine = result.score
+          ? `Счёт матча: ${result.score.attacker} : ${result.score.defender}`
+          : '';
+
         const resultBlock = document.getElementById('draft-last-result');
         resultBlock.classList.remove('hidden');
-        const opponentLabel = result.opponent.username ? '@' + result.opponent.username : 'соперника';
         resultBlock.innerHTML = result.won
           ? `<div class="text-emerald-400 font-black text-sm">🎉 ПОБЕДА!</div>
-             <div class="text-[10px] text-neutral-400 mt-1">Против ${opponentLabel} (рейтинг ${result.defenderRating})</div>
+             <div class="text-[10px] text-neutral-400 mt-1">Против ${opponentLabel} (рейтинг ${result.defenderRating}) · ${scoreLine}</div>
              <div class="text-[10px] text-emerald-400 mt-1">+${result.reward} 🪙 SLive · +${result.pointsGained} очков в Драфт-топ</div>`
           : `<div class="text-red-400 font-black text-sm">😔 ПОРАЖЕНИЕ</div>
-             <div class="text-[10px] text-neutral-400 mt-1">Против ${opponentLabel} (рейтинг ${result.defenderRating})</div>
+             <div class="text-[10px] text-neutral-400 mt-1">Против ${opponentLabel} (рейтинг ${result.defenderRating}) · ${scoreLine}</div>
              <div class="text-[10px] text-red-400 mt-1">Серия закончена — войди в драфт заново, чтобы продолжить.</div>`;
       } catch (e) {
         if (e.message === 'draft_ended') {
@@ -2131,6 +2412,8 @@
         } else {
           alertMsg('Не удалось провести бой. Попробуй ещё раз.');
         }
+      } finally {
+        battleBtn.disabled = false;
       }
     }
 
