@@ -681,6 +681,13 @@ export async function saveUserState({ telegramId, patch }) {
 
 // ---------- Лидерборд / сила состава ----------
 
+// Список telegram_id всех зарегистрированных игроков — используется
+// рассылкой из админки (см. /api/admin/broadcast в server.js), чтобы не
+// дублировать сырой SQL-запрос там.
+export async function getAllUserIds() {
+  return db.prepare('SELECT telegram_id FROM users').all().map(r => r.telegram_id);
+}
+
 export async function getLeaderboard(limit = 10) {
   const rows = db.prepare('SELECT telegram_id FROM users').all();
   // Прогоняем офлайн-фарм по каждому, чтобы топ был честным на момент запроса.
@@ -846,12 +853,62 @@ export async function startDraft({ telegramId, playerIds, currency }) {
   return { squad: rowToDraftSquad(row) };
 }
 
+// Сколько опасных моментов разыгрывается за один симулированный матч драфта.
+const DRAFT_MATCH_MOMENTS = 5;
+// Вероятность того, что КОНКРЕТНЫЙ опасный момент реализуется в гол
+// (не каждый шанс становится взятием ворот — иначе итоговый счёт при 5
+// моментах выглядел бы нереалистично высоким).
+const DRAFT_MOMENT_SCORE_CHANCE = 0.45;
+
+// Полноценная симуляция матча вместо мгновенного объявления победы/поражения:
+// разыгрываем несколько опасных моментов, каждый достаётся одной из команд
+// с вероятностью по той же логистической ELO-формуле (чем сильнее разница
+// рейтингов — тем реже слабая сторона получает моменты), и часть моментов
+// реализуется в гол. Итог решает счёт; при равенстве голов — как и в реальном
+// плей-офф — решает "серия пенальти" по той же вероятности, чтобы более
+// сильный состав оставался фаворитом, а не был отдан монетке 50/50.
+function simulateDraftMatch(attackerRating, defenderRating) {
+  const attackShare = 1 / (1 + Math.pow(10, (defenderRating - attackerRating) / DRAFT_ELO_SCALE));
+  const usedMinutes = new Set();
+  const events = [];
+  let attackerGoals = 0;
+  let defenderGoals = 0;
+
+  for (let i = 0; i < DRAFT_MATCH_MOMENTS; i++) {
+    let minute;
+    do {
+      minute = 3 + Math.floor(Math.random() * 87);
+    } while (usedMinutes.has(minute));
+    usedMinutes.add(minute);
+
+    const side = Math.random() < attackShare ? 'attacker' : 'defender';
+    const scored = Math.random() < DRAFT_MOMENT_SCORE_CHANCE;
+    if (scored) {
+      if (side === 'attacker') attackerGoals++;
+      else defenderGoals++;
+    }
+    events.push({ minute, side, type: scored ? 'goal' : 'miss' });
+  }
+  events.sort((a, b) => a.minute - b.minute);
+
+  let won;
+  if (attackerGoals !== defenderGoals) {
+    won = attackerGoals > defenderGoals;
+  } else {
+    won = Math.random() < attackShare;
+    events.push({ minute: 90, side: won ? 'attacker' : 'defender', type: 'penalty_shootout' });
+  }
+
+  return { events, attackerGoals, defenderGoals, won };
+}
+
 // PvP-бой: соперник — случайный игрок с готовым драфт-составом (не обязательно
 // "активным" — можно атаковать даже того, чья серия уже закончилась, у него
-// всё равно есть сохранённый rating). Победа определяется рейтингом + шансом
-// на апсет (логистическая формула по шкале DRAFT_ELO_SCALE). Поражение сразу
-// завершает СЕРИЮ атакующего (active = 0) — новый бой потребует новый вход.
-// На соперника-защитника результат боя не влияет (асинхронный PvP).
+// всё равно есть сохранённый rating). Матч разыгрывается по моментам через
+// simulateDraftMatch() (см. выше) — итог решает счёт, а не единственный бросок
+// монетки. Поражение сразу завершает СЕРИЮ атакующего (active = 0) — новый бой
+// потребует новый вход. На соперника-защитника результат боя не влияет
+// (асинхронный PvP).
 export async function playDraftBattle({ telegramId }) {
   const attackerRow = db.prepare('SELECT * FROM draft_squads WHERE telegram_id = ?').get(telegramId);
   if (!attackerRow) return { ok: false, reason: 'no_draft_squad' };
@@ -864,8 +921,8 @@ export async function playDraftBattle({ telegramId }) {
 
   const attackerRating = attackerRow.rating;
   const defenderRating = opponentRow.rating;
-  const winProb = 1 / (1 + Math.pow(10, (defenderRating - attackerRating) / DRAFT_ELO_SCALE));
-  const won = Math.random() < winProb;
+  const match = simulateDraftMatch(attackerRating, defenderRating);
+  const won = match.won;
 
   const opponentUser = db.prepare('SELECT username FROM users WHERE telegram_id = ?').get(opponentRow.telegram_id);
 
@@ -888,6 +945,8 @@ export async function playDraftBattle({ telegramId }) {
     won,
     attackerRating,
     defenderRating,
+    score: { attacker: match.attackerGoals, defender: match.defenderGoals },
+    matchLog: match.events,
     reward: won ? DRAFT_WIN_REWARD_SLIVE : 0,
     pointsGained: won ? DRAFT_WIN_POINTS : 0,
     opponent: { username: opponentUser?.username || null, rating: defenderRating },
