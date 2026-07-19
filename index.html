@@ -74,10 +74,70 @@
       animation-fill-mode: forwards;
       pointer-events: none;
     }
-    .card-legend { box-shadow: 0 0 20px rgba(168, 85, 247, 0.5); border-color: #c084fc; }
-    .card-gold { box-shadow: 0 0 15px rgba(250, 204, 21, 0.4); border-color: #fde047; }
-    .card-silver { border-color: #cbd5e1; }
-    .card-bronze { border-color: #d97706; }
+    @keyframes legendPulse {
+      0%, 100% { box-shadow: 0 0 18px rgba(168, 85, 247, 0.45); }
+      50% { box-shadow: 0 0 34px rgba(192, 132, 252, 0.85); }
+    }
+    @keyframes goldPulse {
+      0%, 100% { box-shadow: 0 0 13px rgba(250, 204, 21, 0.35); }
+      50% { box-shadow: 0 0 24px rgba(253, 224, 71, 0.7); }
+    }
+    .card-legend { border-color: #c084fc; animation: legendPulse 2.4s ease-in-out infinite; }
+    .card-gold { border-color: #fde047; animation: goldPulse 2.8s ease-in-out infinite; }
+    .card-silver { border-color: #cbd5e1; transition: box-shadow .2s ease; }
+    .card-bronze { border-color: #d97706; transition: box-shadow .2s ease; }
+
+    /* Диагональный блик, бегущий по карте — усиливает ощущение "премиального"
+       фойла на золотых/легендарных картах. Оверлей абсолютно спозиционирован,
+       поэтому контейнер карты должен быть position:relative + overflow:hidden
+       (см. genCardHTML). */
+    @keyframes shineSweep {
+      0% { transform: translateX(-140%) translateY(-10%) rotate(18deg); opacity: 0; }
+      15% { opacity: 1; }
+      55% { opacity: 1; }
+      100% { transform: translateX(220%) translateY(10%) rotate(18deg); opacity: 0; }
+    }
+    .card-shine-sweep {
+      position: absolute;
+      top: -60%;
+      left: -20%;
+      width: 35%;
+      height: 220%;
+      background: linear-gradient(115deg, transparent, rgba(255,255,255,0.65), transparent);
+      animation: shineSweep 3.2s ease-in-out infinite;
+      pointer-events: none;
+      mix-blend-mode: screen;
+    }
+
+    /* Карточка "влетает" при открытии пака — плавный 3D-переворот с небольшим
+       перелётом (overshoot), а не тупой fade/scale, как раньше. */
+    @keyframes cardFlipIn {
+      0% { transform: perspective(900px) rotateY(100deg) scale(0.75); opacity: 0; }
+      55% { transform: perspective(900px) rotateY(-14deg) scale(1.04); opacity: 1; }
+      75% { transform: perspective(900px) rotateY(6deg) scale(1); }
+      100% { transform: perspective(900px) rotateY(0deg) scale(1); opacity: 1; }
+    }
+    .card-flip-in { animation: cardFlipIn .75s cubic-bezier(.21,.68,.32,1.15) both; }
+
+    /* Мелкая карточка на скамейке/в клубе слегка "оживает" при тапе — короткий
+       squash-and-stretch, чтобы состав не выглядел статичной таблицей. */
+    @keyframes cardTapBounce {
+      0% { transform: scale(1); }
+      35% { transform: scale(0.93, 1.05); }
+      65% { transform: scale(1.05, 0.96); }
+      100% { transform: scale(1); }
+    }
+    .card-tap-bounce { animation: cardTapBounce .35s ease-out; }
+
+    @keyframes ballSpinBounce {
+      0% { transform: rotate(0deg) translateY(0); }
+      25% { transform: rotate(90deg) translateY(-10px); }
+      50% { transform: rotate(180deg) translateY(0); }
+      75% { transform: rotate(270deg) translateY(-6px); }
+      100% { transform: rotate(360deg) translateY(0); }
+    }
+    .pack-loader-ball { animation: ballSpinBounce 1s ease-in-out infinite; }
+
     ::-webkit-scrollbar { width: 0px; background: transparent; }
   </style>
 </head>
@@ -380,7 +440,7 @@
         <!-- Лидерборд ДРАФТА — сверху, отдельная доска от рейтинга по балансу -->
         <h2 class="text-xl font-black uppercase italic tracking-tight mb-2">⚔️ Топ Драфта</h2>
         <p class="text-[10px] text-neutral-400 mb-3 bg-neutral-900 p-2 rounded-lg border border-neutral-800">
-          Рейтинг по очкам PvP-битв драфта. Лидер дня получает <span class="text-emerald-400 font-bold">🪙 1000 $SLive</span> автоматически.
+          Рейтинг по очкам PvP-битв драфта. Лидер дня получает <span class="text-emerald-400 font-bold">🪙 1000 $SLive</span> автоматически, после чего топ обнуляется — новый 24-часовой сезон начинается заново.
         </p>
         <div id="draft-leaderboard-list" class="space-y-2 mb-6">
           <div class="text-neutral-500 text-xs">Загрузка...</div>
@@ -648,15 +708,19 @@
       <div id="bench-list" class="grid grid-cols-3 gap-2 overflow-y-auto pb-10"></div>
     </div>
 
-    <div id="pack-loader" class="hidden absolute inset-0 bg-black/95 z-50 flex flex-col justify-center items-center">
-      <div class="w-32 h-48 bg-gradient-to-br from-yellow-500 to-amber-300 rounded-2xl flex items-center justify-center text-5xl shadow-[0_0_50px_rgba(245,158,11,0.5)] animate-pulse">⚡</div>
+    <div id="pack-loader" class="hidden absolute inset-0 bg-black/95 z-50 flex flex-col justify-center items-center gap-4">
+      <div class="w-32 h-48 bg-gradient-to-br from-yellow-500 to-amber-300 rounded-2xl flex items-center justify-center text-5xl shadow-[0_0_50px_rgba(245,158,11,0.5)]">
+        <span class="pack-loader-ball inline-block">⚽</span>
+      </div>
+      <div class="text-[10px] font-black uppercase tracking-widest text-amber-300 animate-pulse">Открываем пак...</div>
     </div>
 
-    <div id="pack-reveal" class="hidden absolute inset-0 bg-black/95 z-50 flex flex-col justify-center items-center p-6">
-      <h3 class="text-lg font-black text-emerald-400 mb-6 uppercase animate-pulse">🎉 НОВЫЙ ИГРОК!</h3>
-      <div id="revealed-card-container"></div>
-      <div class="text-[10px] text-neutral-400 mt-4 text-center">Доход: <span id="reveal-income" class="font-bold text-emerald-400">+0/день</span></div>
-      <button onclick="closeReveal()" class="mt-8 bg-yellow-500 text-black font-black text-xs px-8 py-3 rounded-xl hover:scale-105 transition-all">
+    <div id="pack-reveal" class="hidden absolute inset-0 bg-black/95 z-50 flex flex-col justify-center items-center p-6 overflow-hidden">
+      <div id="reveal-glow" class="absolute w-72 h-72 rounded-full blur-3xl opacity-0 transition-opacity duration-500 pointer-events-none"></div>
+      <h3 class="text-lg font-black text-emerald-400 mb-6 uppercase animate-pulse relative">🎉 НОВЫЙ ИГРОК!</h3>
+      <div id="revealed-card-container" class="relative"></div>
+      <div class="text-[10px] text-neutral-400 mt-4 text-center relative">Доход: <span id="reveal-income" class="font-bold text-emerald-400">+0/день</span></div>
+      <button onclick="closeReveal()" class="mt-8 bg-yellow-500 text-black font-black text-xs px-8 py-3 rounded-xl hover:scale-105 transition-all relative">
         ЗАБРАТЬ В КЛУБ
       </button>
     </div>
@@ -664,10 +728,23 @@
     <!-- Проигрыватель симулированного матча драфта: показывает события
          (голы/промахи), сгенерированные simulateDraftMatch() на сервере,
          по одному, прежде чем открыть итог боя (draft-last-result). -->
-    <div id="draft-match-overlay" class="hidden absolute inset-0 bg-black/95 z-50 flex flex-col justify-center items-center p-6">
+    <div id="draft-match-overlay" class="hidden absolute inset-0 bg-black/95 z-50 flex flex-col justify-center items-center p-6 relative">
       <div class="text-[10px] uppercase tracking-widest text-neutral-500 font-black mb-1">Прямой эфир</div>
       <div id="draft-match-score" class="text-4xl font-black mb-4 tabular-nums">0 : 0</div>
       <div id="draft-match-feed" class="w-full max-w-xs h-56 overflow-y-auto bg-neutral-900 border border-neutral-800 rounded-2xl p-3"></div>
+
+      <!-- Тактическая пауза: 3-5 раз за матч эфир останавливается и просит
+           тренера (игрока) принять решение. Итог матча уже посчитан на сервере
+           заранее (см. simulateDraftMatch) — выбор тут не меняет счёт, только
+           даёт почувствовать себя тренером и подсвечивает следующий момент
+           короткой репликой. Это чисто presentation-layer пауза. -->
+      <div id="draft-decision-modal" class="hidden absolute inset-0 bg-black/90 z-10 flex flex-col justify-center items-center p-6" style="animation: popIn 0.3s ease-out;">
+        <div class="text-[9px] uppercase tracking-widest text-amber-400 font-black mb-2">⏸️ Тактическая пауза</div>
+        <div id="decision-minute" class="text-xs text-neutral-500 font-bold mb-3"></div>
+        <h3 id="decision-title" class="text-base font-black text-white text-center mb-4 max-w-xs"></h3>
+        <div id="decision-options" class="w-full max-w-xs flex flex-col gap-2"></div>
+        <div id="decision-reaction" class="hidden mt-4 text-center text-sm font-bold text-emerald-400 max-w-xs"></div>
+      </div>
     </div>
 
     <!-- Показывается ПОСЛЕ того как мы дождались (см. waitForStarsCredit)
@@ -1613,21 +1690,43 @@
       document.getElementById('alert-modal').classList.remove('hidden');
     }
 
-    // ---------- Процедурные пиксель-арт аватары карточек ----------
-    // Мы НЕ используем настоящие фотографии игроков — обкладывать реальных,
-    // узнаваемых людей на карточках, которые продаются за деньги (паки,
-    // маркет), — это чужие авторские права на фото + право на изображение
-    // самих футболистов, и без лицензии так делать нельзя. Вместо этого тут
-    // генератор детерминированного (по id карты) пиксельного "портрета" —
-    // всегда один и тот же для конкретной карты, с палитрой по редкости и
-    // лёгким глянцем поверх, чтобы карточка выглядела как premium NFT-арт,
-    // а не просто эмодзи.
+    // ---------- Процедурные аватары карточек: безымянный футболист в форме сборной ----------
+    // Мы НЕ используем настоящие фотографии/лица футболистов и не пытаемся
+    // нарисовать конкретного узнаваемого человека — обкладывать реальных людей
+    // на карточках, которые продаются за деньги (паки, маркет), — это чужие
+    // права на изображение + авторские права на фото, и без лицензии так
+    // делать нельзя. Вместо этого генератор рисует детерминированного (по id
+    // карты — всегда один и тот же результат для конкретной карты) БЕЗЛИКОГО
+    // футболиста: силуэт головы без черт лица + торс в форме сборной, цвета
+    // которой берутся из nation карты (см. NATION_KIT ниже). Редкость влияет
+    // на фоновое свечение и кэп/акцент, а лёгкий хэш даёт разброс по причёске,
+    // тону кожи и рисунку формы, чтобы карточки одной сборной не были клонами.
     const RARITY_AVATAR_PALETTE = {
-      bronze: ['#c2703a', '#8a4a22', '#f0b878', '#3a1d0c'],
-      silver: ['#cbd5e1', '#64748b', '#f1f5f9', '#1e293b'],
-      gold:   ['#f5c542', '#a16207', '#fff3b0', '#3a2900'],
-      legend: ['#a855f7', '#5b21b6', '#e9d5ff', '#170a2e'],
+      bronze: ['#c2703a', '#8a4a22', '#f0b878', '#241206'],
+      silver: ['#cbd5e1', '#64748b', '#f1f5f9', '#0f172a'],
+      gold:   ['#f5c542', '#a16207', '#fff3b0', '#241c00'],
+      legend: ['#a855f7', '#5b21b6', '#e9d5ff', '#0f0620'],
     };
+
+    // Обобщённые цвета домашней формы сборных (по флагу/общеизвестной гамме) —
+    // это не лицензированные шаблоны конкретного производителя экипировки,
+    // просто примерная раскраска "свитер/акцент/шорты" для узнаваемости нации.
+    const NATION_KIT = {
+      UKR: { shirt: '#ffd400', trim: '#0057b7', shorts: '#0057b7' },
+      ARG: { shirt: '#8ec4e8', trim: '#ffffff', shorts: '#2b2b2b', stripes: true },
+      ESP: { shirt: '#e11d34', trim: '#f2c14e', shorts: '#0b3d91' },
+      ENG: { shirt: '#f5f5f5', trim: '#0b2265', shorts: '#0b2265', outline: '#c8102e' },
+      FRA: { shirt: '#1e3a8a', trim: '#ffffff', shorts: '#ffffff' },
+      BRA: { shirt: '#ffdf00', trim: '#1a8a3e', shorts: '#1a8a3e' },
+      NED: { shirt: '#ff7a1a', trim: '#21468b', shorts: '#ffffff' },
+      BEL: { shirt: '#e2001a', trim: '#111111', shorts: '#111111' },
+      GER: { shirt: '#f5f5f5', trim: '#111111', shorts: '#111111', outline: '#dd0000' },
+      NOR: { shirt: '#ba0c2f', trim: '#00205b', shorts: '#00205b' },
+      POR: { shirt: '#d4213d', trim: '#046a38', shorts: '#046a38' },
+    };
+    const DEFAULT_KIT = { shirt: '#6b7280', trim: '#374151', shorts: '#374151' };
+    const SKIN_TONES = ['#8d5a3c', '#c48a5f', '#e0ac74', '#6b4226', '#a86b3f', '#d8996a'];
+    const HAIR_TONES = ['#161616', '#2e1a0f', '#3b2b1a', '#0d0d0d', '#4a3520'];
 
     function hashSeed(str) {
       let h = 2166136261;
@@ -1653,39 +1752,60 @@
       if (avatarSvgCache[p.id]) return avatarSvgCache[p.id];
 
       const rand = mulberry32(hashSeed(p.id + '|' + p.name));
-      const palette = RARITY_AVATAR_PALETTE[p.type] || RARITY_AVATAR_PALETTE.bronze;
-      const cols = 6, rows = 8, cell = 16;
-      const halfCols = Math.ceil(cols / 2);
-      const vbW = cols * cell, vbH = rows * cell;
-      let rects = '';
+      const rarity = RARITY_AVATAR_PALETTE[p.type] || RARITY_AVATAR_PALETTE.bronze;
+      const kit = NATION_KIT[p.nation] || DEFAULT_KIT;
+      const uid = String(p.id).replace(/[^a-zA-Z0-9]/g, '');
 
-      for (let y = 0; y < rows; y++) {
-        // Верхние ряды гуще залиты — читается как "голова", нижние реже — как "плечи".
-        const density = y < 3 ? 0.68 : 0.4;
-        for (let xh = 0; xh < halfCols; xh++) {
-          if (rand() >= density) continue;
-          const color = palette[Math.floor(rand() * 3)]; // индексы 0-2, палитра[3] — фон
-          const xLeft = xh * cell;
-          const xRight = vbW - cell - xh * cell;
-          rects += `<rect x="${xLeft}" y="${y * cell}" width="${cell}" height="${cell}" fill="${color}"/>`;
-          if (xRight !== xLeft) {
-            rects += `<rect x="${xRight}" y="${y * cell}" width="${cell}" height="${cell}" fill="${color}"/>`;
-          }
-        }
+      const skin = SKIN_TONES[Math.floor(rand() * SKIN_TONES.length)];
+      const hair = HAIR_TONES[Math.floor(rand() * HAIR_TONES.length)];
+      const hairStyle = Math.floor(rand() * 3); // 0 короткая, 1 пробор, 2 повязка
+      const patternRoll = rand();
+      const outlineAttr = kit.outline ? ` stroke="${kit.outline}" stroke-width="2.5"` : '';
+
+      let hairPath;
+      if (hairStyle === 0) {
+        hairPath = `<path d="M28 28 Q48 6 68 28 L67 20 Q48 8 29 20 Z" fill="${hair}"/>`;
+      } else if (hairStyle === 1) {
+        hairPath = `<path d="M26 30 Q30 6 48 8 Q66 6 70 30 L64 22 Q48 12 32 22 Z" fill="${hair}"/>`;
+      } else {
+        hairPath = `<path d="M26 24 Q48 6 70 24 L70 18 Q48 2 26 18 Z" fill="${hair}"/><rect x="25" y="18" width="46" height="6" rx="2" fill="${rarity[0]}"/>`;
       }
 
-      const gradId = 'shine' + p.id;
-      const svg = `<svg viewBox="0 0 ${vbW} ${vbH}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice" class="w-full h-full">
+      // Рисунок на груди — либо вертикальные полосы (для сборных с "stripes"),
+      // либо диагональная лента, либо горизонтальная полоса, либо чистый свитер.
+      let chestPattern = '';
+      if (kit.stripes) {
+        chestPattern = `<rect x="39" y="58" width="6" height="50" fill="${kit.trim}" opacity="0.9"/><rect x="51" y="58" width="6" height="50" fill="${kit.trim}" opacity="0.9"/>`;
+      } else if (patternRoll > 0.66) {
+        chestPattern = `<path d="M30 60 L48 80 L66 60 L66 68 L48 88 L30 68 Z" fill="${kit.trim}" opacity="0.45"/>`;
+      } else if (patternRoll > 0.33) {
+        chestPattern = `<rect x="30" y="70" width="36" height="5" fill="${kit.trim}" opacity="0.65"/>`;
+      }
+
+      const svg = `<svg viewBox="0 0 96 128" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice" class="w-full h-full">
         <defs>
-          <linearGradient id="${gradId}" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stop-color="#ffffff" stop-opacity="0.28"/>
+          <radialGradient id="glow${uid}" cx="50%" cy="32%" r="70%">
+            <stop offset="0%" stop-color="${rarity[0]}" stop-opacity="0.55"/>
+            <stop offset="100%" stop-color="${rarity[3]}" stop-opacity="0"/>
+          </radialGradient>
+          <linearGradient id="sheen${uid}" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#ffffff" stop-opacity="0.3"/>
             <stop offset="45%" stop-color="#ffffff" stop-opacity="0"/>
-            <stop offset="100%" stop-color="#000000" stop-opacity="0.2"/>
+            <stop offset="100%" stop-color="#000000" stop-opacity="0.22"/>
           </linearGradient>
         </defs>
-        <rect width="${vbW}" height="${vbH}" fill="${palette[3]}"/>
-        ${rects}
-        <rect width="${vbW}" height="${vbH}" fill="url(#${gradId})"/>
+        <rect width="96" height="128" fill="${rarity[3]}"/>
+        <rect width="96" height="128" fill="url(#glow${uid})"/>
+        <rect x="24" y="106" width="48" height="22" rx="4" fill="${kit.shorts}"/>
+        <path d="M20 62 Q24 51 34 49 L38 58 Q48 65 58 58 L62 49 Q72 51 76 62 L80 108 L16 108 Z" fill="${kit.shirt}"${outlineAttr}/>
+        ${chestPattern}
+        <path d="M40 49 Q48 60 56 49 L52 45 Q48 49 44 45 Z" fill="${kit.trim}"/>
+        <path d="M18 60 L7 75 L18 84 L28 64 Z" fill="${kit.trim}"/>
+        <path d="M78 60 L89 75 L78 84 L68 64 Z" fill="${kit.trim}"/>
+        <rect x="42" y="41" width="12" height="11" fill="${skin}"/>
+        <circle cx="48" cy="29" r="18" fill="${skin}"/>
+        ${hairPath}
+        <rect width="96" height="128" fill="url(#sheen${uid})"/>
       </svg>`;
       avatarSvgCache[p.id] = svg;
       return svg;
@@ -1697,10 +1817,13 @@
                  p.type === 'gold' ? 'from-yellow-600 to-yellow-900' : 
                  p.type === 'silver' ? 'from-slate-400 to-slate-700' : 'from-orange-700 to-orange-950';
       const avatar = pixelAvatarSVG(p);
+      // Бегущий блик — только на голде/легенде, чтобы дешёвые карты не мигали без повода.
+      const shine = (p.type === 'gold' || p.type === 'legend') ? '<div class="card-shine-sweep"></div>' : '';
 
       if (isLarge) {
         return `
-          <div class="relative w-48 h-72 bg-gradient-to-b ${bg} border-4 rounded-2xl p-3 flex flex-col justify-between ${cls} shadow-2xl">
+          <div class="relative w-48 h-72 bg-gradient-to-b ${bg} border-4 rounded-2xl p-3 flex flex-col justify-between ${cls} card-flip-in shadow-2xl overflow-hidden">
+            ${shine}
             <div class="flex justify-between font-black text-white text-3xl">
               <div class="flex flex-col items-center leading-none"><span class="text-4xl">${p.rating}</span><span class="text-sm mt-1">${p.pos}</span></div>
               <span>${FLAGS[p.nation]}</span>
@@ -1712,7 +1835,8 @@
           </div>`;
       } else {
         return `
-          <div class="w-[70px] h-[100px] bg-gradient-to-b ${bg} border-2 rounded-xl p-1.5 flex flex-col justify-between ${cls} text-white shadow-lg">
+          <div class="relative w-[70px] h-[100px] bg-gradient-to-b ${bg} border-2 rounded-xl p-1.5 flex flex-col justify-between ${cls} text-white shadow-lg overflow-hidden">
+            ${shine}
             <div class="flex justify-between items-start leading-none">
               <div class="flex flex-col items-center"><span class="font-black text-sm">${p.rating}</span><span class="text-[7px] font-bold">${p.pos}</span></div>
               <span class="text-xs">${FLAGS[p.nation]}</span>
@@ -2121,6 +2245,13 @@
       }
     }
 
+    const REVEAL_GLOW_COLOR = {
+      bronze: 'rgba(217,119,6,0.45)',
+      silver: 'rgba(203,213,225,0.4)',
+      gold: 'rgba(253,224,71,0.55)',
+      legend: 'rgba(192,132,252,0.65)',
+    };
+
     function openPackAnim(card) {
       const loader = document.getElementById('pack-loader');
       loader.classList.remove('hidden');
@@ -2131,7 +2262,13 @@
 
         document.getElementById('revealed-card-container').innerHTML = genCardHTML(tempOpened, true);
         document.getElementById('reveal-income').innerText = `+${tempOpened.income}/день`;
+
+        const glow = document.getElementById('reveal-glow');
+        glow.style.background = REVEAL_GLOW_COLOR[tempOpened.type] || REVEAL_GLOW_COLOR.bronze;
+        glow.classList.remove('opacity-0');
+
         document.getElementById('pack-reveal').classList.remove('hidden');
+        if (tempOpened.type === 'gold' || tempOpened.type === 'legend') spawnConfetti(60);
       }, 1200);
     }
 
@@ -2140,6 +2277,7 @@
       tempOpened = null;
       saveData();
       document.getElementById('pack-reveal').classList.add('hidden');
+      document.getElementById('reveal-glow').classList.add('opacity-0');
       alertMsg('Игрок добавлен в твой Клуб! Зайди в "Состав" и нажми на пустое место, чтобы выпустить его на поле.');
     }
 
@@ -2335,6 +2473,114 @@
       return new Promise(resolve => setTimeout(resolve, ms));
     }
 
+    function pickRandom(arr) {
+      return arr[Math.floor(Math.random() * arr.length)];
+    }
+
+    // Тактические паузы — чисто presentation-layer штука для вовлечения:
+    // счёт и события уже целиком посчитаны на сервере ЗАРАНЕЕ (simulateDraftMatch),
+    // выбор тренера ничего не меняет в исходе матча, только даёт короткую
+    // реакцию "по мотивам" решения перед следующим моментом.
+    const DRAFT_DECISIONS = [
+      {
+        title: 'Как настроить команду на этот отрезок?',
+        options: [
+          { label: '🔥 Играть первым номером', reactions: ['Команда переходит на высокий прессинг!', 'Атаки пошли одна за другой — соперник напряжён.'] },
+          { label: '🛡️ Сыграть строже в обороне', reactions: ['Линия обороны отходит пониже, играем на встречных.', 'Меньше риска — ждём своего момента.'] },
+        ],
+      },
+      {
+        title: 'Момент затишья — менять что-то в составе?',
+        options: [
+          { label: '🔄 Взбодрить свежими ногами', reactions: ['Темп сразу пошёл выше!', 'Заметно прибавили в движении без мяча.'] },
+          { label: '✋ Оставить всё как есть', reactions: ['Тренер верит в стартовый состав.', 'То, что работает, решили не трогать.'] },
+        ],
+      },
+      {
+        title: 'Соперник поджимает — рискнуть?',
+        options: [
+          { label: '🎲 Пойти ва-банк', reactions: ['Команда бросается вперёд всем составом!', 'Смелое решение — трибуны оценили.'] },
+          { label: '🧊 Сыграть надёжно', reactions: ['Решили не рисковать раньше времени.', 'Хладнокровие — тоже тактика.'] },
+        ],
+      },
+      {
+        title: 'Как ускорить или притормозить игру?',
+        options: [
+          { label: '⚡ Ускорить темп', reactions: ['Игра резко ускорилась на встречных курсах.', 'Обмен атаками пошёл стенка на стенку.'] },
+          { label: '🐢 Придержать мяч', reactions: ['Команда перешла на контроль мяча.', 'Игра стала более позиционной.'] },
+        ],
+      },
+      {
+        title: 'Что сказать команде перед решающими минутами?',
+        options: [
+          { label: '💪 «Верим в победу!»', reactions: ['Заряд получился что надо.', 'Настрой в раздевалке боевой.'] },
+          { label: '🧘 «Спокойно, по делу»', reactions: ['Тренер просит не суетиться.', 'Хладнокровный подход — тоже путь.'] },
+        ],
+      },
+      {
+        title: 'Стандарт у чужих ворот — как разыграть?',
+        options: [
+          { label: '🎯 Бить самому опасному', reactions: ['Ставка на индивидуальное мастерство.', 'Розыгрыш строится вокруг лидера состава.'] },
+          { label: '🤝 Разыграть комбинацией', reactions: ['Команда решает сыграть первым касанием.', 'Ставка на командную комбинацию.'] },
+        ],
+      },
+    ];
+
+    // Раз в 1/4 длины матча, но не меньше 3 и не больше 5 пауз — и никогда на
+    // самом первом или самом последнем событии (чтобы не рвать начало/развязку).
+    function pickDecisionIndices(matchLog) {
+      const n = matchLog.length;
+      if (n < 3) return [];
+      const count = Math.max(3, Math.min(5, Math.round(n / 4)));
+      const usable = Math.min(count, n - 1);
+      const indices = new Set();
+      for (let i = 1; i <= usable; i++) {
+        const idx = Math.max(1, Math.min(n - 1, Math.floor((i * n) / (usable + 1))));
+        indices.add(idx);
+      }
+      return Array.from(indices).sort((a, b) => a - b);
+    }
+
+    let lastDecisionIdx = -1;
+    function showTacticalPause(nextEvent) {
+      return new Promise(resolve => {
+        const modal = document.getElementById('draft-decision-modal');
+        const minuteEl = document.getElementById('decision-minute');
+        const titleEl = document.getElementById('decision-title');
+        const optsEl = document.getElementById('decision-options');
+        const reactionEl = document.getElementById('decision-reaction');
+
+        let idx;
+        do { idx = Math.floor(Math.random() * DRAFT_DECISIONS.length); } while (idx === lastDecisionIdx && DRAFT_DECISIONS.length > 1);
+        lastDecisionIdx = idx;
+        const decision = DRAFT_DECISIONS[idx];
+
+        minuteEl.innerText = `${nextEvent.minute}' — следующий момент матча`;
+        titleEl.innerText = decision.title;
+        reactionEl.classList.add('hidden');
+        reactionEl.innerText = '';
+        optsEl.innerHTML = '';
+
+        decision.options.forEach(opt => {
+          const btn = document.createElement('button');
+          btn.className = 'w-full bg-neutral-800 border border-neutral-700 rounded-xl py-3 text-sm font-bold text-white transition-all active:scale-95';
+          btn.innerText = opt.label;
+          btn.onclick = async () => {
+            if (navigator.vibrate) navigator.vibrate(15);
+            Array.from(optsEl.children).forEach(b => { b.disabled = true; b.classList.add('opacity-50'); });
+            reactionEl.innerText = pickRandom(opt.reactions);
+            reactionEl.classList.remove('hidden');
+            await sleep(900);
+            modal.classList.add('hidden');
+            resolve();
+          };
+          optsEl.appendChild(btn);
+        });
+
+        modal.classList.remove('hidden');
+      });
+    }
+
     async function playMatchLog(matchLog, opponentLabel) {
       const overlay = document.getElementById('draft-match-overlay');
       const feed = document.getElementById('draft-match-feed');
@@ -2344,7 +2590,14 @@
       scoreEl.innerText = '0 : 0';
       overlay.classList.remove('hidden');
 
-      for (const ev of matchLog) {
+      const pauseIndices = new Set(pickDecisionIndices(matchLog));
+
+      for (let i = 0; i < matchLog.length; i++) {
+        if (pauseIndices.has(i)) {
+          await showTacticalPause(matchLog[i]);
+        }
+
+        const ev = matchLog[i];
         await sleep(DRAFT_EVENT_DELAY_MS);
         const line = document.createElement('div');
         line.className = 'text-[11px] py-1 border-b border-neutral-800 flex items-center gap-2';
