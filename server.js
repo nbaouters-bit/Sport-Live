@@ -45,6 +45,7 @@ import {
   placeBet,
   getMyBets,
   exchangeStarsToSlive,
+  getAllUserIds,
   STARS_TO_SLIVE_RATE,
   DB_PATH,
 } from './db.js';
@@ -154,15 +155,20 @@ function requireAdmin(req, res, next) {
 
 // Отправка уведомления игроку в личку бота. Не роняем запрос, если бот не
 // смог написать (например, юзер ни разу не жал /start) — это не критично.
+// Возвращает true/false — рассылке (см. /api/admin/broadcast) нужно знать,
+// сколько сообщений реально доставлено.
 async function notifyUser(telegramId, text) {
   try {
-    await fetch(`${TG_API}/sendMessage`, {
+    const resp = await fetch(`${TG_API}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chat_id: telegramId, text, parse_mode: 'HTML' }),
     });
+    const data = await resp.json();
+    return Boolean(data.ok);
   } catch (err) {
     console.error('notifyUser failed', err);
+    return false;
   }
 }
 
@@ -869,6 +875,47 @@ async function sendDatabaseBackup(caption) {
 
 // Ручной бэкап по кнопке из админ-панели — например, прямо перед рискованной
 // операцией (правка кэфов, массовая выплата и т.п.).
+// Рассылка сообщения ВСЕМ игрокам в личку бота (объявления, анонсы новых
+// паков/ивентов и т.п.). Отвечаем сразу с числом адресатов и рассылаем в
+// фоне — при большой базе игроков синхронная отправка легко упёрлась бы в
+// таймаут этого HTTP-запроса. Батчи по BATCH_SIZE с паузой между ними —
+// Bot API рассчитан примерно на 30 сообщений/сек в разные чаты, берём запас.
+// Когда рассылка закончится, админ получит сводку личным сообщением от бота.
+app.post('/api/admin/broadcast', requireTelegramAuth, requireAdmin, async (req, res) => {
+  const { text } = req.body;
+  if (typeof text !== 'string' || !text.trim()) {
+    return res.status(400).json({ error: 'empty_text' });
+  }
+  if (text.length > 4000) {
+    return res.status(400).json({ error: 'text_too_long' });
+  }
+
+  const userIds = await getAllUserIds();
+  const adminId = req.telegramUser.id;
+  res.json({ ok: true, queued: userIds.length });
+
+  const BATCH_SIZE = 20;
+  const BATCH_DELAY_MS = 1100;
+  (async () => {
+    let sent = 0;
+    let failed = 0;
+    for (let i = 0; i < userIds.length; i += BATCH_SIZE) {
+      const batch = userIds.slice(i, i + BATCH_SIZE);
+      const results = await Promise.all(batch.map(id => notifyUser(id, text)));
+      for (const ok of results) {
+        if (ok) sent++; else failed++;
+      }
+      if (i + BATCH_SIZE < userIds.length) {
+        await new Promise(r => setTimeout(r, BATCH_DELAY_MS));
+      }
+    }
+    notifyUser(
+      adminId,
+      `📣 Рассылка завершена.\nВсего адресатов: ${userIds.length}\nДоставлено: ${sent}\nНе доставлено: ${failed}`
+    );
+  })();
+});
+
 app.post('/api/admin/backup-now', requireTelegramAuth, requireAdmin, async (req, res) => {
   const result = await sendDatabaseBackup('Бэкап по запросу из админ-панели');
   if (!result.ok) return res.status(500).json(result);
