@@ -306,8 +306,8 @@
                 <p class="text-[10px] text-neutral-400 mt-0.5">Базовый доход: ~10-20 $SLive/день</p>
               </div>
               <div class="flex flex-col gap-1.5">
-                <button onclick="buyPack('bronze', 500, 'SLive')" class="bg-neutral-800 text-violet-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 500</button>
-                <button onclick="buyPack('bronze', 20, 'Stars')" class="bg-amber-500 text-black text-[11px] font-black px-3 py-1.5 rounded-xl hover:bg-amber-400 text-center">⭐️ 20</button>
+                <button onclick="buyPack('bronze', 1000, 'SLive')" class="bg-neutral-800 text-violet-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 1K</button>
+                <button onclick="buyPack('bronze', 40, 'Stars')" class="bg-amber-500 text-black text-[11px] font-black px-3 py-1.5 rounded-xl hover:bg-amber-400 text-center">⭐️ 40</button>
               </div>
             </div>
             <!-- Витрина дропа -->
@@ -328,8 +328,8 @@
                 <p class="text-[10px] text-neutral-400 mt-0.5">Улучшенный доход: ~30-50 $SLive/день</p>
               </div>
               <div class="flex flex-col gap-1.5">
-                <button onclick="buyPack('silver', 2500, 'SLive')" class="bg-neutral-800 text-violet-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 2.5K</button>
-                <button onclick="buyPack('silver', 50, 'Stars')" class="bg-amber-500 text-black text-[11px] font-black px-3 py-1.5 rounded-xl hover:bg-amber-400 text-center">⭐️ 50</button>
+                <button onclick="buyPack('silver', 5000, 'SLive')" class="bg-neutral-800 text-violet-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 5K</button>
+                <button onclick="buyPack('silver', 100, 'Stars')" class="bg-amber-500 text-black text-[11px] font-black px-3 py-1.5 rounded-xl hover:bg-amber-400 text-center">⭐️ 100</button>
               </div>
             </div>
             <div class="bg-black/50 rounded-xl p-2 border border-[#78909c]/50">
@@ -349,8 +349,8 @@
                 <p class="text-[10px] text-neutral-400 mt-0.5">Звёздный доход: ~100-160/день</p>
               </div>
               <div class="flex flex-col gap-1.5">
-                <button onclick="buyPack('gold', 10000, 'SLive')" class="bg-neutral-800 text-violet-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 10K</button>
-                <button onclick="buyPack('gold', 200, 'Stars')" class="bg-amber-500 text-black text-[11px] font-black px-3 py-1.5 rounded-xl hover:bg-amber-400 text-center">⭐️ 200</button>
+                <button onclick="buyPack('gold', 20000, 'SLive')" class="bg-neutral-800 text-violet-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 20K</button>
+                <button onclick="buyPack('gold', 400, 'Stars')" class="bg-amber-500 text-black text-[11px] font-black px-3 py-1.5 rounded-xl hover:bg-amber-400 text-center">⭐️ 400</button>
               </div>
             </div>
             <div class="bg-black/50 rounded-xl p-2 border border-[#fbc02d]/30">
@@ -370,8 +370,8 @@
                 <p class="text-[10px] text-neutral-400 mt-0.5">Элитный доход: ~450-650 $SLive/день</p>
               </div>
               <div class="flex flex-col gap-1.5">
-                <button onclick="buyPack('legend', 50000, 'SLive')" class="bg-neutral-800 text-violet-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 50K</button>
-                <button onclick="buyPack('legend', 1000, 'Stars')" class="bg-amber-500 text-black text-[11px] font-black px-3 py-1.5 rounded-xl hover:bg-amber-400 text-center">⭐️ 1000</button>
+                <button onclick="buyPack('legend', 100000, 'SLive')" class="bg-neutral-800 text-violet-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 100K</button>
+                <button onclick="buyPack('legend', 2000, 'Stars')" class="bg-amber-500 text-black text-[11px] font-black px-3 py-1.5 rounded-xl hover:bg-amber-400 text-center">⭐️ 2000</button>
               </div>
             </div>
             <div class="bg-black/50 rounded-xl p-2 border border-[#b39ddb]/30">
@@ -825,15 +825,25 @@
 
       <div id="draft-decision-panel" class="hidden w-full max-w-xs bg-neutral-900 border border-amber-500/40 rounded-2xl p-3">
         <div class="text-[10px] text-amber-400 font-black mb-2 text-center uppercase">Твоё решение на следующий отрезок</div>
-        <div class="grid grid-cols-1 gap-2">
-          <button onclick="chooseDraftTactic('attack')" class="bg-red-500 text-white font-black py-2.5 rounded-xl text-xs">🔥 Все в атаку (риск, больше голов у обеих команд)</button>
-          <button onclick="chooseDraftTactic('counter')" class="bg-orange-500 text-white font-black py-2.5 rounded-xl text-xs">🎯 Контратаки (мало моментов, но бьём почти без промаха)</button>
-          <button onclick="chooseDraftTactic('normal')" class="bg-neutral-700 text-white font-black py-2.5 rounded-xl text-xs">⚖️ Играть как играли</button>
-          <button onclick="chooseDraftTactic('defend')" class="bg-blue-600 text-white font-black py-2.5 rounded-xl text-xs">🛡️ Сушить игру (надёжнее, меньше голов)</button>
-          <button onclick="chooseDraftTactic('substitute')" id="draft-sub-btn" class="bg-violet-500 text-black font-black py-2.5 rounded-xl text-xs">🔄 Замена — свежие силы до конца матча (1 раз за матч)</button>
+        <div class="grid grid-cols-2 gap-1.5 max-h-52 overflow-y-auto pr-0.5 mb-2">
+          <button onclick="chooseDraftTactic('gegenpress')" class="bg-red-700 text-white font-black py-2 rounded-xl text-[10px] leading-tight">🔥🔥 Гегенпрессинг<br><span class="font-normal opacity-80">ва-банк, макс. хаос</span></button>
+          <button onclick="chooseDraftTactic('attack')" class="bg-red-500 text-white font-black py-2 rounded-xl text-[10px] leading-tight">🔥 Все в атаку<br><span class="font-normal opacity-80">риск, много голов</span></button>
+          <button onclick="chooseDraftTactic('wings')" class="bg-orange-500 text-white font-black py-2 rounded-xl text-[10px] leading-tight">↔️ Через фланги<br><span class="font-normal opacity-80">атака помягче</span></button>
+          <button onclick="chooseDraftTactic('press')" class="bg-orange-400 text-black font-black py-2 rounded-xl text-[10px] leading-tight">📈 Прессинг<br><span class="font-normal opacity-80">умеренный нажим</span></button>
+          <button onclick="chooseDraftTactic('possession')" class="bg-sky-500 text-black font-black py-2 rounded-xl text-[10px] leading-tight">⚽ Контроль мяча<br><span class="font-normal opacity-80">много, но аккуратно</span></button>
+          <button onclick="chooseDraftTactic('normal')" class="bg-neutral-700 text-white font-black py-2 rounded-xl text-[10px] leading-tight">⚖️ Как играли<br><span class="font-normal opacity-80">без изменений</span></button>
+          <button onclick="chooseDraftTactic('long_ball')" class="bg-amber-600 text-black font-black py-2 rounded-xl text-[10px] leading-tight">🎯 Второй темп<br><span class="font-normal opacity-80">меньше контроля, остро</span></button>
+          <button onclick="chooseDraftTactic('counter')" class="bg-orange-600 text-white font-black py-2 rounded-xl text-[10px] leading-tight">🎯 Контратаки<br><span class="font-normal opacity-80">редко, но метко</span></button>
+          <button onclick="chooseDraftTactic('defend')" class="bg-blue-600 text-white font-black py-2 rounded-xl text-[10px] leading-tight">🛡️ Сушить игру<br><span class="font-normal opacity-80">надёжнее, меньше голов</span></button>
+          <button onclick="chooseDraftTactic('park_bus')" class="bg-blue-900 text-white font-black py-2 rounded-xl text-[10px] leading-tight">🚌 Автобус<br><span class="font-normal opacity-80">почти никто не забьёт</span></button>
+        </div>
+        <div class="grid grid-cols-2 gap-1.5">
+          <button onclick="chooseDraftTactic('substitute')" id="draft-sub-btn" class="bg-violet-500 text-black font-black py-2.5 rounded-xl text-[10px] leading-tight">🔄 Замена<br><span class="font-normal opacity-80">навсегда, 1 раз за матч</span></button>
+          <button onclick="chooseDraftTactic('motivate')" id="draft-motivate-btn" class="bg-fuchsia-500 text-black font-black py-2.5 rounded-xl text-[10px] leading-tight">🗣️ Речь в раздевалке<br><span class="font-normal opacity-80">только сейчас, 1 раз за матч</span></button>
         </div>
       </div>
     </div>
+
 
     <!-- Показывается ПОСЛЕ того как мы дождались (см. waitForStarsCredit)
          реального зачисления звёзд на сервере через /webhook — а не сразу
@@ -2604,18 +2614,23 @@
     // Показывает панель тактики и ждёт, пока игрок нажмёт одну из кнопок —
     // возвращает выбранное действие через Promise, которую резолвит
     // chooseDraftTactic().
-    function waitForDraftDecision(canSubstitute) {
+    function waitForDraftDecision(canSubstitute, canMotivate) {
       const panel = document.getElementById('draft-decision-panel');
       const subBtn = document.getElementById('draft-sub-btn');
+      const motivateBtn = document.getElementById('draft-motivate-btn');
       subBtn.disabled = !canSubstitute;
       subBtn.style.opacity = canSubstitute ? '1' : '0.4';
+      motivateBtn.disabled = !canMotivate;
+      motivateBtn.style.opacity = canMotivate ? '1' : '0.4';
       panel.classList.remove('hidden');
       return new Promise(resolve => { draftDecisionResolve = resolve; });
     }
 
     function chooseDraftTactic(action) {
       const subBtn = document.getElementById('draft-sub-btn');
+      const motivateBtn = document.getElementById('draft-motivate-btn');
       if (action === 'substitute' && subBtn.disabled) return;
+      if (action === 'motivate' && motivateBtn.disabled) return;
       document.getElementById('draft-decision-panel').classList.add('hidden');
       if (draftDecisionResolve) {
         const resolve = draftDecisionResolve;
@@ -2665,7 +2680,7 @@
           const nextPhaseIdx = Math.min(response.segmentsPlayed ?? 1, DRAFT_PHASE_LABELS.length - 1);
           phaseEl.innerText = DRAFT_PHASE_LABELS[nextPhaseIdx];
 
-          const action = await waitForDraftDecision(response.canSubstitute);
+          const action = await waitForDraftDecision(response.canSubstitute, response.canMotivate);
           response = await apiPost(decideUrl, { matchId: response.matchId, action });
         }
 
