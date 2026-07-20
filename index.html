@@ -74,70 +74,87 @@
       animation-fill-mode: forwards;
       pointer-events: none;
     }
-    @keyframes legendPulse {
-      0%, 100% { box-shadow: 0 0 18px rgba(168, 85, 247, 0.45); }
-      50% { box-shadow: 0 0 34px rgba(192, 132, 252, 0.85); }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    .nav-btn {
+      position: relative;
+      transition: color 0.25s ease, background-color 0.25s ease, transform 0.25s cubic-bezier(.34,1.56,.64,1);
+      color: #6b7280;
     }
-    @keyframes goldPulse {
-      0%, 100% { box-shadow: 0 0 13px rgba(250, 204, 21, 0.35); }
-      50% { box-shadow: 0 0 24px rgba(253, 224, 71, 0.7); }
-    }
-    .card-legend { border-color: #c084fc; animation: legendPulse 2.4s ease-in-out infinite; }
-    .card-gold { border-color: #fde047; animation: goldPulse 2.8s ease-in-out infinite; }
-    .card-silver { border-color: #cbd5e1; transition: box-shadow .2s ease; }
-    .card-bronze { border-color: #d97706; transition: box-shadow .2s ease; }
-
-    /* Диагональный блик, бегущий по карте — усиливает ощущение "премиального"
-       фойла на золотых/легендарных картах. Оверлей абсолютно спозиционирован,
-       поэтому контейнер карты должен быть position:relative + overflow:hidden
-       (см. genCardHTML). */
-    @keyframes shineSweep {
-      0% { transform: translateX(-140%) translateY(-10%) rotate(18deg); opacity: 0; }
-      15% { opacity: 1; }
-      55% { opacity: 1; }
-      100% { transform: translateX(220%) translateY(10%) rotate(18deg); opacity: 0; }
-    }
-    .card-shine-sweep {
+    .nav-btn .nav-icon { display: inline-block; transition: transform 0.25s cubic-bezier(.34,1.56,.64,1); }
+    .nav-btn.nav-active { background: linear-gradient(180deg, rgba(167,139,250,0.22), rgba(167,139,250,0.06)); color: #c4b5fd; transform: translateY(-4px); box-shadow: 0 4px 14px rgba(167,139,250,0.18); }
+    .nav-btn.nav-active .nav-icon { transform: scale(1.22); }
+    .nav-btn.nav-active::after {
+      content: '';
       position: absolute;
-      top: -60%;
-      left: -20%;
-      width: 35%;
-      height: 220%;
-      background: linear-gradient(115deg, transparent, rgba(255,255,255,0.65), transparent);
-      animation: shineSweep 3.2s ease-in-out infinite;
-      pointer-events: none;
-      mix-blend-mode: screen;
+      top: -1px; left: 50%;
+      width: 16px; height: 3px;
+      transform: translateX(-50%);
+      background: #a78bfa;
+      border-radius: 0 0 4px 4px;
+      box-shadow: 0 0 8px rgba(167,139,250,0.8);
     }
-
-    /* Карточка "влетает" при открытии пака — плавный 3D-переворот с небольшим
-       перелётом (overshoot), а не тупой fade/scale, как раньше. */
-    @keyframes cardFlipIn {
-      0% { transform: perspective(900px) rotateY(100deg) scale(0.75); opacity: 0; }
-      55% { transform: perspective(900px) rotateY(-14deg) scale(1.04); opacity: 1; }
-      75% { transform: perspective(900px) rotateY(6deg) scale(1); }
-      100% { transform: perspective(900px) rotateY(0deg) scale(1); opacity: 1; }
+    .nav-btn:active { transform: scale(0.92); }
+    .nav-bar-shell {
+      background: linear-gradient(180deg, #131313, #0d0d0d);
+      box-shadow: 0 -10px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.03);
     }
-    .card-flip-in { animation: cardFlipIn .75s cubic-bezier(.21,.68,.32,1.15) both; }
-
-    /* Мелкая карточка на скамейке/в клубе слегка "оживает" при тапе — короткий
-       squash-and-stretch, чтобы состав не выглядел статичной таблицей. */
-    @keyframes cardTapBounce {
+    @keyframes scorePulseYou {
       0% { transform: scale(1); }
-      35% { transform: scale(0.93, 1.05); }
-      65% { transform: scale(1.05, 0.96); }
+      35% { transform: scale(1.5); text-shadow: 0 0 18px rgba(52,211,153,0.9); }
       100% { transform: scale(1); }
     }
-    .card-tap-bounce { animation: cardTapBounce .35s ease-out; }
-
-    @keyframes ballSpinBounce {
-      0% { transform: rotate(0deg) translateY(0); }
-      25% { transform: rotate(90deg) translateY(-10px); }
-      50% { transform: rotate(180deg) translateY(0); }
-      75% { transform: rotate(270deg) translateY(-6px); }
-      100% { transform: rotate(360deg) translateY(0); }
+    @keyframes scorePulseOpp {
+      0% { transform: scale(1); }
+      35% { transform: scale(1.5); text-shadow: 0 0 18px rgba(248,113,113,0.9); }
+      100% { transform: scale(1); }
     }
-    .pack-loader-ball { animation: ballSpinBounce 1s ease-in-out infinite; }
-
+    .score-pulse-you { animation: scorePulseYou 0.6s ease-out; }
+    .score-pulse-opp { animation: scorePulseOpp 0.6s ease-out; }
+    @keyframes feedSlideIn {
+      0% { opacity: 0; transform: translateY(6px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+    .feed-line-in { animation: feedSlideIn 0.25s ease-out; }
+    /* Карточка секции в Админке / Ставках — единый стиль вместо плоского
+       border-neutral-800 везде: лёгкий градиент + цветной акцент слева,
+       чтобы разные разделы читались с одного взгляда по цвету. */
+    .panel-card {
+      background: linear-gradient(160deg, rgba(255,255,255,0.035), rgba(255,255,255,0.01));
+      border: 1px solid rgba(255,255,255,0.08);
+      border-left-width: 3px;
+      border-radius: 16px;
+    }
+    .panel-card.accent-violet { border-left-color: #a78bfa; }
+    .panel-card.accent-amber { border-left-color: #fbbf24; }
+    .panel-card.accent-sky { border-left-color: #38bdf8; }
+    .panel-card.accent-emerald { border-left-color: #34d399; }
+    .panel-card.accent-fuchsia { border-left-color: #e879f9; }
+    .panel-card.accent-red { border-left-color: #f87171; }
+    .panel-card.accent-neutral { border-left-color: #6b7280; }
+    .stat-card {
+      border-radius: 14px;
+      padding: 10px;
+      position: relative;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.07);
+    }
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      opacity: 0.12;
+      background: radial-gradient(circle at 100% 0%, currentColor, transparent 60%);
+    }
+    .seg-btn { transition: all 0.2s ease; }
+    .bet-option-row { transition: transform 0.15s ease, box-shadow 0.15s ease; }
+    .bet-option-row:active { transform: scale(0.98); }
+    .bet-event-card { transition: box-shadow 0.2s ease; }
+    .bet-event-card.is-open { box-shadow: 0 0 0 1px rgba(167,139,250,0.15), 0 8px 20px -8px rgba(167,139,250,0.25); }
+    .card-legend { box-shadow: 0 0 20px rgba(168, 85, 247, 0.5); border-color: #c084fc; }
+    .card-gold { box-shadow: 0 0 15px rgba(250, 204, 21, 0.4); border-color: #fde047; }
+    .card-silver { border-color: #cbd5e1; }
+    .card-bronze { border-color: #d97706; }
     ::-webkit-scrollbar { width: 0px; background: transparent; }
   </style>
 </head>
@@ -149,7 +166,7 @@
     <div class="bg-[#111]/90 backdrop-blur-md border-b border-neutral-800 p-4 flex flex-col gap-3 z-30 shrink-0">
       <div class="flex justify-between items-center">
         <div class="flex items-center gap-2">
-          <div class="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-xs font-black text-black">SL</div>
+          <div class="w-8 h-8 rounded-full bg-violet-500 flex items-center justify-center text-xs font-black text-black">SL</div>
           <div>
             <div class="text-xs font-bold">Менеджер</div>
             <div id="status-badge" class="text-[9px] font-black uppercase text-neutral-400">Тариф: Игрок</div>
@@ -169,7 +186,7 @@
         <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-2 flex justify-between items-center">
           <div>
             <div class="text-[9px] text-neutral-500 font-bold uppercase">Баланс $SLive</div>
-            <div id="slive-balance" class="text-lg font-black text-emerald-400 leading-none mt-1">0</div>
+            <div id="slive-balance" class="text-lg font-black text-violet-400 leading-none mt-1">0</div>
           </div>
           <span class="text-xl">🪙</span>
         </div>
@@ -194,8 +211,8 @@
             <div class="text-[10px] text-neutral-400 mt-0.5">Собирай игроков, чтобы фармить пассив!</div>
           </div>
           <div class="text-right">
-            <div class="text-[9px] text-emerald-500 font-bold uppercase">Общий фарм:</div>
-            <div id="total-farm-display" class="text-lg font-black text-emerald-400 bg-emerald-500/10 px-2 rounded border border-emerald-500/20">+0/день</div>
+            <div class="text-[9px] text-violet-500 font-bold uppercase">Общий фарм:</div>
+            <div id="total-farm-display" class="text-lg font-black text-violet-400 bg-violet-500/10 px-2 rounded border border-violet-500/20">+0/день</div>
           </div>
         </div>
 
@@ -260,10 +277,10 @@
       <!-- ТАБ 2: ТАПАЛКА -->
       <div id="tab-tap" class="tab-content hidden h-full p-4 flex flex-col justify-center">
         <div class="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 text-center mb-8">
-          <h3 class="font-black text-emerald-400">ТРЕНИРОВКА</h3>
+          <h3 class="font-black text-violet-400">ТРЕНИРОВКА</h3>
           <p class="text-[10px] text-neutral-400 mt-1">Тапай по мячу — 1 тап = 1 энергия = 1 $SLive.</p>
           <div class="w-full bg-black h-3 rounded-full mt-4 overflow-hidden border border-neutral-800">
-            <div id="energy-bar" class="bg-gradient-to-r from-blue-500 to-emerald-400 h-full w-full"></div>
+            <div id="energy-bar" class="bg-gradient-to-r from-blue-500 to-violet-400 h-full w-full"></div>
           </div>
           <div class="text-[10px] font-bold mt-1 text-neutral-300">Энергия: <span id="energy-text">1000/1000</span></div>
           <div class="text-[9px] text-neutral-500 mt-1">Полностью пополняется раз в сутки</div>
@@ -289,7 +306,7 @@
                 <p class="text-[10px] text-neutral-400 mt-0.5">Базовый доход: ~10-20 $SLive/день</p>
               </div>
               <div class="flex flex-col gap-1.5">
-                <button onclick="buyPack('bronze', 500, 'SLive')" class="bg-neutral-800 text-emerald-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 500</button>
+                <button onclick="buyPack('bronze', 500, 'SLive')" class="bg-neutral-800 text-violet-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 500</button>
                 <button onclick="buyPack('bronze', 20, 'Stars')" class="bg-amber-500 text-black text-[11px] font-black px-3 py-1.5 rounded-xl hover:bg-amber-400 text-center">⭐️ 20</button>
               </div>
             </div>
@@ -297,7 +314,7 @@
             <div class="bg-black/50 rounded-xl p-2 border border-[#5d4037]/50">
               <div class="text-[8px] text-[#a1887f] font-bold uppercase mb-1.5 flex justify-between">
                 <span>Возможный дроп:</span>
-                <span class="text-emerald-500">+10-20/день</span>
+                <span class="text-violet-500">+10-20/день</span>
               </div>
               <div class="flex flex-wrap gap-1.5" id="drop-bronze"></div>
             </div>
@@ -311,14 +328,14 @@
                 <p class="text-[10px] text-neutral-400 mt-0.5">Улучшенный доход: ~30-50 $SLive/день</p>
               </div>
               <div class="flex flex-col gap-1.5">
-                <button onclick="buyPack('silver', 2500, 'SLive')" class="bg-neutral-800 text-emerald-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 2.5K</button>
+                <button onclick="buyPack('silver', 2500, 'SLive')" class="bg-neutral-800 text-violet-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 2.5K</button>
                 <button onclick="buyPack('silver', 50, 'Stars')" class="bg-amber-500 text-black text-[11px] font-black px-3 py-1.5 rounded-xl hover:bg-amber-400 text-center">⭐️ 50</button>
               </div>
             </div>
             <div class="bg-black/50 rounded-xl p-2 border border-[#78909c]/50">
               <div class="text-[8px] text-[#90a4ae] font-bold uppercase mb-1.5 flex justify-between">
                 <span>Возможный дроп:</span>
-                <span class="text-emerald-500">+30-50/день</span>
+                <span class="text-violet-500">+30-50/день</span>
               </div>
               <div class="flex flex-wrap gap-1.5" id="drop-silver"></div>
             </div>
@@ -332,14 +349,14 @@
                 <p class="text-[10px] text-neutral-400 mt-0.5">Звёздный доход: ~100-160/день</p>
               </div>
               <div class="flex flex-col gap-1.5">
-                <button onclick="buyPack('gold', 10000, 'SLive')" class="bg-neutral-800 text-emerald-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 10K</button>
+                <button onclick="buyPack('gold', 10000, 'SLive')" class="bg-neutral-800 text-violet-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 10K</button>
                 <button onclick="buyPack('gold', 200, 'Stars')" class="bg-amber-500 text-black text-[11px] font-black px-3 py-1.5 rounded-xl hover:bg-amber-400 text-center">⭐️ 200</button>
               </div>
             </div>
             <div class="bg-black/50 rounded-xl p-2 border border-[#fbc02d]/30">
               <div class="text-[8px] text-[#fff59d] font-bold uppercase mb-1.5 flex justify-between">
                 <span>Возможный дроп:</span>
-                <span class="text-emerald-500">+100-160/день</span>
+                <span class="text-violet-500">+100-160/день</span>
               </div>
               <div class="flex flex-wrap gap-1.5" id="drop-gold"></div>
             </div>
@@ -353,14 +370,14 @@
                 <p class="text-[10px] text-neutral-400 mt-0.5">Элитный доход: ~450-650 $SLive/день</p>
               </div>
               <div class="flex flex-col gap-1.5">
-                <button onclick="buyPack('legend', 50000, 'SLive')" class="bg-neutral-800 text-emerald-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 50K</button>
+                <button onclick="buyPack('legend', 50000, 'SLive')" class="bg-neutral-800 text-violet-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 50K</button>
                 <button onclick="buyPack('legend', 1000, 'Stars')" class="bg-amber-500 text-black text-[11px] font-black px-3 py-1.5 rounded-xl hover:bg-amber-400 text-center">⭐️ 1000</button>
               </div>
             </div>
             <div class="bg-black/50 rounded-xl p-2 border border-[#b39ddb]/30">
               <div class="text-[8px] text-[#d1c4e9] font-bold uppercase mb-1.5 flex justify-between">
                 <span>Возможный дроп:</span>
-                <span class="text-emerald-500">+450-650/день</span>
+                <span class="text-violet-500">+450-650/день</span>
               </div>
               <div class="flex flex-wrap gap-1.5" id="drop-legend"></div>
             </div>
@@ -405,14 +422,14 @@
 
         <h2 class="text-xl font-black uppercase italic tracking-tight mb-2 mt-6">Пригласи друга</h2>
         <div class="bg-neutral-900 border border-neutral-800 rounded-2xl p-4">
-          <p class="text-[10px] text-neutral-400 mb-3">За каждого друга, который впервые откроет игру по твоей ссылке, ты получишь <span class="text-emerald-400 font-bold">🪙 <span id="referral-reward-amount">—</span> $SLive</span>.</p>
+          <p class="text-[10px] text-neutral-400 mb-3">За каждого друга, который впервые откроет игру по твоей ссылке, ты получишь <span class="text-violet-400 font-bold">🪙 <span id="referral-reward-amount">—</span> $SLive</span>.</p>
 
           <!-- status: 'none' — заявки ещё не было -->
           <div id="referral-state-none">
             <div id="referral-channel-block" class="hidden bg-black/40 border border-neutral-800 rounded-lg px-3 py-2 text-[10px] text-neutral-300 mb-2">
-              Сначала подпишись: <a id="referral-channel-link" href="#" target="_blank" class="text-emerald-400 underline break-all">ссылка</a>
+              Сначала подпишись: <a id="referral-channel-link" href="#" target="_blank" class="text-violet-400 underline break-all">ссылка</a>
             </div>
-            <button onclick="requestReferralAccess()" class="w-full bg-emerald-500 text-black text-[10px] font-black py-2.5 rounded-lg">Я подписался — получить ссылку</button>
+            <button onclick="requestReferralAccess()" class="w-full bg-violet-500 text-black text-[10px] font-black py-2.5 rounded-lg">Я подписался — получить ссылку</button>
           </div>
 
           <!-- status: 'pending' — заявка отправлена, ждём подтверждения админом -->
@@ -426,7 +443,7 @@
             <div id="referral-link" class="bg-black/40 border border-neutral-800 rounded-lg px-3 py-2 text-[10px] text-neutral-300 break-all mb-2">Загрузка...</div>
             <div class="flex gap-2">
               <button onclick="copyReferralLink()" class="flex-1 bg-neutral-800 text-white text-[10px] font-black py-2 rounded-lg border border-neutral-700">Скопировать</button>
-              <button onclick="shareReferralLink()" class="flex-1 bg-emerald-500 text-black text-[10px] font-black py-2 rounded-lg">Поделиться</button>
+              <button onclick="shareReferralLink()" class="flex-1 bg-violet-500 text-black text-[10px] font-black py-2 rounded-lg">Поделиться</button>
             </div>
           </div>
 
@@ -438,15 +455,35 @@
       <!-- ТАБ 5: ЛИДЕРБОРД -->
       <div id="tab-leaderboard" class="tab-content hidden p-4">
         <!-- Лидерборд ДРАФТА — сверху, отдельная доска от рейтинга по балансу -->
-        <h2 class="text-xl font-black uppercase italic tracking-tight mb-2">⚔️ Топ Драфта</h2>
+        <h2 class="text-xl font-black uppercase italic tracking-tight mb-2 flex items-center gap-1.5">🎯 Топ Драфта</h2>
         <p class="text-[10px] text-neutral-400 mb-3 bg-neutral-900 p-2 rounded-lg border border-neutral-800">
-          Рейтинг по очкам PvP-битв драфта. Лидер дня получает <span class="text-emerald-400 font-bold">🪙 1000 $SLive</span> автоматически, после чего топ обнуляется — новый 24-часовой сезон начинается заново.
+          Рейтинг по очкам PvP-битв драфта. Лидер дня получает <span class="text-violet-400 font-bold">🪙 1000 $SLive</span> автоматически.
         </p>
         <div id="draft-leaderboard-list" class="space-y-2 mb-6">
           <div class="text-neutral-500 text-xs">Загрузка...</div>
         </div>
 
-        <h2 class="text-xl font-black uppercase italic tracking-tight mb-2">Топ игроков</h2>
+        <!-- Таблица топа Битв составами — настоящая таблица (шапка + строки
+             в grid), а не просто список карточек, как раньше: видно ранг,
+             ник, счёт W-L и % побед одним взглядом, без прокрутки по каждой
+             строке. Топ-3 подсвечены медалями и градиентной рамкой. -->
+        <h2 class="text-xl font-black uppercase italic tracking-tight mb-2 flex items-center gap-1.5">⚔️ Топ Битв составами</h2>
+        <p class="text-[10px] text-neutral-400 mb-3 bg-neutral-900 p-2 rounded-lg border border-neutral-800">
+          Рейтинг по количеству побед в интерактивных боях составами (вкладка БИТВЫ). При равных победах выше тот, у кого лучше % побед.
+        </p>
+        <div class="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden mb-6 shadow-lg shadow-black/20">
+          <div class="grid grid-cols-[26px_1fr_58px_84px] gap-1 px-3 py-2 bg-black/50 border-b border-neutral-800 text-[8px] font-black uppercase text-neutral-500 tracking-wider">
+            <div>#</div>
+            <div>Игрок</div>
+            <div class="text-right">W-L</div>
+            <div class="text-right">Win%</div>
+          </div>
+          <div id="battle-leaderboard-list">
+            <div class="text-neutral-500 text-xs p-3">Загрузка...</div>
+          </div>
+        </div>
+
+        <h2 class="text-xl font-black uppercase italic tracking-tight mb-2">💰 Топ игроков</h2>
         <p class="text-[10px] text-neutral-400 mb-3 bg-neutral-900 p-2 rounded-lg border border-neutral-800">
           Рейтинг по балансу $SLive. Обновляется при каждом заходе на вкладку.
         </p>
@@ -466,7 +503,7 @@
         </p>
 
         <div id="draft-entry-block" class="grid grid-cols-2 gap-2 mb-4">
-          <button onclick="startDraftEntry('slive')" id="draft-entry-slive-btn" class="bg-neutral-800 text-emerald-400 border border-neutral-700 rounded-xl py-3 text-center">
+          <button onclick="startDraftEntry('slive')" id="draft-entry-slive-btn" class="bg-neutral-800 text-violet-400 border border-neutral-700 rounded-xl py-3 text-center">
             <div class="text-xs font-black">🪙 1000</div>
             <div class="text-[8px] text-neutral-500 mt-0.5">1 раз в сутки</div>
           </button>
@@ -484,7 +521,7 @@
           <div id="draft-cards-grid" class="grid grid-cols-3 gap-2 mb-3"></div>
           <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-2.5 flex justify-between items-center mb-3">
             <div class="text-[10px] text-neutral-400">Рейтинг: <span id="draft-rating" class="text-white font-black">0</span></div>
-            <div class="text-[10px] text-neutral-400">Побед в серии: <span id="draft-wins" class="text-emerald-400 font-black">0</span></div>
+            <div class="text-[10px] text-neutral-400">Побед в серии: <span id="draft-wins" class="text-violet-400 font-black">0</span></div>
           </div>
           <button onclick="playDraftBattleClick()" id="draft-battle-btn" class="w-full bg-red-500 text-white font-black py-3 rounded-xl text-sm">⚔️ В БОЙ</button>
         </div>
@@ -492,18 +529,44 @@
         <div id="draft-last-result" class="hidden mt-4 bg-neutral-900 border border-neutral-800 rounded-xl p-3"></div>
       </div>
 
+      <!-- ТАБ БИТВЫ: бьётся ПОСТОЯННЫЙ состав "Мой клуб" (те же карты, что
+           фармят пассивно), а не одноразовый драфт. Проигрыш не убивает
+           серию — просто минус в статистику, и есть перезарядка между боями. -->
+      <div id="tab-battles" class="tab-content hidden p-4">
+        <h2 class="text-xl font-black uppercase italic tracking-tight mb-2">Битвы составами</h2>
+        <p class="text-[10px] text-neutral-400 mb-3 bg-neutral-900 p-2 rounded-lg border border-neutral-800">
+          Бьётся твой постоянный состав со вкладки "Состав". Поражение не страшно — просто идёт в статистику,
+          но между боями нужна небольшая перезарядка.
+        </p>
+
+        <div id="battles-not-ready-block" class="hidden bg-neutral-900 border border-neutral-800 rounded-xl p-3 text-[11px] text-neutral-400 mb-3"></div>
+
+        <div id="battles-ready-block" class="hidden">
+          <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-2.5 flex justify-between items-center mb-3">
+            <div class="text-[10px] text-neutral-400">Рейтинг состава: <span id="battles-rating" class="text-white font-black">0</span></div>
+            <div class="text-[10px] text-neutral-400">Статистика: <span id="battles-stats" class="text-violet-400 font-black">0W — 0L</span></div>
+          </div>
+          <button onclick="playSquadBattleClick()" id="battles-fight-btn" class="w-full bg-red-500 text-white font-black py-3 rounded-xl text-sm">🏆 В БОЙ (400 🪙)</button>
+          <div id="battles-cooldown" class="hidden text-center text-[10px] text-neutral-500 mt-2"></div>
+        </div>
+
+        <div id="battles-last-result" class="hidden mt-4 bg-neutral-900 border border-neutral-800 rounded-xl p-3"></div>
+      </div>
+
       <!-- ТАБ СТАВКИ: ивенты создаёт и подводит итог ТОЛЬКО админ (см. tab-admin
            ниже) — здесь игрок только смотрит открытые ивенты и ставит $SLive.
            Полосы процентов/коэффициентов в духе Binance/Fanton — см. renderBetEvents(). -->
       <div id="tab-bets" class="tab-content hidden p-4">
-        <h2 class="text-xl font-black uppercase italic tracking-tight mb-2">Ставки</h2>
-        <p class="text-[10px] text-neutral-400 mb-3 bg-neutral-900 p-2 rounded-lg border border-neutral-800">
-          Ставь $SLive на исход ивентов. Коэффициент фиксируется в момент ставки — правки процентов админом дальше на неё не влияют.
-        </p>
+        <div class="panel-card accent-violet p-3 mb-3">
+          <h2 class="text-xl font-black uppercase italic tracking-tight mb-1 flex items-center gap-1.5">📈 Ставки</h2>
+          <p class="text-[10px] text-neutral-400">
+            Ставь $SLive на исход ивентов. Коэффициент фиксируется в момент ставки — правки процентов админом дальше на неё не влияют.
+          </p>
+        </div>
 
-        <div class="flex gap-2 mb-3">
-          <button onclick="switchBetsView('events')" id="bets-view-events-btn" class="flex-1 bg-emerald-500 text-black text-[10px] font-black py-2 rounded-lg">Ивенты</button>
-          <button onclick="switchBetsView('mine')" id="bets-view-mine-btn" class="flex-1 bg-neutral-800 text-neutral-300 text-[10px] font-black py-2 rounded-lg border border-neutral-700">Мои ставки</button>
+        <div class="flex gap-1 mb-3 bg-neutral-900 border border-neutral-800 rounded-xl p-1">
+          <button onclick="switchBetsView('events')" id="bets-view-events-btn" class="seg-btn flex-1 bg-violet-500 text-black text-[10px] font-black py-2 rounded-lg">🎟️ Ивенты</button>
+          <button onclick="switchBetsView('mine')" id="bets-view-mine-btn" class="seg-btn flex-1 text-neutral-400 text-[10px] font-black py-2 rounded-lg">📋 Мои ставки</button>
         </div>
 
         <div id="bets-events-list" class="space-y-3"></div>
@@ -512,29 +575,32 @@
 
       <!-- Модалка выбора суммы ставки, открывается по тапу на вариант исхода -->
       <div id="bet-amount-modal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-end">
-        <div class="bg-[#111] border-t border-neutral-800 rounded-t-2xl w-full p-4">
-          <div class="flex justify-between items-center mb-3">
+        <div class="bg-[#111] border-t border-neutral-800 rounded-t-3xl w-full p-4" style="animation: popIn 0.25s ease-out;">
+          <div class="w-10 h-1 bg-neutral-700 rounded-full mx-auto mb-3"></div>
+          <div class="flex justify-between items-center mb-3 bg-neutral-900 border border-neutral-800 rounded-xl p-2.5">
             <div>
-              <div class="text-[10px] text-neutral-500">Ставка на исход:</div>
-              <div id="bet-modal-option-label" class="text-sm font-black text-emerald-400"></div>
+              <div class="text-[9px] text-neutral-500 uppercase font-bold">Ставка на исход:</div>
+              <div id="bet-modal-option-label" class="text-sm font-black text-violet-400"></div>
             </div>
             <div class="text-right">
-              <div class="text-[10px] text-neutral-500">Коэффициент</div>
-              <div id="bet-modal-multiplier" class="text-sm font-black text-white"></div>
+              <div class="text-[9px] text-neutral-500 uppercase font-bold">Коэффициент</div>
+              <div id="bet-modal-multiplier" class="text-base font-black text-white"></div>
             </div>
           </div>
           <div class="grid grid-cols-4 gap-2 mb-2">
-            <button onclick="setBetAmount(100)" class="bg-neutral-800 border border-neutral-700 rounded-lg py-2 text-[10px] font-black">100</button>
-            <button onclick="setBetAmount(500)" class="bg-neutral-800 border border-neutral-700 rounded-lg py-2 text-[10px] font-black">500</button>
-            <button onclick="setBetAmount(1000)" class="bg-neutral-800 border border-neutral-700 rounded-lg py-2 text-[10px] font-black">1000</button>
-            <button onclick="setBetAmountMax()" class="bg-neutral-800 border border-neutral-700 rounded-lg py-2 text-[10px] font-black">MAX</button>
+            <button onclick="setBetAmount(100)" class="bg-neutral-800 border border-neutral-700 rounded-lg py-2 text-[10px] font-black active:scale-95 transition-transform">100</button>
+            <button onclick="setBetAmount(500)" class="bg-neutral-800 border border-neutral-700 rounded-lg py-2 text-[10px] font-black active:scale-95 transition-transform">500</button>
+            <button onclick="setBetAmount(1000)" class="bg-neutral-800 border border-neutral-700 rounded-lg py-2 text-[10px] font-black active:scale-95 transition-transform">1000</button>
+            <button onclick="setBetAmountMax()" class="bg-amber-500/90 text-black border border-amber-400 rounded-lg py-2 text-[10px] font-black active:scale-95 transition-transform">MAX</button>
           </div>
           <input id="bet-amount-input" type="number" min="10" placeholder="Сумма $SLive" oninput="updateBetPotential()"
-            class="w-full bg-black border border-neutral-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-neutral-600 mb-2">
-          <div id="bet-modal-potential" class="text-[10px] text-neutral-400 mb-3">Возможный выигрыш: <span class="text-emerald-400 font-black">—</span></div>
+            class="w-full bg-black border border-neutral-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-neutral-600 mb-2 focus:border-violet-500 outline-none">
+          <div id="bet-modal-potential" class="text-[10px] text-neutral-400 mb-3 bg-violet-500/10 border border-violet-500/20 rounded-lg px-3 py-2 flex justify-between items-center">
+            <span>Возможный выигрыш:</span> <span class="text-violet-400 font-black text-sm">—</span>
+          </div>
           <div class="flex gap-2">
             <button onclick="closeBetModal()" class="flex-1 bg-neutral-800 text-white text-[11px] font-black py-2.5 rounded-lg border border-neutral-700">Отмена</button>
-            <button onclick="confirmPlaceBet()" class="flex-1 bg-emerald-500 text-black text-[11px] font-black py-2.5 rounded-lg">Поставить</button>
+            <button onclick="confirmPlaceBet()" class="flex-1 bg-violet-500 text-black text-[11px] font-black py-2.5 rounded-lg">Поставить</button>
           </div>
         </div>
       </div>
@@ -543,83 +609,86 @@
            у обычных игроков и сам запрос данных всё равно упадёт с 403
            на сервере, если открыть эту вкладку в обход интерфейса) -->
       <div id="tab-admin" class="tab-content hidden p-4">
-        <h2 class="text-xl font-black uppercase italic tracking-tight mb-3">Админ-панель</h2>
+        <div class="panel-card accent-neutral p-3 mb-4">
+          <h2 class="text-xl font-black uppercase italic tracking-tight flex items-center gap-1.5">🛠️ Админ-панель</h2>
+          <p class="text-[10px] text-neutral-500 mt-0.5">Полный контроль над экономикой и ивентами. Видно только тебе.</p>
+        </div>
 
         <div class="grid grid-cols-2 gap-2 mb-4" id="admin-stats">
-          <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-2">
-            <div class="text-[9px] text-neutral-500 font-bold uppercase">Игроков</div>
-            <div id="stat-total-users" class="text-lg font-black text-white leading-none mt-1">—</div>
+          <div class="stat-card bg-neutral-900 text-sky-400">
+            <div class="text-[9px] text-neutral-500 font-bold uppercase relative">👥 Игроков</div>
+            <div id="stat-total-users" class="text-lg font-black text-white leading-none mt-1 relative">—</div>
           </div>
-          <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-2">
-            <div class="text-[9px] text-neutral-500 font-bold uppercase">Stars на балансах</div>
-            <div id="stat-total-stars" class="text-lg font-black text-amber-400 leading-none mt-1">—</div>
+          <div class="stat-card bg-neutral-900 text-amber-400">
+            <div class="text-[9px] text-neutral-500 font-bold uppercase relative">⭐️ Stars на балансах</div>
+            <div id="stat-total-stars" class="text-lg font-black text-amber-400 leading-none mt-1 relative">—</div>
           </div>
-          <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-2">
-            <div class="text-[9px] text-neutral-500 font-bold uppercase">$SLive в игре</div>
-            <div id="stat-total-slive" class="text-lg font-black text-emerald-400 leading-none mt-1">—</div>
+          <div class="stat-card bg-neutral-900 text-violet-400">
+            <div class="text-[9px] text-neutral-500 font-bold uppercase relative">🪙 $SLive в игре</div>
+            <div id="stat-total-slive" class="text-lg font-black text-violet-400 leading-none mt-1 relative">—</div>
           </div>
-          <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-2">
-            <div class="text-[9px] text-neutral-500 font-bold uppercase">VIP / Платежей</div>
-            <div id="stat-vip-payments" class="text-lg font-black text-yellow-400 leading-none mt-1">—</div>
+          <div class="stat-card bg-neutral-900 text-yellow-400">
+            <div class="text-[9px] text-neutral-500 font-bold uppercase relative">🏆 VIP / Платежей</div>
+            <div id="stat-vip-payments" class="text-lg font-black text-yellow-400 leading-none mt-1 relative">—</div>
           </div>
         </div>
 
-        <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-3 mb-4">
-          <div class="text-[10px] font-bold text-neutral-300 mb-2">📣 Рассылка всем игрокам</div>
+        <div class="panel-card accent-amber p-3 mb-3">
+          <div class="text-[10px] font-bold text-neutral-200 mb-2 flex items-center gap-1.5">📣 Рассылка всем игрокам</div>
           <p class="text-[9px] text-neutral-500 mb-2">Бот отправит это сообщение в личку каждому, кто хоть раз открывал приложение. HTML-теги (например &lt;b&gt;) поддерживаются, как в обычных уведомлениях бота.</p>
           <textarea id="admin-broadcast-text" rows="4" placeholder="Текст рассылки..."
-            class="w-full bg-black border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 mb-2"></textarea>
-          <button onclick="adminSendBroadcast()" id="admin-broadcast-btn" class="w-full bg-amber-500 text-black font-black py-2.5 rounded-xl text-xs">Отправить рассылку</button>
+            class="w-full bg-black border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 mb-2 focus:border-amber-500 outline-none"></textarea>
+          <button onclick="adminSendBroadcast()" id="admin-broadcast-btn" class="w-full bg-amber-500 text-black font-black py-2.5 rounded-xl text-xs active:scale-[0.98] transition-transform">Отправить рассылку</button>
           <div id="admin-broadcast-status" class="text-[9px] text-neutral-500 mt-2"></div>
         </div>
 
-        <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-3 mb-4 flex items-center justify-between gap-2">
+        <div class="panel-card accent-sky p-3 mb-3 flex items-center justify-between gap-2">
           <div>
-            <div class="text-[10px] font-bold text-neutral-300">Резервная копия базы</div>
+            <div class="text-[10px] font-bold text-neutral-200 flex items-center gap-1.5">💾 Резервная копия базы</div>
             <div class="text-[9px] text-neutral-500">Бот пришлёт файл базы тебе в личку в Telegram</div>
           </div>
-          <button onclick="adminBackupNow()" id="admin-backup-btn" class="bg-neutral-800 text-white text-[10px] font-black px-3 py-2 rounded-lg border border-neutral-700 whitespace-nowrap">Бэкап сейчас</button>
+          <button onclick="adminBackupNow()" id="admin-backup-btn" class="bg-sky-500/20 text-sky-300 text-[10px] font-black px-3 py-2 rounded-lg border border-sky-500/40 whitespace-nowrap active:scale-95 transition-transform">Бэкап сейчас</button>
         </div>
 
-        <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-3 mb-4">
-          <div class="text-[10px] font-bold text-neutral-300 mb-2">Ручная корректировка Stars</div>
+        <div class="panel-card accent-violet p-3 mb-3">
+          <div class="text-[10px] font-bold text-neutral-200 mb-2 flex items-center gap-1.5">⭐️ Ручная корректировка Stars</div>
           <div class="flex flex-col gap-2">
             <input id="admin-adjust-id" type="text" placeholder="Telegram ID игрока"
-              class="bg-black border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600">
+              class="bg-black border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 focus:border-violet-500 outline-none">
             <div class="flex gap-2">
               <input id="admin-adjust-amount" type="number" placeholder="Сумма (может быть отрицательной)"
-                class="flex-1 bg-black border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600">
-              <button onclick="adminAdjustStars()" class="bg-emerald-500 text-black text-[11px] font-black px-4 rounded-lg">Применить</button>
+                class="flex-1 bg-black border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 focus:border-violet-500 outline-none">
+              <button onclick="adminAdjustStars()" class="bg-violet-500 text-black text-[11px] font-black px-4 rounded-lg active:scale-95 transition-transform">Применить</button>
             </div>
           </div>
         </div>
 
-        <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-3 mb-4">
-          <div class="text-[10px] font-bold text-neutral-300 mb-2">Ручная корректировка $SLive</div>
+        <div class="panel-card accent-violet p-3 mb-3">
+          <div class="text-[10px] font-bold text-neutral-200 mb-2 flex items-center gap-1.5">🪙 Ручная корректировка $SLive</div>
           <div class="flex flex-col gap-2">
             <input id="admin-slive-id" type="text" placeholder="Telegram ID игрока"
-              class="bg-black border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600">
+              class="bg-black border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 focus:border-violet-500 outline-none">
             <div class="flex gap-2">
               <input id="admin-slive-amount" type="number" placeholder="Сумма (может быть отрицательной)"
-                class="flex-1 bg-black border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600">
-              <button onclick="adminAdjustSlive()" class="bg-emerald-500 text-black text-[11px] font-black px-4 rounded-lg">Применить</button>
+                class="flex-1 bg-black border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 focus:border-violet-500 outline-none">
+              <button onclick="adminAdjustSlive()" class="bg-violet-500 text-black text-[11px] font-black px-4 rounded-lg active:scale-95 transition-transform">Применить</button>
             </div>
           </div>
         </div>
 
-        <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-3 mb-4">
-          <div class="text-[10px] font-bold text-neutral-300 mb-2">Ссылка для подписки (реферальная программа)</div>
+        <div class="panel-card accent-emerald p-3 mb-3">
+          <div class="text-[10px] font-bold text-neutral-200 mb-2 flex items-center gap-1.5">🔗 Ссылка для подписки (реферальная программа)</div>
           <p class="text-[9px] text-neutral-500 mb-2">Показывается игрокам во вкладке "Пригласи друга" перед тем, как они запросят свою реферальную ссылку.</p>
           <div class="flex gap-2">
             <input id="admin-referral-channel" type="text" placeholder="https://t.me/your_channel"
-              class="flex-1 bg-black border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600">
-            <button onclick="adminSetReferralChannel()" class="bg-emerald-500 text-black text-[11px] font-black px-4 rounded-lg">Сохранить</button>
+              class="flex-1 bg-black border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 focus:border-emerald-500 outline-none">
+            <button onclick="adminSetReferralChannel()" class="bg-emerald-500 text-black text-[11px] font-black px-4 rounded-lg active:scale-95 transition-transform">Сохранить</button>
           </div>
         </div>
 
-        <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-3 mb-4">
+        <div class="panel-card accent-emerald p-3 mb-3">
           <div class="flex justify-between items-center mb-2">
-            <div class="text-[10px] font-bold text-neutral-300">Заявки на реферальную ссылку</div>
+            <div class="text-[10px] font-bold text-neutral-200 flex items-center gap-1.5">📨 Заявки на реферальную ссылку</div>
             <button onclick="loadReferralRequests()" class="text-[9px] text-emerald-400 font-bold">↻ Обновить</button>
           </div>
           <p class="text-[9px] text-neutral-500 mb-2">Впиши ссылку (можно поправить подсказанную) и подтверди — игрок сразу увидит её у себя, и бот пришлёт ему уведомление.</p>
@@ -628,34 +697,34 @@
           </div>
         </div>
 
-        <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-3 mb-4">
-          <div class="text-[10px] font-bold text-neutral-300 mb-2">Создать ивент ставок</div>
+        <div class="panel-card accent-fuchsia p-3 mb-3">
+          <div class="text-[10px] font-bold text-neutral-200 mb-2 flex items-center gap-1.5">🎟️ Создать ивент ставок</div>
           <input id="admin-bet-title" type="text" placeholder="Название (напр. Матч А — Б)"
-            class="w-full bg-black border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 mb-2">
+            class="w-full bg-black border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 mb-2 focus:border-fuchsia-500 outline-none">
           <input id="admin-bet-description" type="text" placeholder="Описание (необязательно)"
-            class="w-full bg-black border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 mb-2">
+            class="w-full bg-black border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 mb-2 focus:border-fuchsia-500 outline-none">
 
           <div id="admin-bet-options" class="space-y-2 mb-2"></div>
           <div class="flex gap-2 mb-3">
-            <button onclick="adminAddBetOption()" class="flex-1 bg-neutral-800 text-white text-[10px] font-black py-2 rounded-lg border border-neutral-700">+ Вариант исхода</button>
+            <button onclick="adminAddBetOption()" class="flex-1 bg-neutral-800 text-white text-[10px] font-black py-2 rounded-lg border border-neutral-700 active:scale-95 transition-transform">+ Вариант исхода</button>
           </div>
           <p class="text-[9px] text-neutral-500 mb-2">Проценты — это шанс на вариант (как полосы в Binance/Fanton). Коэффициент выплаты считается автоматически как 100/процент.</p>
-          <button onclick="adminCreateBetEvent()" class="w-full bg-emerald-500 text-black text-[11px] font-black py-2.5 rounded-lg">Создать ивент</button>
+          <button onclick="adminCreateBetEvent()" class="w-full bg-fuchsia-500 text-black text-[11px] font-black py-2.5 rounded-lg active:scale-[0.98] transition-transform">Создать ивент</button>
         </div>
 
-        <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-3 mb-4">
+        <div class="panel-card accent-fuchsia p-3 mb-4">
           <div class="flex justify-between items-center mb-2">
-            <div class="text-[10px] font-bold text-neutral-300">Ивенты ставок</div>
-            <button onclick="loadAdminBetEvents()" class="text-[9px] text-emerald-400 font-bold">↻ Обновить</button>
+            <div class="text-[10px] font-bold text-neutral-200 flex items-center gap-1.5">🎟️ Ивенты ставок</div>
+            <button onclick="loadAdminBetEvents()" class="text-[9px] text-fuchsia-400 font-bold">↻ Обновить</button>
           </div>
           <div id="admin-bet-events-list" class="space-y-2">
             <div class="text-neutral-500 text-xs">Загрузка...</div>
           </div>
         </div>
 
-        <div class="flex justify-between items-center mb-2">
-          <div class="text-[10px] font-bold text-neutral-300">Игроки</div>
-          <button onclick="loadAdminPanel()" class="text-[9px] text-emerald-400 font-bold">↻ Обновить</button>
+        <div class="flex justify-between items-center mb-2 px-1">
+          <div class="text-[10px] font-bold text-neutral-300 flex items-center gap-1.5">👥 Игроки</div>
+          <button onclick="loadAdminPanel()" class="text-[9px] text-violet-400 font-bold">↻ Обновить</button>
         </div>
         <div id="admin-users-list" class="space-y-2 pb-6">
           <div class="text-neutral-500 text-xs">Загрузка...</div>
@@ -665,37 +734,45 @@
 
     </div>
 
-    <!-- НИЖНЯЯ НАВИГАЦИЯ -->
-    <div class="bg-[#111] border-t border-neutral-800 p-2 flex justify-around items-center z-30 shrink-0">
-      <button onclick="switchTab('squad')" id="nav-squad" class="flex flex-col items-center gap-1 text-[9px] font-black text-emerald-400">
-        <span class="text-xl">🛡️</span> СОСТАВ
+    <!-- НИЖНЯЯ НАВИГАЦИЯ: раньше был overflow-x-auto с кнопками фиксированной
+         ширины — при 9 вкладках "Битвы" уезжали за край экрана без видимого
+         скролла, и выглядело, будто вкладки нет вообще. Теперь flex-1 —
+         все вкладки ВСЕГДА целиком на экране, просто чуть уже. Активная
+         вкладка анимированно приподнимается и подсвечивается пилюлей
+         (см. .nav-btn / .nav-active в <style> и switchTab()). -->
+    <div class="nav-bar-shell border-t border-neutral-800/80 px-1 py-1.5 flex items-stretch gap-0.5 z-30 shrink-0">
+      <button onclick="switchTab('squad')" id="nav-squad" class="nav-btn nav-active flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl text-[8px] font-black">
+        <span class="nav-icon text-lg">🛡️</span> СОСТАВ
       </button>
-      <button onclick="switchTab('club')" id="nav-club" class="flex flex-col items-center gap-1 text-[9px] font-black text-neutral-500">
-        <span class="text-xl">🎒</span> КЛУБ
+      <button onclick="switchTab('club')" id="nav-club" class="nav-btn flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl text-[8px] font-black">
+        <span class="nav-icon text-lg">🎒</span> КЛУБ
       </button>
-      <button onclick="switchTab('tap')" id="nav-tap" class="flex flex-col items-center gap-1 text-[9px] font-black text-neutral-500">
-        <span class="text-xl">⚽</span> ТАП
+      <button onclick="switchTab('tap')" id="nav-tap" class="nav-btn flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl text-[8px] font-black">
+        <span class="nav-icon text-lg">⚽</span> ТАП
       </button>
-      <button onclick="switchTab('packs')" id="nav-packs" class="flex flex-col items-center gap-1 text-[9px] font-black text-neutral-500">
-        <span class="text-xl">⚡</span> ПАКИ
+      <button onclick="switchTab('packs')" id="nav-packs" class="nav-btn flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl text-[8px] font-black">
+        <span class="nav-icon text-lg">⚡</span> ПАКИ
       </button>
-      <button onclick="switchTab('market')" id="nav-market" class="flex flex-col items-center gap-1 text-[9px] font-black text-neutral-500">
-        <span class="text-xl">🥩</span> МАРКЕТ
+      <button onclick="switchTab('market')" id="nav-market" class="nav-btn flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl text-[8px] font-black">
+        <span class="nav-icon text-lg">🥩</span> МАРКЕТ
       </button>
-      <button onclick="switchTab('leaderboard')" id="nav-leaderboard" class="flex flex-col items-center gap-1 text-[9px] font-black text-neutral-500">
-        <span class="text-xl">🏆</span> ТОП
+      <button onclick="switchTab('leaderboard')" id="nav-leaderboard" class="nav-btn flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl text-[8px] font-black">
+        <span class="nav-icon text-lg">🏆</span> ТОП
       </button>
-      <button onclick="switchTab('draft')" id="nav-draft" class="flex flex-col items-center gap-1 text-[9px] font-black text-neutral-500">
-        <span class="text-xl">⚔️</span> ДРАФТ
+      <button onclick="switchTab('draft')" id="nav-draft" class="nav-btn flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl text-[8px] font-black">
+        <span class="nav-icon text-lg">🎯</span> ДРАФТ
       </button>
-      <button onclick="switchTab('bets')" id="nav-bets" class="flex flex-col items-center gap-1 text-[9px] font-black text-neutral-500">
-        <span class="text-xl">📈</span> СТАВКИ
+      <button onclick="switchTab('battles')" id="nav-battles" class="nav-btn flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl text-[8px] font-black">
+        <span class="nav-icon text-lg">⚔️</span> БИТВЫ
+      </button>
+      <button onclick="switchTab('bets')" id="nav-bets" class="nav-btn flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl text-[8px] font-black">
+        <span class="nav-icon text-lg">📈</span> СТАВКИ
       </button>
       <!-- Кнопка админки скрыта по умолчанию (class="hidden") и показывается
            только если сервер подтвердил isAdmin: true в ответе /api/me.
            Обычные игроки физически не видят и не могут открыть эту вкладку. -->
-      <button onclick="switchTab('admin')" id="nav-admin" class="hidden flex-col items-center gap-1 text-[9px] font-black text-neutral-500">
-        <span class="text-xl">🛠️</span> АДМИН
+      <button onclick="switchTab('admin')" id="nav-admin" class="hidden nav-btn flex-1 flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl text-[8px] font-black">
+        <span class="nav-icon text-lg">🛠️</span> АДМИН
       </button>
     </div>
 
@@ -708,42 +785,53 @@
       <div id="bench-list" class="grid grid-cols-3 gap-2 overflow-y-auto pb-10"></div>
     </div>
 
-    <div id="pack-loader" class="hidden absolute inset-0 bg-black/95 z-50 flex flex-col justify-center items-center gap-4">
-      <div class="w-32 h-48 bg-gradient-to-br from-yellow-500 to-amber-300 rounded-2xl flex items-center justify-center text-5xl shadow-[0_0_50px_rgba(245,158,11,0.5)]">
-        <span class="pack-loader-ball inline-block">⚽</span>
-      </div>
-      <div class="text-[10px] font-black uppercase tracking-widest text-amber-300 animate-pulse">Открываем пак...</div>
+    <div id="pack-loader" class="hidden absolute inset-0 bg-black/95 z-50 flex flex-col justify-center items-center">
+      <div class="w-32 h-48 bg-gradient-to-br from-yellow-500 to-amber-300 rounded-2xl flex items-center justify-center text-5xl shadow-[0_0_50px_rgba(245,158,11,0.5)] animate-pulse">⚡</div>
     </div>
 
-    <div id="pack-reveal" class="hidden absolute inset-0 bg-black/95 z-50 flex flex-col justify-center items-center p-6 overflow-hidden">
-      <div id="reveal-glow" class="absolute w-72 h-72 rounded-full blur-3xl opacity-0 transition-opacity duration-500 pointer-events-none"></div>
-      <h3 class="text-lg font-black text-emerald-400 mb-6 uppercase animate-pulse relative">🎉 НОВЫЙ ИГРОК!</h3>
-      <div id="revealed-card-container" class="relative"></div>
-      <div class="text-[10px] text-neutral-400 mt-4 text-center relative">Доход: <span id="reveal-income" class="font-bold text-emerald-400">+0/день</span></div>
-      <button onclick="closeReveal()" class="mt-8 bg-yellow-500 text-black font-black text-xs px-8 py-3 rounded-xl hover:scale-105 transition-all relative">
+    <div id="pack-reveal" class="hidden absolute inset-0 bg-black/95 z-50 flex flex-col justify-center items-center p-6">
+      <h3 class="text-lg font-black text-violet-400 mb-6 uppercase animate-pulse">🎉 НОВЫЙ ИГРОК!</h3>
+      <div id="revealed-card-container"></div>
+      <div class="text-[10px] text-neutral-400 mt-4 text-center">Доход: <span id="reveal-income" class="font-bold text-violet-400">+0/день</span></div>
+      <button onclick="closeReveal()" class="mt-8 bg-yellow-500 text-black font-black text-xs px-8 py-3 rounded-xl hover:scale-105 transition-all">
         ЗАБРАТЬ В КЛУБ
       </button>
     </div>
 
-    <!-- Проигрыватель симулированного матча драфта: показывает события
-         (голы/промахи), сгенерированные simulateDraftMatch() на сервере,
-         по одному, прежде чем открыть итог боя (draft-last-result). -->
-    <div id="draft-match-overlay" class="hidden absolute inset-0 bg-black/95 z-50 flex flex-col justify-center items-center p-6 relative">
-      <div class="text-[10px] uppercase tracking-widest text-neutral-500 font-black mb-1">Прямой эфир</div>
-      <div id="draft-match-score" class="text-4xl font-black mb-4 tabular-nums">0 : 0</div>
-      <div id="draft-match-feed" class="w-full max-w-xs h-56 overflow-y-auto bg-neutral-900 border border-neutral-800 rounded-2xl p-3"></div>
+    <!-- Проигрыватель интерактивного матча драфта: показывает события сегмента
+         одно за другим, а между сегментами — панель тактических решений
+         (см. /api/draft/battle/start и /decide в server.js). -->
+    <div id="draft-match-overlay" class="hidden absolute inset-0 bg-black/95 z-50 flex flex-col justify-center items-center p-6">
+      <div class="text-[10px] uppercase tracking-widest text-neutral-500 font-black mb-1">Прямой эфир · <span id="draft-match-phase">1-й тайм</span></div>
 
-      <!-- Тактическая пауза: 3-5 раз за матч эфир останавливается и просит
-           тренера (игрока) принять решение. Итог матча уже посчитан на сервере
-           заранее (см. simulateDraftMatch) — выбор тут не меняет счёт, только
-           даёт почувствовать себя тренером и подсвечивает следующий момент
-           короткой репликой. Это чисто presentation-layer пауза. -->
-      <div id="draft-decision-modal" class="hidden absolute inset-0 bg-black/90 z-10 flex flex-col justify-center items-center p-6" style="animation: popIn 0.3s ease-out;">
-        <div class="text-[9px] uppercase tracking-widest text-amber-400 font-black mb-2">⏸️ Тактическая пауза</div>
-        <div id="decision-minute" class="text-xs text-neutral-500 font-bold mb-3"></div>
-        <h3 id="decision-title" class="text-base font-black text-white text-center mb-4 max-w-xs"></h3>
-        <div id="decision-options" class="w-full max-w-xs flex flex-col gap-2"></div>
-        <div id="decision-reaction" class="hidden mt-4 text-center text-sm font-bold text-emerald-400 max-w-xs"></div>
+      <!-- Счёт разбит на ДВЕ явно окрашенные половины (ты = зелёный, слева;
+           соперник = красный, справа) — раньше был один нейтральный "0 : 0"
+           фиолетовым, и в моменте гола было непонятно, кто именно забил, пока
+           не прочитаешь текст в ленте. Число забившей стороны ещё и пульсирует
+           (см. .score-pulse-you/.score-pulse-opp) в момент гола. -->
+      <div class="w-full max-w-xs flex items-end justify-center gap-4 mb-1">
+        <div class="flex-1 text-right">
+          <div class="text-[9px] font-black text-emerald-400 uppercase tracking-wider mb-0.5">Ты</div>
+          <div id="draft-score-you" class="text-5xl font-black tabular-nums text-emerald-400">0</div>
+        </div>
+        <div class="text-2xl font-black text-neutral-700 pb-1">:</div>
+        <div class="flex-1 text-left">
+          <div id="draft-score-opp-label" class="text-[9px] font-black text-red-400 uppercase tracking-wider mb-0.5 truncate">Соперник</div>
+          <div id="draft-score-opp" class="text-5xl font-black tabular-nums text-red-400">0</div>
+        </div>
+      </div>
+      <div class="text-[9px] text-neutral-600 font-bold mb-4">🟢 твои голы слева · 🔴 голы соперника справа</div>
+      <div id="draft-match-feed" class="w-full max-w-xs h-56 overflow-y-auto bg-neutral-900 border border-neutral-800 rounded-2xl p-3 mb-3"></div>
+
+      <div id="draft-decision-panel" class="hidden w-full max-w-xs bg-neutral-900 border border-amber-500/40 rounded-2xl p-3">
+        <div class="text-[10px] text-amber-400 font-black mb-2 text-center uppercase">Твоё решение на следующий отрезок</div>
+        <div class="grid grid-cols-1 gap-2">
+          <button onclick="chooseDraftTactic('attack')" class="bg-red-500 text-white font-black py-2.5 rounded-xl text-xs">🔥 Все в атаку (риск, больше голов у обеих команд)</button>
+          <button onclick="chooseDraftTactic('counter')" class="bg-orange-500 text-white font-black py-2.5 rounded-xl text-xs">🎯 Контратаки (мало моментов, но бьём почти без промаха)</button>
+          <button onclick="chooseDraftTactic('normal')" class="bg-neutral-700 text-white font-black py-2.5 rounded-xl text-xs">⚖️ Играть как играли</button>
+          <button onclick="chooseDraftTactic('defend')" class="bg-blue-600 text-white font-black py-2.5 rounded-xl text-xs">🛡️ Сушить игру (надёжнее, меньше голов)</button>
+          <button onclick="chooseDraftTactic('substitute')" id="draft-sub-btn" class="bg-violet-500 text-black font-black py-2.5 rounded-xl text-xs">🔄 Замена — свежие силы до конца матча (1 раз за матч)</button>
+        </div>
       </div>
     </div>
 
@@ -753,11 +841,11 @@
          Telegram раньше, чем наш вебхук успевает обработать платёж. -->
     <div id="purchase-success-modal" class="hidden absolute inset-0 bg-black/90 z-50 flex flex-col justify-center items-center p-6 overflow-hidden">
       <div id="confetti-layer" class="absolute inset-0 pointer-events-none"></div>
-      <div class="relative bg-neutral-900 border border-emerald-500/40 rounded-2xl p-6 w-full max-w-xs text-center shadow-2xl" style="animation: popIn 0.35s ease-out;">
+      <div class="relative bg-neutral-900 border border-violet-500/40 rounded-2xl p-6 w-full max-w-xs text-center shadow-2xl" style="animation: popIn 0.35s ease-out;">
         <div class="text-5xl mb-2">✅</div>
-        <h3 class="font-black text-lg text-emerald-400 mb-1">Спасибо за покупку!</h3>
+        <h3 class="font-black text-lg text-violet-400 mb-1">Спасибо за покупку!</h3>
         <p id="purchase-success-text" class="text-[11px] text-neutral-400 mb-4">Баланс уже обновлён.</p>
-        <button onclick="closePurchaseSuccess()" class="bg-emerald-500 text-black font-black py-2.5 px-6 rounded-xl text-xs w-full">Отлично!</button>
+        <button onclick="closePurchaseSuccess()" class="bg-violet-500 text-black font-black py-2.5 px-6 rounded-xl text-xs w-full">Отлично!</button>
       </div>
     </div>
 
@@ -765,14 +853,14 @@
          короткий спиннер, чтобы не показать "Спасибо" раньше, чем баланс
          реально обновился. -->
     <div id="payment-wait-modal" class="hidden absolute inset-0 bg-black/90 z-50 flex flex-col justify-center items-center p-6">
-      <div class="w-16 h-16 border-4 border-neutral-700 border-t-emerald-400 rounded-full animate-spin mb-4"></div>
+      <div class="w-16 h-16 border-4 border-neutral-700 border-t-violet-400 rounded-full animate-spin mb-4"></div>
       <div class="text-xs text-neutral-400 font-bold">Подтверждаем оплату...</div>
     </div>
 
     <div id="alert-modal" class="hidden absolute inset-0 bg-black/80 z-50 flex justify-center items-center p-6">
       <div class="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 w-full max-w-xs text-center shadow-2xl">
         <p id="alert-text" class="text-sm font-bold text-white"></p>
-        <button onclick="document.getElementById('alert-modal').classList.add('hidden')" class="mt-4 bg-emerald-500 text-black font-black py-2 px-6 rounded-xl text-xs w-full">ОК</button>
+        <button onclick="document.getElementById('alert-modal').classList.add('hidden')" class="mt-4 bg-violet-500 text-black font-black py-2 px-6 rounded-xl text-xs w-full">ОК</button>
       </div>
     </div>
 
@@ -804,8 +892,8 @@
             <input id="exchange-stars-amount" type="number" min="1" placeholder="Сколько ⭐️ обменять" oninput="updateExchangePreview()"
               class="flex-1 bg-black border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600">
           </div>
-          <div class="text-[10px] text-neutral-400 mb-2 text-left">Получишь: <span id="exchange-preview" class="text-emerald-400 font-black">0 🪙</span></div>
-          <button onclick="exchangeStarsToSliveClick()" class="w-full bg-emerald-500 text-black font-black py-2.5 rounded-xl text-sm">Обменять</button>
+          <div class="text-[10px] text-neutral-400 mb-2 text-left">Получишь: <span id="exchange-preview" class="text-violet-400 font-black">0 🪙</span></div>
+          <button onclick="exchangeStarsToSliveClick()" class="w-full bg-violet-500 text-black font-black py-2.5 rounded-xl text-sm">Обменять</button>
         </div>
 
         <button onclick="document.getElementById('stars-modal').classList.add('hidden')" class="mt-4 text-neutral-500 text-xs font-bold">Отмена</button>
@@ -1008,13 +1096,13 @@
             rarity.legend ? `⭐${rarity.legend}` : '',
           ].filter(Boolean).join(' ') || '— карт нет';
           return `
-          <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-2.5 flex justify-between items-center gap-2">
+          <div class="panel-card ${u.isVip ? 'accent-amber' : 'accent-neutral'} p-2.5 flex justify-between items-center gap-2">
             <div class="min-w-0">
-              <a href="${link}" target="_blank" class="text-[11px] font-bold text-emerald-400 underline truncate block">${label}${u.isVip ? ' 🏆' : ''}</a>
+              <a href="${link}" target="_blank" class="text-[11px] font-bold text-violet-400 underline truncate block">${label}${u.isVip ? ' 🏆' : ''}</a>
               <div class="text-[9px] text-neutral-500 mt-0.5">
                 <span class="text-amber-400 font-bold">⭐️ ${u.tgStars}</span>
                 &nbsp;·&nbsp;
-                <span class="text-emerald-400 font-bold">🪙 ${u.sliveTokens}</span>
+                <span class="text-violet-400 font-bold">🪙 ${u.sliveTokens}</span>
                 &nbsp;·&nbsp;
                 <span class="text-neutral-400">👥 ${u.invited}</span>
                 &nbsp;·&nbsp;
@@ -1110,14 +1198,14 @@
           const label = r.username ? '@' + r.username : `ID ${r.telegramId}`;
           const inputId = `referral-req-link-${r.telegramId}`;
           return `
-          <div class="bg-black/40 border border-neutral-800 rounded-xl p-2.5">
-            <div class="text-[11px] font-bold text-emerald-400 mb-1.5">${label}</div>
+          <div class="panel-card accent-emerald bg-black/40 p-2.5">
+            <div class="text-[11px] font-bold text-violet-400 mb-1.5">${label}</div>
             <div class="flex gap-2">
               <input id="${inputId}" type="text" value="${(r.suggestedLink || '').replace(/"/g, '&quot;')}" placeholder="Ссылка для этого игрока"
                 class="flex-1 bg-black border border-neutral-700 rounded-lg px-2 py-1.5 text-[10px] text-white placeholder-neutral-600">
             </div>
             <div class="flex gap-2 mt-1.5">
-              <button onclick="adminApproveReferral('${r.telegramId}', '${inputId}')" class="flex-1 bg-emerald-500 text-black text-[10px] font-black py-1.5 rounded-lg">Подтвердить</button>
+              <button onclick="adminApproveReferral('${r.telegramId}', '${inputId}')" class="flex-1 bg-violet-500 text-black text-[10px] font-black py-1.5 rounded-lg">Подтвердить</button>
               <button onclick="adminRejectReferral('${r.telegramId}')" class="flex-1 bg-neutral-800 text-white text-[10px] font-black py-1.5 rounded-lg border border-neutral-700">Отклонить</button>
             </div>
           </div>
@@ -1218,7 +1306,7 @@
                     class="w-14 bg-black border border-neutral-700 rounded-lg px-1.5 py-1 text-[10px] text-white text-center">
                   <span class="text-neutral-500">%</span>
                   <span id="admin-odds-preview-${opt.id}" class="text-neutral-500 text-[9px] w-10 text-center">x${opt.multiplier}</span>
-                  <button onclick="adminUpdateOdds('${ev.id}', '${opt.id}')" class="bg-emerald-500 text-black text-[9px] font-black px-2 py-1 rounded-lg whitespace-nowrap">Сохранить</button>
+                  <button onclick="adminUpdateOdds('${ev.id}', '${opt.id}')" class="bg-violet-500 text-black text-[9px] font-black px-2 py-1 rounded-lg whitespace-nowrap">Сохранить</button>
                 </div>
               ` : `<span class="text-neutral-500">(${opt.percent}%, x${opt.multiplier})</span>`}
               <span class="text-neutral-500">🪙 ${opt.pool.toLocaleString()} · ${opt.betsCount} ставок</span>
@@ -1230,18 +1318,19 @@
               <select id="admin-bet-resolve-${ev.id}" class="flex-1 bg-black border border-neutral-700 rounded-lg px-2 py-1.5 text-[10px] text-white">
                 ${ev.options.map(o => `<option value="${o.id}">${o.label}</option>`).join('')}
               </select>
-              <button onclick="adminResolveBetEvent('${ev.id}')" class="bg-emerald-500 text-black text-[10px] font-black px-3 rounded-lg">Подтвердить исход</button>
+              <button onclick="adminResolveBetEvent('${ev.id}')" class="bg-violet-500 text-black text-[10px] font-black px-3 rounded-lg">Подтвердить исход</button>
             </div>
             <div class="flex gap-2 mt-1.5">
               ${ev.status === 'open'
                 ? `<button onclick="adminCloseBetEvent('${ev.id}')" class="flex-1 bg-neutral-800 text-white text-[10px] font-black py-1.5 rounded-lg border border-neutral-700">Остановить приём ставок</button>`
-                : `<button onclick="adminOpenBetEvent('${ev.id}')" class="flex-1 bg-emerald-500 text-black text-[10px] font-black py-1.5 rounded-lg">Открыть приём ставок</button>`}
+                : `<button onclick="adminOpenBetEvent('${ev.id}')" class="flex-1 bg-violet-500 text-black text-[10px] font-black py-1.5 rounded-lg">Открыть приём ставок</button>`}
               <button onclick="adminDeleteBetEvent('${ev.id}')" class="bg-red-500/20 text-red-400 border border-red-500/40 text-[10px] font-black py-1.5 px-3 rounded-lg">Удалить</button>
             </div>
           ` : `<div class="text-[10px] text-amber-400 font-bold mt-1.5">Исход: ${ev.options.find(o => o.id === ev.resolvedOptionId)?.label || '—'}</div>`;
 
+          const eventAccent = ev.status === 'open' ? 'accent-violet' : ev.status === 'closed' ? 'accent-amber' : 'accent-neutral';
           return `
-          <div class="bg-black/40 border border-neutral-800 rounded-xl p-2.5">
+          <div class="panel-card ${eventAccent} bg-black/40 p-2.5">
             <div class="flex justify-between items-center mb-1">
               <div class="text-[11px] font-bold text-white">${ev.title}</div>
               <span class="text-[8px] font-black text-neutral-400 border border-neutral-700 rounded-full px-2 py-0.5">${ev.status.toUpperCase()}</span>
@@ -1401,12 +1490,12 @@
         }
         const medals = ['🥇', '🥈', '🥉'];
         listEl.innerHTML = leaderboard.map((u, i) => `
-          <div class="bg-neutral-900 border ${u.telegramId === myId ? 'border-emerald-500' : 'border-neutral-800'} rounded-xl p-2.5 flex justify-between items-center">
+          <div class="bg-neutral-900 border ${u.telegramId === myId ? 'border-violet-500' : 'border-neutral-800'} rounded-xl p-2.5 flex justify-between items-center">
             <div class="flex items-center gap-2 min-w-0">
               <span class="w-6 text-center font-black shrink-0">${medals[i] || (i + 1)}</span>
               <span class="text-xs font-bold text-white truncate">${u.username ? '@' + u.username : 'ID ' + u.telegramId}${u.isVip ? ' 🏆' : ''}</span>
             </div>
-            <span class="text-emerald-400 font-black text-xs shrink-0">🪙 ${u.balance.toLocaleString()}</span>
+            <span class="text-violet-400 font-black text-xs shrink-0">🪙 ${u.balance.toLocaleString()}</span>
           </div>
         `).join('');
       } catch (e) {
@@ -1690,124 +1779,101 @@
       document.getElementById('alert-modal').classList.remove('hidden');
     }
 
-    // ---------- Процедурные аватары карточек: безымянный футболист в форме сборной ----------
-    // Мы НЕ используем настоящие фотографии/лица футболистов и не пытаемся
-    // нарисовать конкретного узнаваемого человека — обкладывать реальных людей
-    // на карточках, которые продаются за деньги (паки, маркет), — это чужие
-    // права на изображение + авторские права на фото, и без лицензии так
-    // делать нельзя. Вместо этого генератор рисует детерминированного (по id
-    // карты — всегда один и тот же результат для конкретной карты) БЕЗЛИКОГО
-    // футболиста: силуэт головы без черт лица + торс в форме сборной, цвета
-    // которой берутся из nation карты (см. NATION_KIT ниже). Редкость влияет
-    // на фоновое свечение и кэп/акцент, а лёгкий хэш даёт разброс по причёске,
-    // тону кожи и рисунку формы, чтобы карточки одной сборной не были клонами.
-    const RARITY_AVATAR_PALETTE = {
-      bronze: ['#c2703a', '#8a4a22', '#f0b878', '#241206'],
-      silver: ['#cbd5e1', '#64748b', '#f1f5f9', '#0f172a'],
-      gold:   ['#f5c542', '#a16207', '#fff3b0', '#241c00'],
-      legend: ['#a855f7', '#5b21b6', '#e9d5ff', '#0f0620'],
-    };
-
-    // Обобщённые цвета домашней формы сборных (по флагу/общеизвестной гамме) —
-    // это не лицензированные шаблоны конкретного производителя экипировки,
-    // просто примерная раскраска "свитер/акцент/шорты" для узнаваемости нации.
+    // ---------- Безымянный футболист на карточке ----------
+    // Полностью generic силуэт без лица — НЕ основан ни на одном реальном
+    // человеке. Форма (цвета) берётся по национальности карточки, поза — по
+    // позиции (GK/DEF/MID/FWD), чтобы карточки не были одинаковыми болванками,
+    // но при этом не изображали никого конкретного.
     const NATION_KIT = {
-      UKR: { shirt: '#ffd400', trim: '#0057b7', shorts: '#0057b7' },
-      ARG: { shirt: '#8ec4e8', trim: '#ffffff', shorts: '#2b2b2b', stripes: true },
-      ESP: { shirt: '#e11d34', trim: '#f2c14e', shorts: '#0b3d91' },
-      ENG: { shirt: '#f5f5f5', trim: '#0b2265', shorts: '#0b2265', outline: '#c8102e' },
-      FRA: { shirt: '#1e3a8a', trim: '#ffffff', shorts: '#ffffff' },
-      BRA: { shirt: '#ffdf00', trim: '#1a8a3e', shorts: '#1a8a3e' },
-      NED: { shirt: '#ff7a1a', trim: '#21468b', shorts: '#ffffff' },
-      BEL: { shirt: '#e2001a', trim: '#111111', shorts: '#111111' },
-      GER: { shirt: '#f5f5f5', trim: '#111111', shorts: '#111111', outline: '#dd0000' },
-      NOR: { shirt: '#ba0c2f', trim: '#00205b', shorts: '#00205b' },
-      POR: { shirt: '#d4213d', trim: '#046a38', shorts: '#046a38' },
+      UKR: { primary: '#fde047', secondary: '#2563eb' },
+      ENG: { primary: '#f8fafc', secondary: '#dc2626' },
+      NED: { primary: '#f97316', secondary: '#1e293b' },
+      FRA: { primary: '#1d4ed8', secondary: '#f8fafc' },
+      BEL: { primary: '#dc2626', secondary: '#1f2937' },
+      ESP: { primary: '#dc2626', secondary: '#facc15' },
+      GER: { primary: '#f8fafc', secondary: '#1f2937' },
+      ARG: { primary: '#7dd3fc', secondary: '#f8fafc' },
+      BRA: { primary: '#fbbf24', secondary: '#16a34a' },
+      NOR: { primary: '#dc2626', secondary: '#1e3a8a' },
+      POR: { primary: '#dc2626', secondary: '#16a34a' },
     };
-    const DEFAULT_KIT = { shirt: '#6b7280', trim: '#374151', shorts: '#374151' };
-    const SKIN_TONES = ['#8d5a3c', '#c48a5f', '#e0ac74', '#6b4226', '#a86b3f', '#d8996a'];
-    const HAIR_TONES = ['#161616', '#2e1a0f', '#3b2b1a', '#0d0d0d', '#4a3520'];
+    const DEFAULT_KIT = { primary: '#64748b', secondary: '#1f2937' };
+    // Вратари по традиции играют в контрастной форме, отличной от сборной.
+    const GK_KIT = { primary: '#22c55e', secondary: '#1f2937' };
+    const SILHOUETTE = '#33261b'; // нейтральный тон "кожи" — намеренно не привязан ни к одной этничности
 
-    function hashSeed(str) {
-      let h = 2166136261;
-      for (let i = 0; i < str.length; i++) {
-        h ^= str.charCodeAt(i);
-        h = Math.imul(h, 16777619);
-      }
-      return h >>> 0;
+    function getKit(p) {
+      return p.pos === 'GK' ? GK_KIT : (NATION_KIT[p.nation] || DEFAULT_KIT);
     }
 
-    function mulberry32(seed) {
-      let a = seed;
-      return function () {
-        a |= 0; a = (a + 0x6D2B79F5) | 0;
-        let t = Math.imul(a ^ (a >>> 15), 1 | a);
-        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-      };
+    // Четыре позы по амплуа — просто чтобы карточки не были клонами друг
+    // друга; ноги/руки — простые фигуры, лицо намеренно не прорисовано.
+    function poseParts(pos, kit) {
+      if (pos === 'GK') {
+        return `
+          <path d="M35 60 L35 95 Q50 100 65 95 L65 60 Z" fill="${kit.primary}"/>
+          <rect x="30" y="60" width="8" height="22" rx="3" fill="${kit.primary}"/>
+          <rect x="62" y="60" width="8" height="22" rx="3" fill="${kit.primary}"/>
+          <circle cx="27" cy="84" r="5" fill="#facc15"/>
+          <circle cx="73" cy="84" r="5" fill="#facc15"/>
+          <rect x="39" y="95" width="9" height="26" rx="3" fill="${SILHOUETTE}"/>
+          <rect x="52" y="95" width="9" height="26" rx="3" fill="${SILHOUETTE}"/>
+          <rect x="37" y="116" width="13" height="6" rx="2" fill="${kit.secondary}"/>
+          <rect x="50" y="116" width="13" height="6" rx="2" fill="${kit.secondary}"/>`;
+      }
+      if (pos === 'DEF') {
+        return `
+          <path d="M33 60 L33 96 Q50 101 67 96 L67 60 Z" fill="${kit.primary}"/>
+          <rect x="26" y="66" width="10" height="20" rx="4" fill="${kit.primary}" transform="rotate(18 31 76)"/>
+          <rect x="64" y="66" width="10" height="20" rx="4" fill="${kit.primary}" transform="rotate(-18 69 76)"/>
+          <rect x="39" y="96" width="9" height="27" rx="3" fill="${SILHOUETTE}"/>
+          <rect x="52" y="96" width="9" height="27" rx="3" fill="${SILHOUETTE}"/>
+          <rect x="37" y="118" width="13" height="6" rx="2" fill="${kit.secondary}"/>
+          <rect x="50" y="118" width="13" height="6" rx="2" fill="${kit.secondary}"/>`;
+      }
+      if (pos === 'FWD') {
+        return `
+          <path d="M34 58 L34 94 Q50 99 66 94 L66 58 Z" fill="${kit.primary}"/>
+          <rect x="27" y="62" width="9" height="19" rx="4" fill="${kit.primary}" transform="rotate(-25 31 71)"/>
+          <rect x="64" y="62" width="9" height="19" rx="4" fill="${kit.primary}" transform="rotate(25 69 71)"/>
+          <rect x="39" y="94" width="9" height="20" rx="3" fill="${SILHOUETTE}"/>
+          <rect x="53" y="94" width="10" height="14" rx="3" fill="${SILHOUETTE}" transform="rotate(-35 58 101)"/>
+          <rect x="37" y="112" width="13" height="6" rx="2" fill="${kit.secondary}"/>
+          <circle cx="72" cy="118" r="6" fill="#f8fafc" stroke="#1f2937" stroke-width="1.5"/>`;
+      }
+      // MID (по умолчанию) — бег в среднем темпе.
+      return `
+        <path d="M34 59 L34 95 Q50 100 66 95 L66 59 Z" fill="${kit.primary}"/>
+        <rect x="27" y="63" width="9" height="19" rx="4" fill="${kit.primary}" transform="rotate(-15 31 72)"/>
+        <rect x="64" y="63" width="9" height="19" rx="4" fill="${kit.primary}" transform="rotate(20 69 72)"/>
+        <rect x="38" y="95" width="9" height="22" rx="3" fill="${SILHOUETTE}" transform="rotate(-12 42 106)"/>
+        <rect x="53" y="95" width="9" height="22" rx="3" fill="${SILHOUETTE}" transform="rotate(14 57 106)"/>
+        <rect x="36" y="115" width="13" height="6" rx="2" fill="${kit.secondary}"/>
+        <rect x="51" y="115" width="13" height="6" rx="2" fill="${kit.secondary}"/>`;
     }
 
-    const avatarSvgCache = {};
-    function pixelAvatarSVG(p) {
-      if (avatarSvgCache[p.id]) return avatarSvgCache[p.id];
+    const footballerSvgCache = {};
+    function footballerSVG(p) {
+      const cacheKey = p.id + '|' + p.pos + '|' + p.nation;
+      if (footballerSvgCache[cacheKey]) return footballerSvgCache[cacheKey];
 
-      const rand = mulberry32(hashSeed(p.id + '|' + p.name));
-      const rarity = RARITY_AVATAR_PALETTE[p.type] || RARITY_AVATAR_PALETTE.bronze;
-      const kit = NATION_KIT[p.nation] || DEFAULT_KIT;
-      const uid = String(p.id).replace(/[^a-zA-Z0-9]/g, '');
-
-      const skin = SKIN_TONES[Math.floor(rand() * SKIN_TONES.length)];
-      const hair = HAIR_TONES[Math.floor(rand() * HAIR_TONES.length)];
-      const hairStyle = Math.floor(rand() * 3); // 0 короткая, 1 пробор, 2 повязка
-      const patternRoll = rand();
-      const outlineAttr = kit.outline ? ` stroke="${kit.outline}" stroke-width="2.5"` : '';
-
-      let hairPath;
-      if (hairStyle === 0) {
-        hairPath = `<path d="M28 28 Q48 6 68 28 L67 20 Q48 8 29 20 Z" fill="${hair}"/>`;
-      } else if (hairStyle === 1) {
-        hairPath = `<path d="M26 30 Q30 6 48 8 Q66 6 70 30 L64 22 Q48 12 32 22 Z" fill="${hair}"/>`;
-      } else {
-        hairPath = `<path d="M26 24 Q48 6 70 24 L70 18 Q48 2 26 18 Z" fill="${hair}"/><rect x="25" y="18" width="46" height="6" rx="2" fill="${rarity[0]}"/>`;
-      }
-
-      // Рисунок на груди — либо вертикальные полосы (для сборных с "stripes"),
-      // либо диагональная лента, либо горизонтальная полоса, либо чистый свитер.
-      let chestPattern = '';
-      if (kit.stripes) {
-        chestPattern = `<rect x="39" y="58" width="6" height="50" fill="${kit.trim}" opacity="0.9"/><rect x="51" y="58" width="6" height="50" fill="${kit.trim}" opacity="0.9"/>`;
-      } else if (patternRoll > 0.66) {
-        chestPattern = `<path d="M30 60 L48 80 L66 60 L66 68 L48 88 L30 68 Z" fill="${kit.trim}" opacity="0.45"/>`;
-      } else if (patternRoll > 0.33) {
-        chestPattern = `<rect x="30" y="70" width="36" height="5" fill="${kit.trim}" opacity="0.65"/>`;
-      }
-
-      const svg = `<svg viewBox="0 0 96 128" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice" class="w-full h-full">
+      const kit = getKit(p);
+      const gradId = 'shine-' + cacheKey.replace(/[^a-z0-9]/gi, '');
+      const svg = `<svg viewBox="0 0 100 128" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" class="w-full h-full">
         <defs>
-          <radialGradient id="glow${uid}" cx="50%" cy="32%" r="70%">
-            <stop offset="0%" stop-color="${rarity[0]}" stop-opacity="0.55"/>
-            <stop offset="100%" stop-color="${rarity[3]}" stop-opacity="0"/>
-          </radialGradient>
-          <linearGradient id="sheen${uid}" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stop-color="#ffffff" stop-opacity="0.3"/>
-            <stop offset="45%" stop-color="#ffffff" stop-opacity="0"/>
-            <stop offset="100%" stop-color="#000000" stop-opacity="0.22"/>
+          <linearGradient id="${gradId}" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#ffffff" stop-opacity="0.25"/>
+            <stop offset="50%" stop-color="#ffffff" stop-opacity="0"/>
+            <stop offset="100%" stop-color="#000000" stop-opacity="0.18"/>
           </linearGradient>
         </defs>
-        <rect width="96" height="128" fill="${rarity[3]}"/>
-        <rect width="96" height="128" fill="url(#glow${uid})"/>
-        <rect x="24" y="106" width="48" height="22" rx="4" fill="${kit.shorts}"/>
-        <path d="M20 62 Q24 51 34 49 L38 58 Q48 65 58 58 L62 49 Q72 51 76 62 L80 108 L16 108 Z" fill="${kit.shirt}"${outlineAttr}/>
-        ${chestPattern}
-        <path d="M40 49 Q48 60 56 49 L52 45 Q48 49 44 45 Z" fill="${kit.trim}"/>
-        <path d="M18 60 L7 75 L18 84 L28 64 Z" fill="${kit.trim}"/>
-        <path d="M78 60 L89 75 L78 84 L68 64 Z" fill="${kit.trim}"/>
-        <rect x="42" y="41" width="12" height="11" fill="${skin}"/>
-        <circle cx="48" cy="29" r="18" fill="${skin}"/>
-        ${hairPath}
-        <rect width="96" height="128" fill="url(#sheen${uid})"/>
+        <circle cx="50" cy="34" r="14" fill="${SILHOUETTE}"/>
+        ${poseParts(p.pos, kit)}
+        <rect x="16" y="52" width="8" height="10" rx="2" fill="${kit.secondary}" opacity="0.85"/>
+        <rect x="76" y="52" width="8" height="10" rx="2" fill="${kit.secondary}" opacity="0.85"/>
+        <rect width="100" height="128" fill="url(#${gradId})"/>
       </svg>`;
-      avatarSvgCache[p.id] = svg;
+      footballerSvgCache[cacheKey] = svg;
       return svg;
     }
 
@@ -1816,32 +1882,28 @@
       const bg = p.type === 'legend' ? 'from-purple-800 to-indigo-950' : 
                  p.type === 'gold' ? 'from-yellow-600 to-yellow-900' : 
                  p.type === 'silver' ? 'from-slate-400 to-slate-700' : 'from-orange-700 to-orange-950';
-      const avatar = pixelAvatarSVG(p);
-      // Бегущий блик — только на голде/легенде, чтобы дешёвые карты не мигали без повода.
-      const shine = (p.type === 'gold' || p.type === 'legend') ? '<div class="card-shine-sweep"></div>' : '';
+      const avatar = footballerSVG(p);
 
       if (isLarge) {
         return `
-          <div class="relative w-48 h-72 bg-gradient-to-b ${bg} border-4 rounded-2xl p-3 flex flex-col justify-between ${cls} card-flip-in shadow-2xl overflow-hidden">
-            ${shine}
+          <div class="relative w-48 h-72 bg-gradient-to-b ${bg} border-4 rounded-2xl p-3 flex flex-col justify-between ${cls} shadow-2xl">
             <div class="flex justify-between font-black text-white text-3xl">
               <div class="flex flex-col items-center leading-none"><span class="text-4xl">${p.rating}</span><span class="text-sm mt-1">${p.pos}</span></div>
               <span>${FLAGS[p.nation]}</span>
             </div>
-            <div class="w-28 h-28 mx-auto rounded-xl overflow-hidden border border-white/25 shadow-inner">${avatar}</div>
+            <div class="w-32 h-32 mx-auto">${avatar}</div>
             <div class="bg-black/60 p-2 rounded-lg text-center leading-tight">
               <div class="font-black text-lg uppercase truncate">${p.name}</div>
             </div>
           </div>`;
       } else {
         return `
-          <div class="relative w-[70px] h-[100px] bg-gradient-to-b ${bg} border-2 rounded-xl p-1.5 flex flex-col justify-between ${cls} text-white shadow-lg overflow-hidden">
-            ${shine}
+          <div class="w-[70px] h-[100px] bg-gradient-to-b ${bg} border-2 rounded-xl p-1.5 flex flex-col justify-between ${cls} text-white shadow-lg">
             <div class="flex justify-between items-start leading-none">
               <div class="flex flex-col items-center"><span class="font-black text-sm">${p.rating}</span><span class="text-[7px] font-bold">${p.pos}</span></div>
               <span class="text-xs">${FLAGS[p.nation]}</span>
             </div>
-            <div class="w-9 h-9 mx-auto rounded-md overflow-hidden border border-white/20">${avatar}</div>
+            <div class="w-11 h-11 mx-auto">${avatar}</div>
             <div class="bg-black/60 rounded px-1 text-center">
               <div class="font-bold text-[7px] uppercase truncate">${p.name}</div>
             </div>
@@ -2116,7 +2178,7 @@
           filledSlots++;
         } else {
           el.innerHTML = '+';
-          el.className = "w-[70px] h-[100px] bg-black/40 border-2 border-dashed border-white/20 rounded-xl flex items-center justify-center text-2xl text-white/30 cursor-pointer hover:bg-emerald-900/30";
+          el.className = "w-[70px] h-[100px] bg-black/40 border-2 border-dashed border-white/20 rounded-xl flex items-center justify-center text-2xl text-white/30 cursor-pointer hover:bg-violet-900/30";
         }
       });
 
@@ -2176,7 +2238,7 @@
             const div = document.createElement('div');
             div.innerHTML = `
               ${genCardHTML(p, false)}
-              <button onclick="assignToPitch('${p.instId}')" class="w-full mt-1 bg-emerald-500 text-black text-[9px] font-black py-1.5 rounded">Выбрать</button>
+              <button onclick="assignToPitch('${p.instId}')" class="w-full mt-1 bg-violet-500 text-black text-[9px] font-black py-1.5 rounded">Выбрать</button>
             `;
             list.appendChild(div);
           }
@@ -2245,13 +2307,6 @@
       }
     }
 
-    const REVEAL_GLOW_COLOR = {
-      bronze: 'rgba(217,119,6,0.45)',
-      silver: 'rgba(203,213,225,0.4)',
-      gold: 'rgba(253,224,71,0.55)',
-      legend: 'rgba(192,132,252,0.65)',
-    };
-
     function openPackAnim(card) {
       const loader = document.getElementById('pack-loader');
       loader.classList.remove('hidden');
@@ -2262,13 +2317,7 @@
 
         document.getElementById('revealed-card-container').innerHTML = genCardHTML(tempOpened, true);
         document.getElementById('reveal-income').innerText = `+${tempOpened.income}/день`;
-
-        const glow = document.getElementById('reveal-glow');
-        glow.style.background = REVEAL_GLOW_COLOR[tempOpened.type] || REVEAL_GLOW_COLOR.bronze;
-        glow.classList.remove('opacity-0');
-
         document.getElementById('pack-reveal').classList.remove('hidden');
-        if (tempOpened.type === 'gold' || tempOpened.type === 'legend') spawnConfetti(60);
       }, 1200);
     }
 
@@ -2277,7 +2326,6 @@
       tempOpened = null;
       saveData();
       document.getElementById('pack-reveal').classList.add('hidden');
-      document.getElementById('reveal-glow').classList.add('opacity-0');
       alertMsg('Игрок добавлен в твой Клуб! Зайди в "Состав" и нажми на пустое место, чтобы выпустить его на поле.');
     }
 
@@ -2295,18 +2343,20 @@
       document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
       document.getElementById(`tab-${tabId}`).classList.remove('hidden');
 
-      ['squad', 'club', 'tap', 'packs', 'market', 'leaderboard', 'draft', 'bets', 'admin'].forEach(t => {
+      ['squad', 'club', 'tap', 'packs', 'market', 'leaderboard', 'draft', 'battles', 'bets', 'admin'].forEach(t => {
         const el = document.getElementById(`nav-${t}`);
         if (!el) return;
         const isHiddenAdmin = t === 'admin' && !isAdmin;
-        el.className = `${isHiddenAdmin ? 'hidden ' : 'flex '}flex-col items-center gap-1 text-[9px] font-black ${t === tabId ? 'text-emerald-400' : 'text-neutral-500'}`;
+        const active = t === tabId;
+        el.className = `${isHiddenAdmin ? 'hidden ' : 'flex-1 flex '}nav-btn${active ? ' nav-active' : ''} flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl text-[8px] font-black`;
       });
 
       if (tabId === 'admin') loadAdminPanel();
-      if (tabId === 'leaderboard') { loadLeaderboard(); loadDraftLeaderboard(); }
+      if (tabId === 'leaderboard') { loadLeaderboard(); loadDraftLeaderboard(); loadBattleLeaderboard(); }
       if (tabId === 'market') loadReferralInfo();
       if (tabId === 'club') renderClubInventory();
       if (tabId === 'draft') loadDraftState();
+      if (tabId === 'battles') loadBattlesState();
       if (tabId === 'bets') loadBetEvents();
     }
 
@@ -2330,7 +2380,7 @@
       marketTier = tier;
       document.querySelectorAll('.market-filter-btn').forEach(b => {
         const active = b.dataset.tier === tier;
-        b.classList.toggle('bg-emerald-500', active);
+        b.classList.toggle('bg-violet-500', active);
         b.classList.toggle('text-black', active);
         b.classList.toggle('bg-neutral-800', !active);
       });
@@ -2348,7 +2398,7 @@
           ${genCardHTML(p, false)}
           <div class="flex gap-1 w-full">
             <button onclick="buyPlayerCard('${p.id}', 'stars')" class="flex-1 bg-amber-500 text-black text-[8px] font-black py-1 rounded">⭐️${price.stars}</button>
-            <button onclick="buyPlayerCard('${p.id}', 'slive')" class="flex-1 bg-neutral-800 text-emerald-400 text-[8px] font-black py-1 rounded border border-neutral-700">🪙${price.slive}</button>
+            <button onclick="buyPlayerCard('${p.id}', 'slive')" class="flex-1 bg-neutral-800 text-violet-400 text-[8px] font-black py-1 rounded border border-neutral-700">🪙${price.slive}</button>
           </div>
         </div>
       `).join('');
@@ -2420,7 +2470,7 @@
       const battleBtn = document.getElementById('draft-battle-btn');
       if (active) {
         badge.innerText = 'СЕРИЯ ИДЁТ';
-        badge.className = 'text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+        badge.className = 'text-[9px] font-black px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-400 border border-violet-500/30';
         battleBtn.disabled = false;
         battleBtn.classList.remove('opacity-40');
         battleBtn.innerText = '⚔️ В БОЙ';
@@ -2464,160 +2514,176 @@
       }
     }
 
-    // Задержка между событиями симулированного матча — просто ощущение "живой"
-    // трансляции; сам исход уже посчитан на сервере (см. simulateDraftMatch
-    // в db.js), тут только проигрываем лог событий по одному.
-    const DRAFT_EVENT_DELAY_MS = 550;
+    // Темп трансляции подобран так, чтобы ВЕСЬ матч (без учёта пауз на
+    // тактику — те ждут игрока и не считаются) занимал около 40 секунд:
+    // раньше все события шли по 650мс и матч из 12 моментов пролетал за
+    // ~8 секунд — не видно было, кто вообще забивает. Голы теперь ощутимо
+    // "весомее" промахов (дольше держатся на экране), плюс есть стартовая
+    // и финальная пауза — вместе с обычным разбросом голов это и даёт
+    // на выходе примерно 35-45 секунд живого эфира.
+    const DRAFT_EVENT_DELAY_GOAL_MS = 3400;
+    const DRAFT_EVENT_DELAY_MISS_MS = 2100;
+    const DRAFT_KICKOFF_DELAY_MS = 1500;
+    const DRAFT_FULLTIME_DELAY_MS = 2200;
+    const DRAFT_PHASE_LABELS = ["1-й тайм (1-22')", "1-й тайм (23-45')", "2-й тайм (46-68')", "2-й тайм (69-90')"];
 
     function sleep(ms) {
       return new Promise(resolve => setTimeout(resolve, ms));
     }
 
-    function pickRandom(arr) {
-      return arr[Math.floor(Math.random() * arr.length)];
+    // Текущий счёт матча живёт тут между сегментами, чтобы фид не сбрасывался
+    // при каждом вызове playSegmentEvents.
+    let draftLiveScore = { attacker: 0, defender: 0 };
+    // Резолвер текущего "ожидания решения" — chooseDraftTactic() дергает его,
+    // когда игрок нажал одну из кнопок тактики.
+    let draftDecisionResolve = null;
+
+    // Обновляет ОДНУ из двух половин счёта (твою/соперника) и коротко
+    // "пульсирует" её — это и есть основной сигнал "кто только что забил",
+    // отдельно от текста в ленте, чтобы было видно даже боковым зрением.
+    function bumpDraftScore(side) {
+      const elId = side === 'attacker' ? 'draft-score-you' : 'draft-score-opp';
+      const pulseClass = side === 'attacker' ? 'score-pulse-you' : 'score-pulse-opp';
+      const el = document.getElementById(elId);
+      if (side === 'attacker') draftLiveScore.attacker++; else draftLiveScore.defender++;
+      el.innerText = side === 'attacker' ? draftLiveScore.attacker : draftLiveScore.defender;
+      el.classList.remove(pulseClass);
+      void el.offsetWidth; // рестарт CSS-анимации при повторном голе подряд
+      el.classList.add(pulseClass);
     }
 
-    // Тактические паузы — чисто presentation-layer штука для вовлечения:
-    // счёт и события уже целиком посчитаны на сервере ЗАРАНЕЕ (simulateDraftMatch),
-    // выбор тренера ничего не меняет в исходе матча, только даёт короткую
-    // реакцию "по мотивам" решения перед следующим моментом.
-    const DRAFT_DECISIONS = [
-      {
-        title: 'Как настроить команду на этот отрезок?',
-        options: [
-          { label: '🔥 Играть первым номером', reactions: ['Команда переходит на высокий прессинг!', 'Атаки пошли одна за другой — соперник напряжён.'] },
-          { label: '🛡️ Сыграть строже в обороне', reactions: ['Линия обороны отходит пониже, играем на встречных.', 'Меньше риска — ждём своего момента.'] },
-        ],
-      },
-      {
-        title: 'Момент затишья — менять что-то в составе?',
-        options: [
-          { label: '🔄 Взбодрить свежими ногами', reactions: ['Темп сразу пошёл выше!', 'Заметно прибавили в движении без мяча.'] },
-          { label: '✋ Оставить всё как есть', reactions: ['Тренер верит в стартовый состав.', 'То, что работает, решили не трогать.'] },
-        ],
-      },
-      {
-        title: 'Соперник поджимает — рискнуть?',
-        options: [
-          { label: '🎲 Пойти ва-банк', reactions: ['Команда бросается вперёд всем составом!', 'Смелое решение — трибуны оценили.'] },
-          { label: '🧊 Сыграть надёжно', reactions: ['Решили не рисковать раньше времени.', 'Хладнокровие — тоже тактика.'] },
-        ],
-      },
-      {
-        title: 'Как ускорить или притормозить игру?',
-        options: [
-          { label: '⚡ Ускорить темп', reactions: ['Игра резко ускорилась на встречных курсах.', 'Обмен атаками пошёл стенка на стенку.'] },
-          { label: '🐢 Придержать мяч', reactions: ['Команда перешла на контроль мяча.', 'Игра стала более позиционной.'] },
-        ],
-      },
-      {
-        title: 'Что сказать команде перед решающими минутами?',
-        options: [
-          { label: '💪 «Верим в победу!»', reactions: ['Заряд получился что надо.', 'Настрой в раздевалке боевой.'] },
-          { label: '🧘 «Спокойно, по делу»', reactions: ['Тренер просит не суетиться.', 'Хладнокровный подход — тоже путь.'] },
-        ],
-      },
-      {
-        title: 'Стандарт у чужих ворот — как разыграть?',
-        options: [
-          { label: '🎯 Бить самому опасному', reactions: ['Ставка на индивидуальное мастерство.', 'Розыгрыш строится вокруг лидера состава.'] },
-          { label: '🤝 Разыграть комбинацией', reactions: ['Команда решает сыграть первым касанием.', 'Ставка на командную комбинацию.'] },
-        ],
-      },
-    ];
-
-    // Раз в 1/4 длины матча, но не меньше 3 и не больше 5 пауз — и никогда на
-    // самом первом или самом последнем событии (чтобы не рвать начало/развязку).
-    function pickDecisionIndices(matchLog) {
-      const n = matchLog.length;
-      if (n < 3) return [];
-      const count = Math.max(3, Math.min(5, Math.round(n / 4)));
-      const usable = Math.min(count, n - 1);
-      const indices = new Set();
-      for (let i = 1; i <= usable; i++) {
-        const idx = Math.max(1, Math.min(n - 1, Math.floor((i * n) / (usable + 1))));
-        indices.add(idx);
+    // Строит одну строку ленты. Твои события ВСЕГДА слева и зелёные, события
+    // соперника ВСЕГДА справа и красные — сторона читается по расположению
+    // ещё до того, как взгляд дойдёт до текста.
+    function buildFeedLine(ev, opponentLabel) {
+      const isYou = ev.side === 'attacker';
+      const align = isYou ? 'justify-start' : 'justify-end';
+      if (ev.type === 'penalty_shootout') {
+        return `<div class="w-full flex justify-center feed-line-in"><div class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-black bg-amber-500/15 text-amber-400 border border-amber-500/30">🥅 Ничья! Решает серия пенальти...</div></div>`;
       }
-      return Array.from(indices).sort((a, b) => a - b);
+      if (ev.type === 'goal') {
+        const who = isYou ? 'ТЫ ЗАБИВАЕШЬ' : `ЗАБИВАЕТ ${String(opponentLabel).toUpperCase()}`;
+        const color = isYou
+          ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40'
+          : 'bg-red-500/15 text-red-400 border-red-500/40';
+        return `<div class="w-full flex ${align} feed-line-in">
+          <div class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-black border ${color} max-w-[88%]">
+            <span class="shrink-0">⚽</span><span class="shrink-0 text-[9px] opacity-70">${ev.minute}'</span><span>${who}!</span>
+          </div>
+        </div>`;
+      }
+      const who = isYou ? 'Твой удар — мимо' : `${opponentLabel} бьёт — мимо`;
+      const color = isYou ? 'text-emerald-500/70 border-emerald-900/40' : 'text-red-500/70 border-red-900/40';
+      return `<div class="w-full flex ${align} feed-line-in">
+        <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-bold bg-neutral-800/50 border ${color} max-w-[88%]">
+          <span class="shrink-0 opacity-60">${ev.minute}'</span><span>${who}</span>
+        </div>
+      </div>`;
     }
 
-    let lastDecisionIdx = -1;
-    function showTacticalPause(nextEvent) {
-      return new Promise(resolve => {
-        const modal = document.getElementById('draft-decision-modal');
-        const minuteEl = document.getElementById('decision-minute');
-        const titleEl = document.getElementById('decision-title');
-        const optsEl = document.getElementById('decision-options');
-        const reactionEl = document.getElementById('decision-reaction');
+    async function playSegmentEvents(events, opponentLabel) {
+      const feed = document.getElementById('draft-match-feed');
 
-        let idx;
-        do { idx = Math.floor(Math.random() * DRAFT_DECISIONS.length); } while (idx === lastDecisionIdx && DRAFT_DECISIONS.length > 1);
-        lastDecisionIdx = idx;
-        const decision = DRAFT_DECISIONS[idx];
+      for (const ev of events) {
+        const delay = ev.type === 'goal' ? DRAFT_EVENT_DELAY_GOAL_MS : DRAFT_EVENT_DELAY_MISS_MS;
+        await sleep(delay);
 
-        minuteEl.innerText = `${nextEvent.minute}' — следующий момент матча`;
-        titleEl.innerText = decision.title;
-        reactionEl.classList.add('hidden');
-        reactionEl.innerText = '';
-        optsEl.innerHTML = '';
+        const wrap = document.createElement('div');
+        wrap.className = 'mb-1.5';
+        wrap.innerHTML = buildFeedLine(ev, opponentLabel);
+        feed.appendChild(wrap);
+        feed.scrollTop = feed.scrollHeight;
 
-        decision.options.forEach(opt => {
-          const btn = document.createElement('button');
-          btn.className = 'w-full bg-neutral-800 border border-neutral-700 rounded-xl py-3 text-sm font-bold text-white transition-all active:scale-95';
-          btn.innerText = opt.label;
-          btn.onclick = async () => {
-            if (navigator.vibrate) navigator.vibrate(15);
-            Array.from(optsEl.children).forEach(b => { b.disabled = true; b.classList.add('opacity-50'); });
-            reactionEl.innerText = pickRandom(opt.reactions);
-            reactionEl.classList.remove('hidden');
-            await sleep(900);
-            modal.classList.add('hidden');
-            resolve();
-          };
-          optsEl.appendChild(btn);
-        });
-
-        modal.classList.remove('hidden');
-      });
+        if (ev.type === 'goal') {
+          bumpDraftScore(ev.side);
+          if (navigator.vibrate) navigator.vibrate(ev.side === 'attacker' ? [20, 40, 20] : 15);
+        }
+      }
     }
 
-    async function playMatchLog(matchLog, opponentLabel) {
+    // Показывает панель тактики и ждёт, пока игрок нажмёт одну из кнопок —
+    // возвращает выбранное действие через Promise, которую резолвит
+    // chooseDraftTactic().
+    function waitForDraftDecision(canSubstitute) {
+      const panel = document.getElementById('draft-decision-panel');
+      const subBtn = document.getElementById('draft-sub-btn');
+      subBtn.disabled = !canSubstitute;
+      subBtn.style.opacity = canSubstitute ? '1' : '0.4';
+      panel.classList.remove('hidden');
+      return new Promise(resolve => { draftDecisionResolve = resolve; });
+    }
+
+    function chooseDraftTactic(action) {
+      const subBtn = document.getElementById('draft-sub-btn');
+      if (action === 'substitute' && subBtn.disabled) return;
+      document.getElementById('draft-decision-panel').classList.add('hidden');
+      if (draftDecisionResolve) {
+        const resolve = draftDecisionResolve;
+        draftDecisionResolve = null;
+        resolve(action);
+      }
+    }
+
+    // Общий "движок" проигрывания интерактивного матча — используется и
+    // Драфтом, и Битвами составами: обе фичи используют одинаковый протокол
+    // (start -> сегмент событий -> решение тактики -> decide -> ... -> finished).
+    async function runInteractiveMatch(startUrl, decideUrl, onStart) {
       const overlay = document.getElementById('draft-match-overlay');
       const feed = document.getElementById('draft-match-feed');
-      const scoreEl = document.getElementById('draft-match-score');
+      const youScoreEl = document.getElementById('draft-score-you');
+      const oppScoreEl = document.getElementById('draft-score-opp');
+      const phaseEl = document.getElementById('draft-match-phase');
+
       feed.innerHTML = '';
-      let myScore = 0, theirScore = 0;
-      scoreEl.innerText = '0 : 0';
+      draftLiveScore = { attacker: 0, defender: 0 };
+      youScoreEl.innerText = '0';
+      oppScoreEl.innerText = '0';
+      phaseEl.innerText = DRAFT_PHASE_LABELS[0];
       overlay.classList.remove('hidden');
 
-      const pauseIndices = new Set(pickDecisionIndices(matchLog));
+      try {
+        // Короткий "свисток к началу" — без него первое событие выскакивало
+        // мгновенно после открытия оверлея, и глаз не успевал понять, что
+        // матч вообще начался.
+        await sleep(DRAFT_KICKOFF_DELAY_MS);
 
-      for (let i = 0; i < matchLog.length; i++) {
-        if (pauseIndices.has(i)) {
-          await showTacticalPause(matchLog[i]);
+        let response = await apiPost(startUrl);
+        // Сервер списывает плату за вход (если она есть, см. Битвы составами)
+        // уже ВНУТРИ /start — до этого колбэка деньги ещё не потрачены, после
+        // него — уже да. onStart даёт вызывающей функции обновить баланс сразу.
+        if (onStart) onStart(response);
+        const opponentLabel = response.opponent.username ? '@' + response.opponent.username : 'Соперник';
+        document.getElementById('draft-score-opp-label').innerText = opponentLabel;
+
+        // Проигрываем сегменты и между ними ждём решения игрока, пока
+        // сервер не пришлёт finished: true (после регулярных сегментов,
+        // плюс доп. время, если счёт был равным — см. maybePlayExtraTime).
+        while (true) {
+          await playSegmentEvents(response.events, opponentLabel);
+          if (response.finished) break;
+
+          const nextPhaseIdx = Math.min(response.segmentsPlayed ?? 1, DRAFT_PHASE_LABELS.length - 1);
+          phaseEl.innerText = DRAFT_PHASE_LABELS[nextPhaseIdx];
+
+          const action = await waitForDraftDecision(response.canSubstitute);
+          response = await apiPost(decideUrl, { matchId: response.matchId, action });
         }
 
-        const ev = matchLog[i];
-        await sleep(DRAFT_EVENT_DELAY_MS);
-        const line = document.createElement('div');
-        line.className = 'text-[11px] py-1 border-b border-neutral-800 flex items-center gap-2';
-
-        if (ev.type === 'penalty_shootout') {
-          line.innerHTML = `<span class="text-neutral-500 w-8">${ev.minute}'</span><span>🥅 Ничья в основное время — решает серия пенальти...</span>`;
-        } else if (ev.type === 'goal') {
-          if (ev.side === 'attacker') myScore++; else theirScore++;
-          const who = ev.side === 'attacker' ? 'Твоя команда' : opponentLabel;
-          line.innerHTML = `<span class="text-neutral-500 w-8">${ev.minute}'</span><span class="text-emerald-400 font-bold">⚽ ГОЛ! ${who} забивает!</span>`;
-        } else {
-          const who = ev.side === 'attacker' ? 'Твоя команда' : opponentLabel;
-          line.innerHTML = `<span class="text-neutral-500 w-8">${ev.minute}'</span><span class="text-neutral-400">${who} бьёт... мимо!</span>`;
-        }
-        feed.appendChild(line);
-        feed.scrollTop = feed.scrollHeight;
-        scoreEl.innerText = `${myScore} : ${theirScore}`;
+        phaseEl.innerText = 'Финальный свисток';
+        await sleep(DRAFT_FULLTIME_DELAY_MS);
+        overlay.classList.add('hidden');
+        return { ok: true, response, opponentLabel };
+      } catch (e) {
+        overlay.classList.add('hidden');
+        return { ok: false, error: e.message };
       }
-      await sleep(600);
-      overlay.classList.add('hidden');
+    }
+
+    function draftScoreLine(response) {
+      let extra = '';
+      if (response.wentToExtraTime) extra = ' (доп. время)';
+      if (response.wentToPenalties) extra = ' (по пенальти)';
+      return `Счёт матча: ${response.score.attacker} : ${response.score.defender}${extra}`;
     }
 
     async function playDraftBattleClick() {
@@ -2625,49 +2691,124 @@
         return alertMsg('Бои драфта работают только внутри Telegram.');
       }
       const battleBtn = document.getElementById('draft-battle-btn');
-      try {
+      battleBtn.disabled = true;
+
+      const { ok, response, opponentLabel, error } = await runInteractiveMatch(
+        '/api/draft/battle/start',
+        '/api/draft/battle/decide'
+      );
+
+      if (!ok) {
+        battleBtn.disabled = false;
+        if (error === 'draft_ended') return alertMsg('Серия уже закончена — войди в драфт заново.');
+        if (error === 'no_opponents') return alertMsg('Пока нет соперников с готовым драфт-составом. Попробуй чуть позже.');
+        if (error === 'no_draft_squad') return alertMsg('Сначала войди в драфт.');
+        return alertMsg('Не удалось провести бой. Попробуй ещё раз.');
+      }
+
+      draftState.squad = response.squad;
+      renderDraftUI();
+      if (response.won) {
+        sliveTokens += response.reward;
+        updateHeader();
+      }
+
+      const resultBlock = document.getElementById('draft-last-result');
+      resultBlock.classList.remove('hidden');
+      resultBlock.innerHTML = response.won
+        ? `<div class="text-violet-400 font-black text-sm">🎉 ПОБЕДА!</div>
+           <div class="text-[10px] text-neutral-400 mt-1">Против ${opponentLabel} (рейтинг ${response.defenderRating}) · ${draftScoreLine(response)}</div>
+           <div class="text-[10px] text-violet-400 mt-1">+${response.reward} 🪙 SLive · +${response.pointsGained} очков в Драфт-топ</div>`
+        : `<div class="text-red-400 font-black text-sm">😔 ПОРАЖЕНИЕ</div>
+           <div class="text-[10px] text-neutral-400 mt-1">Против ${opponentLabel} (рейтинг ${response.defenderRating}) · ${draftScoreLine(response)}</div>
+           <div class="text-[10px] text-red-400 mt-1">Серия закончена — войди в драфт заново, чтобы продолжить.</div>`;
+
+      battleBtn.disabled = false;
+    }
+
+    // ---------- БИТВЫ СОСТАВАМИ (вкладка "Битвы") ----------
+    async function loadBattlesState() {
+      const readyBlock = document.getElementById('battles-ready-block');
+      const notReadyBlock = document.getElementById('battles-not-ready-block');
+      const statsEl = document.getElementById('battles-stats');
+      const battleBtn = document.getElementById('battles-fight-btn');
+      const cooldownEl = document.getElementById('battles-cooldown');
+
+      if (!tg?.initData) {
+        readyBlock.classList.add('hidden');
+        notReadyBlock.classList.remove('hidden');
+        notReadyBlock.innerText = 'Битвы составами работают только внутри Telegram.';
+        return;
+      }
+
+      const state = await apiPost('/api/battles/state');
+      if (!state.ready) {
+        readyBlock.classList.add('hidden');
+        notReadyBlock.classList.remove('hidden');
+        notReadyBlock.innerText = 'Собери полный состав из 5 карт на вкладке "Состав" (GK, DEF, MID, FWD1, FWD2), чтобы биться.';
+        return;
+      }
+
+      readyBlock.classList.remove('hidden');
+      notReadyBlock.classList.add('hidden');
+      document.getElementById('battles-rating').innerText = state.rating;
+      statsEl.innerText = `${state.wins}W — ${state.losses}L`;
+      battleBtn.innerText = `🏆 В БОЙ (${state.entryCost} 🪙)`;
+
+      if (state.cooldownRemainingMs > 0) {
         battleBtn.disabled = true;
-        const result = await apiPost('/api/draft/battle');
-        const opponentLabel = result.opponent.username ? '@' + result.opponent.username : 'соперник';
+        const secs = Math.ceil(state.cooldownRemainingMs / 1000);
+        cooldownEl.classList.remove('hidden');
+        cooldownEl.innerText = `Перезарядка: ${secs} сек.`;
+        setTimeout(loadBattlesState, Math.min(state.cooldownRemainingMs, 3000));
+      } else {
+        battleBtn.disabled = false;
+        cooldownEl.classList.add('hidden');
+      }
+    }
 
-        if (Array.isArray(result.matchLog) && result.matchLog.length) {
-          await playMatchLog(result.matchLog, opponentLabel);
-        }
+    async function playSquadBattleClick() {
+      if (!tg?.initData) {
+        return alertMsg('Битвы составами работают только внутри Telegram.');
+      }
+      const battleBtn = document.getElementById('battles-fight-btn');
+      battleBtn.disabled = true;
 
-        draftState.squad = result.squad;
-        renderDraftUI();
-
-        if (result.won) {
-          sliveTokens += result.reward;
+      const { ok, response, opponentLabel, error } = await runInteractiveMatch(
+        '/api/battles/start',
+        '/api/battles/decide',
+        (startResponse) => {
+          sliveTokens -= startResponse.entryCost;
           updateHeader();
         }
+      );
 
-        const scoreLine = result.score
-          ? `Счёт матча: ${result.score.attacker} : ${result.score.defender}`
-          : '';
-
-        const resultBlock = document.getElementById('draft-last-result');
-        resultBlock.classList.remove('hidden');
-        resultBlock.innerHTML = result.won
-          ? `<div class="text-emerald-400 font-black text-sm">🎉 ПОБЕДА!</div>
-             <div class="text-[10px] text-neutral-400 mt-1">Против ${opponentLabel} (рейтинг ${result.defenderRating}) · ${scoreLine}</div>
-             <div class="text-[10px] text-emerald-400 mt-1">+${result.reward} 🪙 SLive · +${result.pointsGained} очков в Драфт-топ</div>`
-          : `<div class="text-red-400 font-black text-sm">😔 ПОРАЖЕНИЕ</div>
-             <div class="text-[10px] text-neutral-400 mt-1">Против ${opponentLabel} (рейтинг ${result.defenderRating}) · ${scoreLine}</div>
-             <div class="text-[10px] text-red-400 mt-1">Серия закончена — войди в драфт заново, чтобы продолжить.</div>`;
-      } catch (e) {
-        if (e.message === 'draft_ended') {
-          alertMsg('Серия уже закончена — войди в драфт заново.');
-        } else if (e.message === 'no_opponents') {
-          alertMsg('Пока нет соперников с готовым драфт-составом. Попробуй чуть позже.');
-        } else if (e.message === 'no_draft_squad') {
-          alertMsg('Сначала войди в драфт.');
-        } else {
-          alertMsg('Не удалось провести бой. Попробуй ещё раз.');
-        }
-      } finally {
-        battleBtn.disabled = false;
+      if (!ok) {
+        if (error === 'squad_not_ready') alertMsg('Собери полный состав из 5 карт на вкладке "Состав".');
+        else if (error === 'cooldown') alertMsg('Ещё рано — состав отдыхает после прошлого боя.');
+        else if (error === 'no_opponents') alertMsg('Пока нет соперников с готовым составом. Попробуй чуть позже.');
+        else if (error === 'insufficient_funds') alertMsg('Не хватает $SLive на вход в бой (нужно 400 🪙).');
+        else alertMsg('Не удалось провести бой. Попробуй ещё раз.');
+        loadBattlesState();
+        return;
       }
+
+      if (response.won) {
+        sliveTokens += response.reward;
+        updateHeader();
+      }
+
+      const resultBlock = document.getElementById('battles-last-result');
+      resultBlock.classList.remove('hidden');
+      resultBlock.innerHTML = response.won
+        ? `<div class="text-violet-400 font-black text-sm">🏆 ПОБЕДА!</div>
+           <div class="text-[10px] text-neutral-400 mt-1">Против ${opponentLabel} (рейтинг ${response.defenderRating}) · ${draftScoreLine(response)}</div>
+           <div class="text-[10px] text-violet-400 mt-1">+${response.reward} 🪙 SLive</div>`
+        : `<div class="text-red-400 font-black text-sm">😔 ПОРАЖЕНИЕ</div>
+           <div class="text-[10px] text-neutral-400 mt-1">Против ${opponentLabel} (рейтинг ${response.defenderRating}) · ${draftScoreLine(response)}</div>`;
+
+      document.getElementById('battles-stats').innerText = `${response.wins}W — ${response.losses}L`;
+      loadBattlesState();
     }
 
     // Лидерборд драфта — отдельная доска сверху вкладки "Топ" (см. loadLeaderboard
@@ -2688,7 +2829,7 @@
         }
         const medals = ['🥇', '🥈', '🥉'];
         listEl.innerHTML = leaderboard.map((u, i) => `
-          <div class="bg-neutral-900 border ${u.telegramId === myId ? 'border-emerald-500' : 'border-neutral-800'} rounded-xl p-2.5 flex justify-between items-center">
+          <div class="bg-neutral-900 border ${u.telegramId === myId ? 'border-violet-500' : 'border-neutral-800'} rounded-xl p-2.5 flex justify-between items-center">
             <div class="flex items-center gap-2 min-w-0">
               <span class="w-6 text-center font-black shrink-0">${medals[i] || (i + 1)}</span>
               <span class="text-xs font-bold text-white truncate">${u.username ? '@' + u.username : 'ID ' + u.telegramId}</span>
@@ -2703,6 +2844,51 @@
       }
     }
 
+    // Таблица топа "Битв составами" — рендерит настоящие строки таблицы
+    // (та же grid-сетка колонок, что и в шапке в HTML), с медалями на
+    // топ-3 и мини-полосой прогресса под % побед, чтобы разницу между,
+    // скажем, 55% и 80% было видно с одного взгляда, а не только по цифре.
+    async function loadBattleLeaderboard() {
+      const listEl = document.getElementById('battle-leaderboard-list');
+      listEl.innerHTML = '<div class="text-neutral-500 text-xs p-3">Загрузка...</div>';
+      if (!tg?.initData) {
+        listEl.innerHTML = '<div class="text-neutral-500 text-xs p-3">Доступно только внутри Telegram.</div>';
+        return;
+      }
+      try {
+        const { leaderboard } = await apiPost('/api/battles/leaderboard');
+        const myId = String(tg?.initDataUnsafe?.user?.id || '');
+        if (leaderboard.length === 0) {
+          listEl.innerHTML = '<div class="text-neutral-500 text-xs p-3">Пока никто не сыграл в Битвы составами.</div>';
+          return;
+        }
+        const medals = ['🥇', '🥈', '🥉'];
+        listEl.innerHTML = leaderboard.map((u, i) => {
+          const isMe = u.telegramId === myId;
+          const barColor = u.winRate >= 66 ? 'bg-emerald-500' : u.winRate >= 40 ? 'bg-amber-500' : 'bg-red-500';
+          return `
+            <div class="grid grid-cols-[26px_1fr_58px_84px] gap-1 items-center px-3 py-2 ${i % 2 === 0 ? 'bg-white/[0.015]' : ''} ${isMe ? 'bg-violet-500/10' : ''} ${i < leaderboard.length - 1 ? 'border-b border-neutral-800/60' : ''}">
+              <div class="text-xs font-black ${i < 3 ? '' : 'text-neutral-500'}">${medals[i] || (i + 1)}</div>
+              <div class="min-w-0 flex items-center gap-1">
+                <span class="text-[11px] font-bold text-white truncate">${u.username ? '@' + u.username : 'ID ' + u.telegramId}</span>
+                ${isMe ? '<span class="text-[7px] font-black text-violet-400 border border-violet-500/40 rounded px-1 shrink-0">ТЫ</span>' : ''}
+              </div>
+              <div class="text-right text-[10px] font-bold tabular-nums"><span class="text-emerald-400">${u.wins}</span><span class="text-neutral-600">-</span><span class="text-red-400">${u.losses}</span></div>
+              <div class="text-right">
+                <div class="text-[10px] font-black tabular-nums text-white">${u.winRate}%</div>
+                <div class="h-1 w-full bg-neutral-800 rounded-full overflow-hidden mt-0.5">
+                  <div class="h-full ${barColor}" style="width:${u.winRate}%"></div>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      } catch (e) {
+        console.error(e);
+        listEl.innerHTML = '<div class="text-red-400 text-xs p-3">Не удалось загрузить рейтинг Битв составами.</div>';
+      }
+    }
+
     // ---------- СТАВКИ ----------
     // Ивенты и проценты полностью управляются админом (см. АДМИН-ПАНЕЛЬ ниже) —
     // здесь только отрисовка Binance/Fanton-style полос и оформление ставки.
@@ -2714,14 +2900,14 @@
       document.getElementById('bets-events-list').classList.toggle('hidden', view !== 'events');
       document.getElementById('bets-mine-list').classList.toggle('hidden', view !== 'mine');
       document.getElementById('bets-view-events-btn').className =
-        `flex-1 text-[10px] font-black py-2 rounded-lg ${view === 'events' ? 'bg-emerald-500 text-black' : 'bg-neutral-800 text-neutral-300 border border-neutral-700'}`;
+        `seg-btn flex-1 text-[10px] font-black py-2 rounded-lg ${view === 'events' ? 'bg-violet-500 text-black' : 'text-neutral-400'}`;
       document.getElementById('bets-view-mine-btn').className =
-        `flex-1 text-[10px] font-black py-2 rounded-lg ${view === 'mine' ? 'bg-emerald-500 text-black' : 'bg-neutral-800 text-neutral-300 border border-neutral-700'}`;
+        `seg-btn flex-1 text-[10px] font-black py-2 rounded-lg ${view === 'mine' ? 'bg-violet-500 text-black' : 'text-neutral-400'}`;
       if (view === 'events') loadBetEvents(); else loadMyBets();
     }
 
     // Цвета полос по индексу варианта — как разноцветные шкалы в Binance/Fanton.
-    const BET_BAR_COLORS = ['bg-emerald-500', 'bg-red-500', 'bg-amber-400', 'bg-sky-400', 'bg-fuchsia-400'];
+    const BET_BAR_COLORS = ['bg-violet-500', 'bg-red-500', 'bg-amber-400', 'bg-sky-400', 'bg-fuchsia-400'];
 
     async function loadBetEvents() {
       const listEl = document.getElementById('bets-events-list');
@@ -2748,38 +2934,40 @@
       listEl.innerHTML = events.map(ev => {
         const isOpen = ev.status === 'open';
         const statusBadge = ev.status === 'open'
-          ? '<span class="text-[8px] font-black text-emerald-400 border border-emerald-500/40 rounded-full px-2 py-0.5">ОТКРЫТО</span>'
+          ? '<span class="inline-flex items-center gap-1 text-[8px] font-black text-violet-400 border border-violet-500/40 bg-violet-500/10 rounded-full px-2 py-0.5"><span class="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse"></span>ОТКРЫТО</span>'
           : ev.status === 'closed'
-            ? '<span class="text-[8px] font-black text-amber-400 border border-amber-500/40 rounded-full px-2 py-0.5">ПРИЁМ ЗАКРЫТ</span>'
-            : '<span class="text-[8px] font-black text-neutral-400 border border-neutral-600 rounded-full px-2 py-0.5">ЗАВЕРШЁН</span>';
+            ? '<span class="inline-flex items-center gap-1 text-[8px] font-black text-amber-400 border border-amber-500/40 bg-amber-500/10 rounded-full px-2 py-0.5"><span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>ПРИЁМ ЗАКРЫТ</span>'
+            : '<span class="inline-flex items-center gap-1 text-[8px] font-black text-neutral-400 border border-neutral-600 bg-neutral-800 rounded-full px-2 py-0.5"><span class="w-1.5 h-1.5 rounded-full bg-neutral-500"></span>ЗАВЕРШЁН</span>';
 
         const optionsHtml = ev.options.map((opt, i) => {
           const color = BET_BAR_COLORS[i % BET_BAR_COLORS.length];
           const isWinner = ev.resolvedOptionId === opt.id;
           const clickable = isOpen ? `onclick="openBetModal('${ev.id}','${opt.id}','${opt.label.replace(/'/g, "\\'")}',${opt.multiplier})"` : '';
           return `
-            <div class="relative ${isOpen ? 'cursor-pointer' : ''}" ${clickable}>
+            <div class="bet-option-row relative ${isOpen ? 'cursor-pointer' : ''} ${isWinner ? 'ring-1 ring-amber-400/60 rounded-xl p-1.5 bg-amber-400/5' : ''}" ${clickable}>
               <div class="flex justify-between items-center text-[9px] mb-0.5">
                 <span class="font-bold text-white flex items-center gap-1">${opt.label}${isWinner ? ' 🏆' : ''}</span>
-                <span class="text-neutral-400">${opt.percent}% · x${opt.multiplier}</span>
+                <span class="text-neutral-400 font-bold">${opt.percent}% <span class="text-neutral-600">·</span> <span class="text-emerald-400">x${opt.multiplier}</span></span>
               </div>
               <div class="w-full bg-neutral-800 rounded-full h-3 overflow-hidden">
-                <div class="${isWinner ? 'bg-amber-400' : color} h-3 rounded-full transition-all" style="width:${Math.min(100, opt.percent)}%"></div>
+                <div class="${isWinner ? 'bg-gradient-to-r from-amber-400 to-yellow-300' : color} h-3 rounded-full transition-all" style="width:${Math.min(100, opt.percent)}%"></div>
               </div>
             </div>
           `;
         }).join('');
 
         return `
-        <div class="bg-neutral-900 border ${ev.status === 'resolved' ? 'border-neutral-800' : 'border-emerald-500/20'} rounded-2xl p-3">
+        <div class="bet-event-card ${isOpen ? 'is-open' : ''} bg-neutral-900 border ${ev.status === 'resolved' ? 'border-neutral-800' : 'border-violet-500/25'} rounded-2xl p-3">
           <div class="flex justify-between items-start gap-2 mb-1">
             <div class="text-xs font-black text-white">${ev.title}</div>
             ${statusBadge}
           </div>
           ${ev.description ? `<p class="text-[9px] text-neutral-500 mb-2">${ev.description}</p>` : ''}
           <div class="space-y-2 mb-2">${optionsHtml}</div>
-          <div class="text-[9px] text-neutral-500">Банк: <span class="text-emerald-400 font-bold">🪙 ${ev.totalPool.toLocaleString()}</span></div>
-          ${ev.status === 'resolved' ? `<div class="text-[9px] text-amber-400 font-bold mt-1">Исход: ${ev.options.find(o => o.id === ev.resolvedOptionId)?.label || '—'}</div>` : ''}
+          <div class="flex justify-between items-center pt-2 border-t border-neutral-800/70">
+            <div class="text-[9px] text-neutral-500">Банк: <span class="text-violet-400 font-bold">🪙 ${ev.totalPool.toLocaleString()}</span></div>
+            ${ev.status === 'resolved' ? `<div class="text-[9px] text-amber-400 font-bold">🏆 ${ev.options.find(o => o.id === ev.resolvedOptionId)?.label || '—'}</div>` : ''}
+          </div>
         </div>
       `}).join('');
     }
@@ -2845,12 +3033,13 @@
         }
         listEl.innerHTML = bets.map(b => {
           const statusLabel = b.status === 'won'
-            ? `<span class="text-emerald-400 font-black">🏆 +${b.payout}</span>`
+            ? `<span class="text-emerald-400 font-black">🏆 +${b.payout.toLocaleString()}</span>`
             : b.status === 'lost'
               ? '<span class="text-red-400 font-black">Проигрыш</span>'
-              : '<span class="text-amber-400 font-black">Ожидание</span>';
+              : '<span class="text-amber-400 font-black">⏳ Ожидание</span>';
+          const accent = b.status === 'won' ? 'accent-emerald' : b.status === 'lost' ? 'accent-red' : 'accent-amber';
           return `
-          <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-2.5 flex justify-between items-center">
+          <div class="panel-card ${accent} p-2.5 flex justify-between items-center">
             <div class="min-w-0">
               <div class="text-[11px] font-bold text-white truncate">${b.eventTitle}</div>
               <div class="text-[9px] text-neutral-500">${b.optionLabel} · x${b.multiplier} · 🪙 ${b.amount.toLocaleString()}</div>
@@ -2904,7 +3093,7 @@
           <div class="flex flex-col items-center gap-1 bg-neutral-900 border border-neutral-800 rounded-xl p-2">
             <div class="relative">
               ${genCardHTML(p, false)}
-              ${count > 1 ? `<div class="absolute -top-1 -right-1 bg-emerald-500 text-black text-[8px] font-black rounded-full w-4 h-4 flex items-center justify-center">${count}</div>` : ''}
+              ${count > 1 ? `<div class="absolute -top-1 -right-1 bg-violet-500 text-black text-[8px] font-black rounded-full w-4 h-4 flex items-center justify-center">${count}</div>` : ''}
             </div>
             ${actionHTML}
           </div>`;
