@@ -4,6 +4,7 @@ import fs from 'fs';
 import express from 'express';
 import cors from 'cors';
 import fetch from 'node-fetch';
+import { randomUUID } from 'crypto';
 import { validateInitData } from './telegramAuth.js';
 import {
   ensureUser,
@@ -31,8 +32,14 @@ import {
   canUseFreeDraftEntry,
   startDraft,
   getDraftState,
-  playDraftBattle,
+  beginDraftBattle,
+  simulateDraftSegment,
+  finalizeDraftBattle,
   getDraftLeaderboard,
+  beginSquadBattle,
+  getSquadBattleState,
+  finalizeSquadBattle,
+  getSquadBattleLeaderboard,
   payoutDraftTopIfNeeded,
   createBetEvent,
   closeBetEvent,
@@ -526,20 +533,201 @@ app.post('/api/draft/start', requireTelegramAuth, async (req, res) => {
   res.json({ ok: true, balance: spendResult.balance, currency, ...result });
 });
 
-// Один PvP-бой против случайного соперника с готовым драфт-составом. Победа
-// даёт награду и очки в лидерборд драфта; поражение сразу завершает серию —
-// новый бой потребует новый вход через /api/draft/start.
-app.post('/api/draft/battle', requireTelegramAuth, async (req, res) => {
-  const telegramId = String(req.telegramUser.id);
-  const result = await playDraftBattle({ telegramId });
-  if (!result.ok) {
-    return res.status(409).json({ error: result.reason });
+// ---------- ДРАФТ: интерактивный матч ----------
+// Матч разыгрывается в 3 сегментах по 3 опасных момента (см.
+// simulateDraftSegment в db.js). После 1-го и 2-го сегмента игрок выбирает
+// тактику на следующий отрезок — это и есть "реальное игровое решение" в
+// бою, а не мгновенный бросок кубика. Состояние боя между запросами живёт
+// в памяти процесса (не в БД — это одноразовое эфемерное состояние ровно
+// одного текущего боя), с TTL на случай, если игрок бросил бой на середине.
+const draftMatchSessions = new Map();
+const DRAFT_SESSION_TTL_MS = 10 * 60 * 1000; // 10 минут на "зависший" бой
+setInterval(() => {
+  const cutoff = Date.now() - DRAFT_SESSION_TTL_MS;
+  for (const [matchId, session] of draftMatchSessions) {
+    if (session.createdAt < cutoff) draftMatchSessions.delete(matchId);
   }
+}, 60 * 1000).unref();
+
+// 4 отрезка вместо 3 — матч стал заметно длиннее (12 моментов вместо 9 +
+// доп. время) и решений у игрока теперь 3 (после 1, 2 и 3 отрезков), а не 2.
+const DRAFT_SEGMENT_RANGES = [[1, 22], [23, 45], [46, 68], [69, 90]];
+const DRAFT_TOTAL_SEGMENTS = DRAFT_SEGMENT_RANGES.length;
+
+// Тактика влияет на ЭТОТ сегмент — и эффект теперь заметно сильнее, чтобы
+// решение игрока реально двигало исход, а не было косметикой:
+// "attack" — сильно давит на ворота соперника ценой открытой, голевой игры
+// с обеих сторон; "defend" — надёжно закрывается, но почти не создаёт своих
+// моментов; "counter" — сознательно отдаёт инициативу (мало своих моментов),
+// зато реализует их почти без промаха — ставка на несколько чётких контратак
+// вместо давления; "substitute" не меняет характер игры в сегменте, зато даёт
+// постоянную прибавку к рейтингу до конца матча (доступно 1 раз за бой);
+// "normal" — играть как играли, без изменений.
+function tacticModifiers(action, alreadySubUsed) {
+  if (action === 'attack') return { ratingBoost: 16, scoreChance: 0.62, consumesSub: false };
+  if (action === 'defend') return { ratingBoost: -10, scoreChance: 0.26, consumesSub: false };
+  if (action === 'counter') return { ratingBoost: -14, scoreChance: 0.72, consumesSub: false };
+  if (action === 'substitute') {
+    if (alreadySubUsed) return null;
+    return { ratingBoost: 0, scoreChance: 0.45, consumesSub: true, permanentBoost: 12 };
+  }
+  return { ratingBoost: 0, scoreChance: 0.45, consumesSub: false };
+}
+
+// Начинает бой: подбирает соперника и разыгрывает 1-й сегмент (без решения —
+// матч всегда открывается обычной игрой). Дальше клиент показывает эти
+// события и предлагает выбрать тактику на 2-й сегмент через /decide.
+app.post('/api/draft/battle/start', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  const begin = await beginDraftBattle({ telegramId });
+  if (!begin.ok) {
+    return res.status(409).json({ error: begin.reason });
+  }
+
+  const [minuteFrom, minuteTo] = DRAFT_SEGMENT_RANGES[0];
+  const segment = simulateDraftSegment({
+    attackerRating: begin.attackerRating,
+    defenderRating: begin.defenderRating,
+    minuteFrom,
+    minuteTo,
+  });
+
+  const matchId = randomUUID();
+  draftMatchSessions.set(matchId, {
+    telegramId,
+    attackerRating: begin.attackerRating,
+    defenderRating: begin.defenderRating,
+    opponent: begin.opponent,
+    segmentsPlayed: 1,
+    permanentBoost: 0,
+    subUsed: false,
+    attackerGoals: segment.attackerGoals,
+    defenderGoals: segment.defenderGoals,
+    createdAt: Date.now(),
+  });
+
+  res.json({
+    ok: true,
+    matchId,
+    events: segment.events,
+    score: { attacker: segment.attackerGoals, defender: segment.defenderGoals },
+    opponent: begin.opponent,
+    defenderRating: begin.defenderRating,
+    finished: false,
+    decisionRequired: true,
+    canSubstitute: true,
+    segmentsPlayed: 1,
+  });
+});
+
+// Применяет выбранную тактику и разыгрывает следующий сегмент. Если это был
+// последний (3-й) сегмент — сразу подводит итог боя через finalizeDraftBattle
+// (начисляет награду/очки или завершает серию при поражении).
+// Доп. время: если после всех обычных сегментов счёт равный, разыгрываем ещё
+// один короткий отрезок (91-120', 2 момента, без тактики — "открытый футбол"
+// в дополнительное время) прежде чем отдавать судьбу серии пенальти. Общая
+// логика для Драфта и Битв составами — обе используют одинаковую структуру
+// сессии (attackerGoals/defenderGoals/permanentBoost).
+const EXTRA_TIME_RANGE = [91, 120];
+const EXTRA_TIME_MOMENTS = 2;
+
+function maybePlayExtraTime(session) {
+  if (session.attackerGoals !== session.defenderGoals) return [];
+  const [minuteFrom, minuteTo] = EXTRA_TIME_RANGE;
+  const extra = simulateDraftSegment({
+    attackerRating: session.attackerRating + session.permanentBoost,
+    defenderRating: session.defenderRating,
+    minuteFrom,
+    minuteTo,
+    moments: EXTRA_TIME_MOMENTS,
+  });
+  session.attackerGoals += extra.attackerGoals;
+  session.defenderGoals += extra.defenderGoals;
+  return extra.events;
+}
+
+app.post('/api/draft/battle/decide', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  const { matchId, action } = req.body;
+
+  const session = draftMatchSessions.get(matchId);
+  if (!session || session.telegramId !== telegramId) {
+    return res.status(409).json({ error: 'no_active_match' });
+  }
+  if (session.segmentsPlayed >= DRAFT_TOTAL_SEGMENTS) {
+    draftMatchSessions.delete(matchId);
+    return res.status(409).json({ error: 'match_already_finished' });
+  }
+
+  const mod = tacticModifiers(action, session.subUsed);
+  if (!mod) {
+    return res.status(409).json({ error: 'substitute_already_used' });
+  }
+  if (mod.consumesSub) {
+    session.subUsed = true;
+    session.permanentBoost += mod.permanentBoost;
+  }
+
+  const [minuteFrom, minuteTo] = DRAFT_SEGMENT_RANGES[session.segmentsPlayed];
+  const segment = simulateDraftSegment({
+    attackerRating: session.attackerRating + session.permanentBoost,
+    defenderRating: session.defenderRating,
+    minuteFrom,
+    minuteTo,
+    ratingBoost: mod.ratingBoost,
+    scoreChance: mod.scoreChance,
+  });
+  session.attackerGoals += segment.attackerGoals;
+  session.defenderGoals += segment.defenderGoals;
+  session.segmentsPlayed += 1;
+
+  const finished = session.segmentsPlayed >= DRAFT_TOTAL_SEGMENTS;
+  let allEvents = segment.events;
+
+  if (!finished) {
+    return res.json({
+      ok: true,
+      matchId,
+      events: allEvents,
+      score: { attacker: session.attackerGoals, defender: session.defenderGoals },
+      finished: false,
+      decisionRequired: true,
+      canSubstitute: !session.subUsed,
+      segmentsPlayed: session.segmentsPlayed,
+    });
+  }
+
+  const extraEvents = maybePlayExtraTime(session);
+  if (extraEvents.length) allEvents = allEvents.concat(extraEvents);
+
+  const result = await finalizeDraftBattle({
+    telegramId,
+    attackerGoals: session.attackerGoals,
+    defenderGoals: session.defenderGoals,
+  });
+  draftMatchSessions.delete(matchId);
+
   if (result.won) {
-    const opponentLabel = result.opponent.username ? `@${result.opponent.username}` : 'соперника';
+    const opponentLabel = session.opponent.username ? `@${session.opponent.username}` : 'соперника';
     notifyUser(telegramId, `⚔️ Победа в Драфт-битве против ${opponentLabel}! +${result.reward} 🪙 SLive.`);
   }
-  res.json(result);
+
+  res.json({
+    ok: true,
+    matchId,
+    events: allEvents,
+    score: { attacker: session.attackerGoals, defender: session.defenderGoals },
+    finished: true,
+    decisionRequired: false,
+    wentToPenalties: result.wentToPenalties,
+    wentToExtraTime: extraEvents.length > 0,
+    won: result.won,
+    reward: result.reward,
+    pointsGained: result.pointsGained,
+    opponent: session.opponent,
+    defenderRating: session.defenderRating,
+    squad: result.squad,
+  });
 });
 
 // Лидерборд драфта (по накопительным очкам total_points) — отдельный от
@@ -548,6 +736,170 @@ app.post('/api/draft/leaderboard', requireTelegramAuth, async (req, res) => {
   const leaderboard = await getDraftLeaderboard(10);
   res.json({ leaderboard });
 });
+
+// ---------- БИТВЫ СОСТАВАМИ ----------
+// Отдельный от Драфта режим: бьётся ОБЫЧНЫЙ состав "Мой клуб" (вкладка
+// СОСТАВ) — те же карты, что фармят $SLive пассивно. В отличие от Драфта тут
+// нет "жизни серии": проигрыш просто идёт в статистику побед/поражений, а
+// между боями — перезарядка (см. SQUAD_BATTLE_COOLDOWN_MS в db.js), чтобы
+// нельзя было фармить награду бесконечно. Механика самого матча (сегменты,
+// тактика, замена, доп. время) — точно та же, что в Драфте, через общие
+// simulateDraftSegment/maybePlayExtraTime.
+const squadBattleSessions = new Map();
+
+app.post('/api/battles/state', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  const state = await getSquadBattleState({ telegramId });
+  res.json(state);
+});
+
+app.post('/api/battles/start', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  const begin = await beginSquadBattle({ telegramId });
+  if (!begin.ok) {
+    const extra = begin.reason === 'cooldown'
+      ? { retryInMs: begin.retryInMs }
+      : begin.reason === 'insufficient_funds'
+        ? { balance: begin.balance, required: begin.required }
+        : {};
+    return res.status(409).json({ error: begin.reason, ...extra });
+  }
+
+  const [minuteFrom, minuteTo] = DRAFT_SEGMENT_RANGES[0];
+  const segment = simulateDraftSegment({
+    attackerRating: begin.attackerRating,
+    defenderRating: begin.defenderRating,
+    minuteFrom,
+    minuteTo,
+  });
+
+  const matchId = randomUUID();
+  squadBattleSessions.set(matchId, {
+    telegramId,
+    attackerRating: begin.attackerRating,
+    defenderRating: begin.defenderRating,
+    opponent: begin.opponent,
+    segmentsPlayed: 1,
+    permanentBoost: 0,
+    subUsed: false,
+    attackerGoals: segment.attackerGoals,
+    defenderGoals: segment.defenderGoals,
+    createdAt: Date.now(),
+  });
+
+  res.json({
+    ok: true,
+    matchId,
+    events: segment.events,
+    score: { attacker: segment.attackerGoals, defender: segment.defenderGoals },
+    opponent: begin.opponent,
+    defenderRating: begin.defenderRating,
+    entryCost: begin.entryCost,
+    finished: false,
+    decisionRequired: true,
+    canSubstitute: true,
+    segmentsPlayed: 1,
+  });
+});
+
+app.post('/api/battles/decide', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  const { matchId, action } = req.body;
+
+  const session = squadBattleSessions.get(matchId);
+  if (!session || session.telegramId !== telegramId) {
+    return res.status(409).json({ error: 'no_active_match' });
+  }
+  if (session.segmentsPlayed >= DRAFT_TOTAL_SEGMENTS) {
+    squadBattleSessions.delete(matchId);
+    return res.status(409).json({ error: 'match_already_finished' });
+  }
+
+  const mod = tacticModifiers(action, session.subUsed);
+  if (!mod) {
+    return res.status(409).json({ error: 'substitute_already_used' });
+  }
+  if (mod.consumesSub) {
+    session.subUsed = true;
+    session.permanentBoost += mod.permanentBoost;
+  }
+
+  const [minuteFrom, minuteTo] = DRAFT_SEGMENT_RANGES[session.segmentsPlayed];
+  const segment = simulateDraftSegment({
+    attackerRating: session.attackerRating + session.permanentBoost,
+    defenderRating: session.defenderRating,
+    minuteFrom,
+    minuteTo,
+    ratingBoost: mod.ratingBoost,
+    scoreChance: mod.scoreChance,
+  });
+  session.attackerGoals += segment.attackerGoals;
+  session.defenderGoals += segment.defenderGoals;
+  session.segmentsPlayed += 1;
+
+  const finished = session.segmentsPlayed >= DRAFT_TOTAL_SEGMENTS;
+  let allEvents = segment.events;
+
+  if (!finished) {
+    return res.json({
+      ok: true,
+      matchId,
+      events: allEvents,
+      score: { attacker: session.attackerGoals, defender: session.defenderGoals },
+      finished: false,
+      decisionRequired: true,
+      canSubstitute: !session.subUsed,
+      segmentsPlayed: session.segmentsPlayed,
+    });
+  }
+
+  const extraEvents = maybePlayExtraTime(session);
+  if (extraEvents.length) allEvents = allEvents.concat(extraEvents);
+
+  const result = await finalizeSquadBattle({
+    telegramId,
+    attackerGoals: session.attackerGoals,
+    defenderGoals: session.defenderGoals,
+  });
+  squadBattleSessions.delete(matchId);
+
+  if (result.won) {
+    const opponentLabel = session.opponent.username ? `@${session.opponent.username}` : 'соперника';
+    notifyUser(telegramId, `🏆 Победа в Битве составами против ${opponentLabel}! +${result.reward} 🪙 SLive.`);
+  }
+
+  res.json({
+    ok: true,
+    matchId,
+    events: allEvents,
+    score: { attacker: session.attackerGoals, defender: session.defenderGoals },
+    finished: true,
+    decisionRequired: false,
+    wentToPenalties: result.wentToPenalties,
+    wentToExtraTime: extraEvents.length > 0,
+    won: result.won,
+    reward: result.reward,
+    wins: result.wins,
+    losses: result.losses,
+    opponent: session.opponent,
+    defenderRating: session.defenderRating,
+  });
+});
+
+// Таблица топа "Битв составами" по победам — показывается на вкладке "Топ"
+// вместе с лидербордом Драфта и рейтингом по балансу $SLive.
+app.post('/api/battles/leaderboard', requireTelegramAuth, async (req, res) => {
+  const leaderboard = await getSquadBattleLeaderboard(10);
+  res.json({ leaderboard });
+});
+
+// Чистим зависшие сессии Битв составами той же логикой TTL, что и Драфт.
+setInterval(() => {
+  const cutoff = Date.now() - DRAFT_SESSION_TTL_MS;
+  for (const [matchId, session] of squadBattleSessions) {
+    if (session.createdAt < cutoff) squadBattleSessions.delete(matchId);
+  }
+}, 60 * 1000).unref();
 
 // ---------- Ставки за $SLive ----------
 // Всё содержимое (ивенты, варианты, проценты/коэффициенты) полностью
