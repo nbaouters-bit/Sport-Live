@@ -100,18 +100,18 @@ const MAX_CUSTOM_STARS = 100000;
 // Цены ниже — единственный источник правды, ПОДГОНЯЙТЕ КНОПКИ В index.html ПОД НИХ,
 // а не наоборот.
 const GAME_PACKS = {
-  bronze: { price: 20, currency: 'stars' },
-  silver: { price: 50, currency: 'stars' },
-  gold: { price: 200, currency: 'stars' },
-  legend: { price: 1000, currency: 'stars' },
+  bronze: { price: 40, currency: 'stars' },
+  silver: { price: 100, currency: 'stars' },
+  gold: { price: 400, currency: 'stars' },
+  legend: { price: 2000, currency: 'stars' },
 };
 
 // Паки за внутриигровую валюту $SLive — те же паки, но с ценой в SLive.
 const GAME_PACKS_SLIVE = {
-  bronze: 500,
-  silver: 2500,
-  gold: 10000,
-  legend: 50000,
+  bronze: 1000,
+  silver: 5000,
+  gold: 20000,
+  legend: 100000,
 };
 
 // Цена VIP-статуса в Stars (разовая покупка, см. /api/buy-vip).
@@ -554,24 +554,58 @@ setInterval(() => {
 const DRAFT_SEGMENT_RANGES = [[1, 22], [23, 45], [46, 68], [69, 90]];
 const DRAFT_TOTAL_SEGMENTS = DRAFT_SEGMENT_RANGES.length;
 
-// Тактика влияет на ЭТОТ сегмент — и эффект теперь заметно сильнее, чтобы
-// решение игрока реально двигало исход, а не было косметикой:
-// "attack" — сильно давит на ворота соперника ценой открытой, голевой игры
-// с обеих сторон; "defend" — надёжно закрывается, но почти не создаёт своих
-// моментов; "counter" — сознательно отдаёт инициативу (мало своих моментов),
-// зато реализует их почти без промаха — ставка на несколько чётких контратак
-// вместо давления; "substitute" не меняет характер игры в сегменте, зато даёт
-// постоянную прибавку к рейтингу до конца матча (доступно 1 раз за бой);
-// "normal" — играть как играли, без изменений.
-function tacticModifiers(action, alreadySubUsed) {
-  if (action === 'attack') return { ratingBoost: 16, scoreChance: 0.62, consumesSub: false };
-  if (action === 'defend') return { ratingBoost: -10, scoreChance: 0.26, consumesSub: false };
-  if (action === 'counter') return { ratingBoost: -14, scoreChance: 0.72, consumesSub: false };
-  if (action === 'substitute') {
-    if (alreadySubUsed) return null;
-    return { ratingBoost: 0, scoreChance: 0.45, consumesSub: true, permanentBoost: 12 };
+// Тактика влияет на ЭТОТ сегмент по двум независимым осям:
+//  ratingBoost — сдвигает "долю моментов" в твою пользу (сколько из 3
+//    моментов сегмента достанутся тебе, а не сопернику);
+//  scoreChance — "открытость" игры: с какой вероятностью КАЖДЫЙ момент (не
+//    важно, чей) превращается в гол. Чем выше — тем более обменный, дёрганый
+//    футбол (может влететь и тебе, и сопернику), чем ниже — тем более вязкая,
+//    закрытая игра почти в ноль.
+// Раньше выбор сводился к 4 вариантам (атака/оборона/контратака/замена).
+// Теперь у игрока 9 обычных стилей на каждое решение — они реально разные
+// по профилю риска, а не просто "сильнее/слабее" одного и того же вектора:
+//  attack      — давим по всей ширине поля, игра открытая в обе стороны
+//  gegenpress  — экстремальный прессинг: моментов ещё больше, чем в attack,
+//                и хаоса тоже больше — ва-банк, когда горим по счёту
+//  press       — умеренный прессинг: чуть больше своих моментов, умеренный хаос
+//  wings       — атака через фланги: промежуточный вариант между press и attack
+//  possession  — контроль мяча: моментов у тебя больше, но игра при этом
+//                аккуратная и низкая по хаосу (терпеливый розыгрыш, а не обмен)
+//  normal      — играть как играли, без изменений
+//  long_ball   — игра вторым темпом: отдаём часть контроля, зато каждый
+//                момент — что твой, что соперника — острый и часто голевой
+//  counter     — сознательно отдаём инициативу, зато реализуем свои редкие
+//                моменты почти без промаха
+//  defend      — компактный средний блок, надёжно, но почти без своих атак
+//  park_bus    — автобус у ворот: почти все моменты у соперника, но игра
+//                топится в ноль — не забивает почти никто
+// Плюс два разовых спецрешения (по одному использованию за матч каждое —
+// независимо друг от друга, можно применить оба в разные сегменты):
+//  substitute  — не меняет характер ЭТОГО сегмента, зато даёт ПОСТОЯННУЮ
+//                прибавку к рейтингу до конца матча — вклад в долгую
+//  motivate    — речь в раздевалке: не трогает долю моментов, но резко
+//                поднимает реализацию ТОЛЬКО в этом сегменте — ставка на один
+//                решающий отрезок здесь и сейчас
+function tacticModifiers(action, used = {}) {
+  switch (action) {
+    case 'attack': return { ratingBoost: 16, scoreChance: 0.62 };
+    case 'gegenpress': return { ratingBoost: 22, scoreChance: 0.70 };
+    case 'press': return { ratingBoost: 9, scoreChance: 0.52 };
+    case 'wings': return { ratingBoost: 12, scoreChance: 0.56 };
+    case 'possession': return { ratingBoost: 7, scoreChance: 0.34 };
+    case 'long_ball': return { ratingBoost: -6, scoreChance: 0.58 };
+    case 'counter': return { ratingBoost: -14, scoreChance: 0.72 };
+    case 'defend': return { ratingBoost: -10, scoreChance: 0.26 };
+    case 'park_bus': return { ratingBoost: -20, scoreChance: 0.14 };
+    case 'substitute':
+      if (used.substitute) return null;
+      return { ratingBoost: 0, scoreChance: 0.45, consumesSpecial: 'substitute', permanentBoost: 12 };
+    case 'motivate':
+      if (used.motivate) return null;
+      return { ratingBoost: 0, scoreChance: 0.82, consumesSpecial: 'motivate' };
+    default:
+      return { ratingBoost: 0, scoreChance: 0.45 };
   }
-  return { ratingBoost: 0, scoreChance: 0.45, consumesSub: false };
 }
 
 // Начинает бой: подбирает соперника и разыгрывает 1-й сегмент (без решения —
@@ -600,7 +634,7 @@ app.post('/api/draft/battle/start', requireTelegramAuth, async (req, res) => {
     opponent: begin.opponent,
     segmentsPlayed: 1,
     permanentBoost: 0,
-    subUsed: false,
+    usedSpecials: { substitute: false, motivate: false },
     attackerGoals: segment.attackerGoals,
     defenderGoals: segment.defenderGoals,
     createdAt: Date.now(),
@@ -616,6 +650,7 @@ app.post('/api/draft/battle/start', requireTelegramAuth, async (req, res) => {
     finished: false,
     decisionRequired: true,
     canSubstitute: true,
+    canMotivate: true,
     segmentsPlayed: 1,
   });
 });
@@ -659,13 +694,13 @@ app.post('/api/draft/battle/decide', requireTelegramAuth, async (req, res) => {
     return res.status(409).json({ error: 'match_already_finished' });
   }
 
-  const mod = tacticModifiers(action, session.subUsed);
+  const mod = tacticModifiers(action, session.usedSpecials);
   if (!mod) {
-    return res.status(409).json({ error: 'substitute_already_used' });
+    return res.status(409).json({ error: `${action}_already_used` });
   }
-  if (mod.consumesSub) {
-    session.subUsed = true;
-    session.permanentBoost += mod.permanentBoost;
+  if (mod.consumesSpecial) {
+    session.usedSpecials[mod.consumesSpecial] = true;
+    if (mod.permanentBoost) session.permanentBoost += mod.permanentBoost;
   }
 
   const [minuteFrom, minuteTo] = DRAFT_SEGMENT_RANGES[session.segmentsPlayed];
@@ -692,7 +727,8 @@ app.post('/api/draft/battle/decide', requireTelegramAuth, async (req, res) => {
       score: { attacker: session.attackerGoals, defender: session.defenderGoals },
       finished: false,
       decisionRequired: true,
-      canSubstitute: !session.subUsed,
+      canSubstitute: !session.usedSpecials.substitute,
+      canMotivate: !session.usedSpecials.motivate,
       segmentsPlayed: session.segmentsPlayed,
     });
   }
@@ -781,7 +817,7 @@ app.post('/api/battles/start', requireTelegramAuth, async (req, res) => {
     opponent: begin.opponent,
     segmentsPlayed: 1,
     permanentBoost: 0,
-    subUsed: false,
+    usedSpecials: { substitute: false, motivate: false },
     attackerGoals: segment.attackerGoals,
     defenderGoals: segment.defenderGoals,
     createdAt: Date.now(),
@@ -798,6 +834,7 @@ app.post('/api/battles/start', requireTelegramAuth, async (req, res) => {
     finished: false,
     decisionRequired: true,
     canSubstitute: true,
+    canMotivate: true,
     segmentsPlayed: 1,
   });
 });
@@ -815,13 +852,13 @@ app.post('/api/battles/decide', requireTelegramAuth, async (req, res) => {
     return res.status(409).json({ error: 'match_already_finished' });
   }
 
-  const mod = tacticModifiers(action, session.subUsed);
+  const mod = tacticModifiers(action, session.usedSpecials);
   if (!mod) {
-    return res.status(409).json({ error: 'substitute_already_used' });
+    return res.status(409).json({ error: `${action}_already_used` });
   }
-  if (mod.consumesSub) {
-    session.subUsed = true;
-    session.permanentBoost += mod.permanentBoost;
+  if (mod.consumesSpecial) {
+    session.usedSpecials[mod.consumesSpecial] = true;
+    if (mod.permanentBoost) session.permanentBoost += mod.permanentBoost;
   }
 
   const [minuteFrom, minuteTo] = DRAFT_SEGMENT_RANGES[session.segmentsPlayed];
@@ -848,7 +885,8 @@ app.post('/api/battles/decide', requireTelegramAuth, async (req, res) => {
       score: { attacker: session.attackerGoals, defender: session.defenderGoals },
       finished: false,
       decisionRequired: true,
-      canSubstitute: !session.subUsed,
+      canSubstitute: !session.usedSpecials.substitute,
+      canMotivate: !session.usedSpecials.motivate,
       segmentsPlayed: session.segmentsPlayed,
     });
   }
