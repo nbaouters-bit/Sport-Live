@@ -35,10 +35,8 @@ const MAX_TAP_PER_REQUEST = 50;
 // ---------- Драфт: константы наград/очков ----------
 // Награда $SLive за одну победу в PvP-бою драфта.
 const DRAFT_WIN_REWARD_SLIVE = 300;
-// Очки в лидерборд драфта за победу — копятся в рамках ТЕКУЩЕГО 24-часового
-// сезона лидерборда: раз в сутки (см. payoutDraftTopIfNeeded) лидер получает
-// награду и total_points у ВСЕХ игроков обнуляется — топ начинается заново
-// (обнуляется только wins текущей серии).
+// Очки в лидерборд драфта за победу — копятся весь "карьерный" срок игрока,
+// не обнуляются между сериями (обнуляется только wins текущей серии).
 const DRAFT_WIN_POINTS = 3;
 // Шкала ELO-подобной формулы шанса победы: чем МЕНЬШЕ значение, тем сильнее
 // разница в рейтинге решает исход (меньше шансов на апсет). При равных
@@ -102,6 +100,16 @@ db.exec(`
     total_points         INTEGER NOT NULL DEFAULT 0, -- очки лидерборда — накопительно, никогда не обнуляются
     last_free_entry_day  INTEGER NOT NULL DEFAULT -1,-- dayIndex() последнего входа ЗА $SLIVE (для лимита 1/сутки)
     drafted_at           INTEGER NOT NULL
+  );
+
+  -- "Битвы составами": в отличие от Драфта здесь бьётся ОБЫЧНЫЙ состав
+  -- игрока (вкладка СОСТАВ, 5 карт из своей коллекции) — без входного билета
+  -- и без "жизни", просто с перезарядкой между боями (см. SQUAD_BATTLE_COOLDOWN_MS).
+  CREATE TABLE IF NOT EXISTS squad_battles (
+    telegram_id     TEXT PRIMARY KEY,
+    wins            INTEGER NOT NULL DEFAULT 0,
+    losses          INTEGER NOT NULL DEFAULT 0,
+    last_battle_at  INTEGER NOT NULL DEFAULT 0
   );
 
   -- Служебная таблица из одной строки — отслеживает, за какие сутки уже
@@ -683,6 +691,182 @@ export async function saveUserState({ telegramId, patch }) {
 
 // ---------- Лидерборд / сила состава ----------
 
+const CLUB_SQUAD_SLOTS = ['GK', 'DEF', 'MID', 'FWD1', 'FWD2'];
+const SQUAD_BATTLE_COOLDOWN_MS = 90 * 1000; // 1.5 минуты между боями — без этого лимита бой был бы бесплатным бесконечным фармом
+export const SQUAD_BATTLE_WIN_REWARD = 150;
+// Плата за ОДИН вход в бой (списывается независимо от исхода — как ставка).
+// Без платы за вход при награде 150 за победу и ~50% шансах бой был бы
+// чистым плюсом в мат.ожидании и фармился бы бесконечно на перезарядке.
+export const SQUAD_BATTLE_ENTRY_COST = 400;
+
+// Средний OVR ОБЫЧНОГО состава "Мой клуб" (вкладка СОСТАВ) — используется
+// новым режимом "Битвы составами". Возвращает null, если состав не
+// укомплектован полностью (все 5 слотов) или если какая-то из карт состава
+// с тех пор была продана — тогда биться нельзя, пока состав не собран заново.
+function getClubSquadRating(telegramId) {
+  const user = db.prepare('SELECT squad FROM users WHERE telegram_id = ?').get(telegramId);
+  if (!user?.squad) return null;
+
+  let squadMap;
+  try {
+    squadMap = JSON.parse(user.squad);
+  } catch {
+    return null;
+  }
+
+  const filledInstIds = CLUB_SQUAD_SLOTS.map(slot => squadMap[slot]).filter(Boolean);
+  if (filledInstIds.length < CLUB_SQUAD_SLOTS.length) return null;
+
+  const placeholders = filledInstIds.map(() => '?').join(',');
+  const rows = db
+    .prepare(`SELECT inst_id, player_id FROM inventory WHERE inst_id IN (${placeholders})`)
+    .all(...filledInstIds);
+  if (rows.length < CLUB_SQUAD_SLOTS.length) return null;
+
+  const totalRating = rows.reduce((sum, r) => sum + (PLAYERS_BY_ID[r.player_id]?.rating || 0), 0);
+  return Math.round((totalRating / rows.length) * 10) / 10;
+}
+
+// Шаг 1 боя составами: проверяет, что состав укомплектован и перезарядка
+// прошла, затем подбирает соперника — случайного игрока, чей клубный состав
+// ТОЖЕ полностью укомплектован. При большой базе игроков это перебор всех
+// пользователей с ненулевым squad — приемлемо для масштаба этого проекта,
+// но первое, что стоит оптимизировать (например, кэшированной таблицей
+// "боеготовых" составов), если игроков станет много тысяч.
+export async function beginSquadBattle({ telegramId }) {
+  const attackerRating = getClubSquadRating(telegramId);
+  if (attackerRating === null) return { ok: false, reason: 'squad_not_ready' };
+
+  const battleRow = db.prepare('SELECT * FROM squad_battles WHERE telegram_id = ?').get(telegramId);
+  if (battleRow) {
+    const elapsedMs = Date.now() - battleRow.last_battle_at;
+    if (elapsedMs < SQUAD_BATTLE_COOLDOWN_MS) {
+      return { ok: false, reason: 'cooldown', retryInMs: SQUAD_BATTLE_COOLDOWN_MS - elapsedMs };
+    }
+  }
+
+  const candidates = db
+    .prepare("SELECT telegram_id, username FROM users WHERE telegram_id != ? AND squad IS NOT NULL AND squad != '{}'")
+    .all(telegramId);
+  const eligible = [];
+  for (const c of candidates) {
+    const rating = getClubSquadRating(c.telegram_id);
+    if (rating !== null) eligible.push({ telegramId: c.telegram_id, username: c.username, rating });
+  }
+  if (!eligible.length) return { ok: false, reason: 'no_opponents' };
+
+  const opponent = eligible[Math.floor(Math.random() * eligible.length)];
+
+  // Списываем плату за вход ПОСЛЕДНИМ шагом — только когда уже точно известно,
+  // что бой может начаться (состав готов, есть соперник, перезарядка прошла).
+  // Так деньги не улетают впустую, если бой всё равно не мог состояться.
+  const spend = db.transaction(() => {
+    const user = db.prepare('SELECT slive_tokens FROM users WHERE telegram_id = ?').get(telegramId);
+    if (!user || user.slive_tokens < SQUAD_BATTLE_ENTRY_COST) {
+      return { ok: false, balance: user?.slive_tokens || 0 };
+    }
+    db.prepare('UPDATE users SET slive_tokens = slive_tokens - ? WHERE telegram_id = ?')
+      .run(SQUAD_BATTLE_ENTRY_COST, telegramId);
+    return { ok: true };
+  })();
+  if (!spend.ok) {
+    return { ok: false, reason: 'insufficient_funds', balance: spend.balance, required: SQUAD_BATTLE_ENTRY_COST };
+  }
+
+  return {
+    ok: true,
+    attackerRating,
+    defenderRating: opponent.rating,
+    opponent: { telegramId: opponent.telegramId, username: opponent.username || null, rating: opponent.rating },
+    entryCost: SQUAD_BATTLE_ENTRY_COST,
+  };
+}
+
+// Текущее состояние режима для вкладки "Битвы": готов ли состав, статистика
+// побед/поражений и сколько осталось до конца перезарядки.
+export async function getSquadBattleState({ telegramId }) {
+  const rating = getClubSquadRating(telegramId);
+  const battleRow = db.prepare('SELECT * FROM squad_battles WHERE telegram_id = ?').get(telegramId);
+  const cooldownRemainingMs = battleRow
+    ? Math.max(0, SQUAD_BATTLE_COOLDOWN_MS - (Date.now() - battleRow.last_battle_at))
+    : 0;
+
+  return {
+    ready: rating !== null,
+    rating,
+    wins: battleRow?.wins || 0,
+    losses: battleRow?.losses || 0,
+    cooldownRemainingMs,
+    winReward: SQUAD_BATTLE_WIN_REWARD,
+    entryCost: SQUAD_BATTLE_ENTRY_COST,
+  };
+}
+
+// Шаг 2: фиксирует итог боя составами. В отличие от Драфта тут нет "жизни" —
+// поражение просто пишется в статистику, серия не прерывается.
+export async function finalizeSquadBattle({ telegramId, attackerGoals, defenderGoals }) {
+  let won;
+  let wentToPenalties = false;
+  if (attackerGoals !== defenderGoals) {
+    won = attackerGoals > defenderGoals;
+  } else {
+    won = Math.random() < 0.5;
+    wentToPenalties = true;
+  }
+
+  const now = Date.now();
+  const tx = db.transaction(() => {
+    db.prepare(
+      `INSERT INTO squad_battles (telegram_id, wins, losses, last_battle_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(telegram_id) DO UPDATE SET
+         wins = wins + excluded.wins,
+         losses = losses + excluded.losses,
+         last_battle_at = excluded.last_battle_at`
+    ).run(telegramId, won ? 1 : 0, won ? 0 : 1, now);
+
+    if (won) {
+      db.prepare('UPDATE users SET slive_tokens = slive_tokens + ? WHERE telegram_id = ?')
+        .run(SQUAD_BATTLE_WIN_REWARD, telegramId);
+    }
+  });
+  tx();
+
+  const stats = db.prepare('SELECT wins, losses FROM squad_battles WHERE telegram_id = ?').get(telegramId);
+  return {
+    won,
+    wentToPenalties,
+    reward: won ? SQUAD_BATTLE_WIN_REWARD : 0,
+    wins: stats.wins,
+    losses: stats.losses,
+  };
+}
+
+// Таблица топа "Битв составами" по количеству побед — отдельная от Драфта
+// доска (там свой лидерборд по total_points, см. getDraftLeaderboard).
+// Сортировка: сначала по победам, затем по проценту побед (чтобы 3W/0L не
+// проигрывал 20W/40L только из-за меньшего числа игр), затем по разнице W-L
+// как финальный тай-брейк.
+export async function getSquadBattleLeaderboard(limit = 10) {
+  const rows = db
+    .prepare(
+      `SELECT sb.telegram_id AS telegramId, u.username, sb.wins, sb.losses
+       FROM squad_battles sb
+       JOIN users u ON u.telegram_id = sb.telegram_id
+       WHERE sb.wins + sb.losses > 0
+       ORDER BY sb.wins DESC,
+                (CAST(sb.wins AS REAL) / (sb.wins + sb.losses)) DESC,
+                (sb.wins - sb.losses) DESC
+       LIMIT ?`
+    )
+    .all(limit);
+  return rows.map(r => ({
+    ...r,
+    games: r.wins + r.losses,
+    winRate: r.wins + r.losses > 0 ? Math.round((r.wins / (r.wins + r.losses)) * 100) : 0,
+  }));
+}
+
 // Список telegram_id всех зарегистрированных игроков — используется
 // рассылкой из админки (см. /api/admin/broadcast в server.js), чтобы не
 // дублировать сырой SQL-запрос там.
@@ -855,36 +1039,47 @@ export async function startDraft({ telegramId, playerIds, currency }) {
   return { squad: rowToDraftSquad(row) };
 }
 
-// Сколько опасных моментов разыгрывается за один симулированный матч драфта.
-const DRAFT_MATCH_MOMENTS = 5;
-// Вероятность того, что КОНКРЕТНЫЙ опасный момент реализуется в гол
-// (не каждый шанс становится взятием ворот — иначе итоговый счёт при 5
-// моментах выглядел бы нереалистично высоким).
-const DRAFT_MOMENT_SCORE_CHANCE = 0.45;
+// Сколько опасных моментов разыгрывается в ОДНОМ сегменте матча (сегмент =
+// один тайм-отрезок между тактическими решениями игрока).
+const DRAFT_SEGMENT_MOMENTS = 3;
+// Базовая вероятность того, что конкретный опасный момент реализуется в гол
+// при обычной тактике ("normal") — не каждый шанс становится взятием ворот.
+const DRAFT_BASE_SCORE_CHANCE = 0.45;
 
-// Полноценная симуляция матча вместо мгновенного объявления победы/поражения:
-// разыгрываем несколько опасных моментов, каждый достаётся одной из команд
-// с вероятностью по той же логистической ELO-формуле (чем сильнее разница
-// рейтингов — тем реже слабая сторона получает моменты), и часть моментов
-// реализуется в гол. Итог решает счёт; при равенстве голов — как и в реальном
-// плей-офф — решает "серия пенальти" по той же вероятности, чтобы более
-// сильный состав оставался фаворитом, а не был отдан монетке 50/50.
-function simulateDraftMatch(attackerRating, defenderRating) {
-  const attackShare = 1 / (1 + Math.pow(10, (defenderRating - attackerRating) / DRAFT_ELO_SCALE));
+// Один сегмент симуляции: разыгрывает DRAFT_SEGMENT_MOMENTS опасных моментов
+// в заданном диапазоне минут. Экспортируется отдельно от полного матча, чтобы
+// сервер мог звать это по кусочкам МЕЖДУ тактическими решениями игрока
+// (см. /api/draft/battle/start и /api/draft/battle/decide в server.js) —
+// именно это и делает матч драфта интерактивным, а не одним броском кубика.
+// ratingBoost — модификатор рейтинга атакующего на этот сегмент (от тактики
+// "в атаку"/"защищаться" или от постоянного бонуса замены). scoreChance —
+// вероятность гола в реализованном моменте (тактика "в атаку" делает игру
+// более открытой и голевой, "защищаться" — наоборот суше).
+export function simulateDraftSegment({
+  attackerRating,
+  defenderRating,
+  minuteFrom,
+  minuteTo,
+  ratingBoost = 0,
+  scoreChance = DRAFT_BASE_SCORE_CHANCE,
+  moments = DRAFT_SEGMENT_MOMENTS,
+}) {
+  const effectiveAttacker = attackerRating + ratingBoost;
+  const attackShare = 1 / (1 + Math.pow(10, (defenderRating - effectiveAttacker) / DRAFT_ELO_SCALE));
   const usedMinutes = new Set();
   const events = [];
   let attackerGoals = 0;
   let defenderGoals = 0;
 
-  for (let i = 0; i < DRAFT_MATCH_MOMENTS; i++) {
+  for (let i = 0; i < moments; i++) {
     let minute;
     do {
-      minute = 3 + Math.floor(Math.random() * 87);
+      minute = minuteFrom + Math.floor(Math.random() * (minuteTo - minuteFrom + 1));
     } while (usedMinutes.has(minute));
     usedMinutes.add(minute);
 
     const side = Math.random() < attackShare ? 'attacker' : 'defender';
-    const scored = Math.random() < DRAFT_MOMENT_SCORE_CHANCE;
+    const scored = Math.random() < scoreChance;
     if (scored) {
       if (side === 'attacker') attackerGoals++;
       else defenderGoals++;
@@ -893,25 +1088,14 @@ function simulateDraftMatch(attackerRating, defenderRating) {
   }
   events.sort((a, b) => a.minute - b.minute);
 
-  let won;
-  if (attackerGoals !== defenderGoals) {
-    won = attackerGoals > defenderGoals;
-  } else {
-    won = Math.random() < attackShare;
-    events.push({ minute: 90, side: won ? 'attacker' : 'defender', type: 'penalty_shootout' });
-  }
-
-  return { events, attackerGoals, defenderGoals, won };
+  return { events, attackerGoals, defenderGoals };
 }
 
-// PvP-бой: соперник — случайный игрок с готовым драфт-составом (не обязательно
-// "активным" — можно атаковать даже того, чья серия уже закончилась, у него
-// всё равно есть сохранённый rating). Матч разыгрывается по моментам через
-// simulateDraftMatch() (см. выше) — итог решает счёт, а не единственный бросок
-// монетки. Поражение сразу завершает СЕРИЮ атакующего (active = 0) — новый бой
-// потребует новый вход. На соперника-защитника результат боя не влияет
-// (асинхронный PvP).
-export async function playDraftBattle({ telegramId }) {
+// Шаг 1 интерактивного боя: проверяет, что у игрока есть активная серия
+// драфта, подбирает соперника и отдаёт сырые рейтинги — саму симуляцию по
+// сегментам и хранение состояния между решениями делает server.js (это
+// эфемерное состояние одного боя, ему не место в постоянной БД).
+export async function beginDraftBattle({ telegramId }) {
   const attackerRow = db.prepare('SELECT * FROM draft_squads WHERE telegram_id = ?').get(telegramId);
   if (!attackerRow) return { ok: false, reason: 'no_draft_squad' };
   if (!attackerRow.active) return { ok: false, reason: 'draft_ended' };
@@ -921,12 +1105,34 @@ export async function playDraftBattle({ telegramId }) {
     .get(telegramId);
   if (!opponentRow) return { ok: false, reason: 'no_opponents' };
 
-  const attackerRating = attackerRow.rating;
-  const defenderRating = opponentRow.rating;
-  const match = simulateDraftMatch(attackerRating, defenderRating);
-  const won = match.won;
-
   const opponentUser = db.prepare('SELECT username FROM users WHERE telegram_id = ?').get(opponentRow.telegram_id);
+
+  return {
+    ok: true,
+    attackerRating: attackerRow.rating,
+    defenderRating: opponentRow.rating,
+    opponent: {
+      telegramId: opponentRow.telegram_id,
+      username: opponentUser?.username || null,
+      rating: opponentRow.rating,
+    },
+  };
+}
+
+// Шаг 2: фиксирует итог боя в БД по итоговому счёту, который накопил
+// server.js за все сыгранные сегменты. При равенстве голов после всех
+// сегментов решает "серия пенальти" 50/50 — тактические решения уже
+// повлияли на счёт, дальше это честный монетный бросок. Поражение сразу
+// завершает СЕРИЮ атакующего (active = 0) — новый бой потребует новый вход.
+export async function finalizeDraftBattle({ telegramId, attackerGoals, defenderGoals }) {
+  let won;
+  let wentToPenalties = false;
+  if (attackerGoals !== defenderGoals) {
+    won = attackerGoals > defenderGoals;
+  } else {
+    won = Math.random() < 0.5;
+    wentToPenalties = true;
+  }
 
   const tx = db.transaction(() => {
     if (won) {
@@ -943,15 +1149,10 @@ export async function playDraftBattle({ telegramId }) {
   const updated = db.prepare('SELECT * FROM draft_squads WHERE telegram_id = ?').get(telegramId);
 
   return {
-    ok: true,
     won,
-    attackerRating,
-    defenderRating,
-    score: { attacker: match.attackerGoals, defender: match.defenderGoals },
-    matchLog: match.events,
+    wentToPenalties,
     reward: won ? DRAFT_WIN_REWARD_SLIVE : 0,
     pointsGained: won ? DRAFT_WIN_POINTS : 0,
-    opponent: { username: opponentUser?.username || null, rating: defenderRating },
     squad: rowToDraftSquad(updated),
   };
 }
@@ -971,12 +1172,11 @@ export async function getDraftLeaderboard(limit = 10) {
 }
 
 // Раз в календарные сутки (UTC) начисляет 1000 $SLive лидеру драфт-рейтинга
-// (по total_points) и ОБНУЛЯЕТ total_points у всех — лидерборд драфта живёт
-// 24-часовыми сезонами, а не копится вечно. Идемпотентно: draft_meta.last_payout_day
-// гарантирует, что при повторном вызове в те же сутки (или после рестарта
-// сервера) выплата и сброс не задвоятся. Вызывается по таймеру из server.js,
-// а не от конкретного запроса игрока — так и награда, и сброс топа не зависят
-// от того, зайдёт ли вообще кто-то в лидерборд в этот день.
+// (по total_points). Идемпотентно: draft_meta.last_payout_day гарантирует,
+// что при повторном вызове в те же сутки (или после рестарта сервера)
+// выплата не задвоится. Вызывается по таймеру из server.js, а не от
+// конкретного запроса игрока — так награда не зависит от того, зайдёт ли
+// вообще кто-то в лидерборд в этот день.
 export async function payoutDraftTopIfNeeded() {
   const today = dayIndex();
   const meta = db.prepare('SELECT last_payout_day FROM draft_meta WHERE id = 1').get();
@@ -992,9 +1192,6 @@ export async function payoutDraftTopIfNeeded() {
       db.prepare('UPDATE users SET slive_tokens = slive_tokens + ? WHERE telegram_id = ?')
         .run(DRAFT_TOP_REWARD_SLIVE, top.telegram_id);
     }
-    // Новый 24-часовой сезон лидерборда — обнуляем очки всем, включая тех,
-    // у кого их 0 (на всякий случай, идемпотентно).
-    db.prepare('UPDATE draft_squads SET total_points = 0').run();
   });
   tx();
 
