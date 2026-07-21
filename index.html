@@ -310,8 +310,8 @@
                 <p class="text-[10px] text-neutral-400 mt-0.5">Базовый доход: ~10-20 $SLive/день</p>
               </div>
               <div class="flex flex-col gap-1.5">
-                <button onclick="buyPack('bronze', 1000, 'SLive')" class="bg-neutral-800 text-violet-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 1K</button>
-                <button onclick="buyPack('bronze', 40, 'Stars')" class="bg-amber-500 text-black text-[11px] font-black px-3 py-1.5 rounded-xl hover:bg-amber-400 text-center">⭐️ 40</button>
+                <button onclick="buyPack('bronze', 1500, 'SLive')" class="bg-neutral-800 text-violet-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 1.5K</button>
+                <button onclick="buyPack('bronze', 50, 'Stars')" class="bg-amber-500 text-black text-[11px] font-black px-3 py-1.5 rounded-xl hover:bg-amber-400 text-center">⭐️ 50</button>
               </div>
             </div>
             <!-- Витрина дропа -->
@@ -332,7 +332,7 @@
                 <p class="text-[10px] text-neutral-400 mt-0.5">Улучшенный доход: ~30-50 $SLive/день</p>
               </div>
               <div class="flex flex-col gap-1.5">
-                <button onclick="buyPack('silver', 5000, 'SLive')" class="bg-neutral-800 text-violet-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 5K</button>
+                <button onclick="buyPack('silver', 7500, 'SLive')" class="bg-neutral-800 text-violet-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 7.5K</button>
                 <button onclick="buyPack('silver', 100, 'Stars')" class="bg-amber-500 text-black text-[11px] font-black px-3 py-1.5 rounded-xl hover:bg-amber-400 text-center">⭐️ 100</button>
               </div>
             </div>
@@ -353,7 +353,7 @@
                 <p class="text-[10px] text-neutral-400 mt-0.5">Звёздный доход: ~100-160/день</p>
               </div>
               <div class="flex flex-col gap-1.5">
-                <button onclick="buyPack('gold', 20000, 'SLive')" class="bg-neutral-800 text-violet-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 20K</button>
+                <button onclick="buyPack('gold', 30000, 'SLive')" class="bg-neutral-800 text-violet-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 30K</button>
                 <button onclick="buyPack('gold', 400, 'Stars')" class="bg-amber-500 text-black text-[11px] font-black px-3 py-1.5 rounded-xl hover:bg-amber-400 text-center">⭐️ 400</button>
               </div>
             </div>
@@ -374,8 +374,8 @@
                 <p class="text-[10px] text-neutral-400 mt-0.5">Элитный доход: ~450-650 $SLive/день</p>
               </div>
               <div class="flex flex-col gap-1.5">
-                <button onclick="buyPack('legend', 100000, 'SLive')" class="bg-neutral-800 text-violet-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 100K</button>
-                <button onclick="buyPack('legend', 2000, 'Stars')" class="bg-amber-500 text-black text-[11px] font-black px-3 py-1.5 rounded-xl hover:bg-amber-400 text-center">⭐️ 2000</button>
+                <button onclick="buyPack('legend', 150000, 'SLive')" class="bg-neutral-800 text-violet-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 150K</button>
+                <button onclick="buyPack('legend', 1000, 'Stars')" class="bg-amber-500 text-black text-[11px] font-black px-3 py-1.5 rounded-xl hover:bg-amber-400 text-center">⭐️ 1000</button>
               </div>
             </div>
             <div class="bg-black/50 rounded-xl p-2 border border-[#b39ddb]/30">
@@ -1706,7 +1706,7 @@
     function bpRewardLabel(reward) {
       if (!reward || !reward.type) return '—';
       if (reward.type === 'slive') return `${reward.amount} 🪙`;
-      if (reward.type === 'token') return `${reward.amount} 🎟️`;
+      if (reward.type === 'token') return `${reward.amount} Жетон Драфта 🎟️`;
       if (reward.type === 'pack') return `Пак: ${reward.pack === 'gold' ? 'Золото' : reward.pack === 'silver' ? 'Серебро' : 'Бронза'}`;
       if (reward.type === 'pack_bundle') return `Набор: ${reward.count}x ${reward.pack === 'gold' ? 'Золото' : reward.pack === 'silver' ? 'Серебро' : 'Бронза'} 🏆`;
       return '—';
@@ -1776,7 +1776,7 @@
       if (reward.claimed) {
         btn = `<span class="text-[9px] text-emerald-400 font-black">✓ Забрано</span>`;
       } else if (needsPremium) {
-        btn = `<span class="text-[9px] text-neutral-600 font-black">🔒 БП</span>`;
+        btn = `<span class="text-[9px] text-neutral-600 font-black">🔒 Премиум</span>`;
       } else if (locked) {
         btn = `<span class="text-[9px] text-neutral-600 font-black">🔒</span>`;
       } else {
