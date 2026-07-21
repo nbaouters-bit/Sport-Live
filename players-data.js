@@ -69,10 +69,10 @@ export const PLAYERS_BY_ID = Object.values(PLAYER_POOL)
 // (в отличие от пака, где выдаётся случайная карта этой редкости). Выше цены
 // самого пака этой редкости — потому что тут нет элемента случайности.
 export const MARKET_PRICE = {
-  bronze: { stars: 50, slive: 1400 },
-  silver: { stars: 120, slive: 7000 },
-  gold: { stars: 500, slive: 30000 },
-  legend: { stars: 2400, slive: 140000 },
+  bronze: { stars: 75, slive: 2100 },
+  silver: { stars: 180, slive: 10500 },
+  gold: { stars: 750, slive: 45000 },
+  legend: { stars: 3600, slive: 210000 },
 };
 
 // Доля от гарантированной цены Маркета (в SLive), которую игрок получает при
