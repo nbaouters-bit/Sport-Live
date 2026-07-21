@@ -506,7 +506,7 @@
           Одно поражение — и серия заканчивается, для нового боя нужен новый вход.
         </p>
 
-        <div id="draft-entry-block" class="grid grid-cols-2 gap-2 mb-4">
+        <div id="draft-entry-block" class="grid grid-cols-3 gap-2 mb-4">
           <button onclick="startDraftEntry('slive')" id="draft-entry-slive-btn" class="bg-neutral-800 text-violet-400 border border-neutral-700 rounded-xl py-3 text-center">
             <div class="text-xs font-black">🪙 1000</div>
             <div class="text-[8px] text-neutral-500 mt-0.5">1 раз в сутки</div>
@@ -515,7 +515,12 @@
             <div class="text-xs font-black">⭐️ 100</div>
             <div class="text-[8px] text-black/60 mt-0.5">Без лимита</div>
           </button>
+          <button onclick="startDraftEntry('tokens')" id="draft-entry-tokens-btn" class="bg-violet-500/10 text-violet-300 border border-violet-500/30 rounded-xl py-3 text-center">
+            <div class="text-xs font-black">🎟️ 3</div>
+            <div id="draft-tokens-balance" class="text-[8px] text-violet-400/70 mt-0.5">есть: 0</div>
+          </button>
         </div>
+        <div class="text-[9px] text-neutral-500 mb-3 -mt-2">🎟️ Жетоны Драфта дают награды Батл Пасса (см. кнопку "Батл Пасс" наверху).</div>
 
         <div id="draft-squad-block" class="hidden">
           <div class="flex justify-between items-center mb-2">
@@ -1703,6 +1708,7 @@
       if (reward.type === 'slive') return `${reward.amount} 🪙`;
       if (reward.type === 'token') return `${reward.amount} 🎟️`;
       if (reward.type === 'pack') return `Пак: ${reward.pack === 'gold' ? 'Золото' : reward.pack === 'silver' ? 'Серебро' : 'Бронза'}`;
+      if (reward.type === 'pack_bundle') return `Набор: ${reward.count}x ${reward.pack === 'gold' ? 'Золото' : reward.pack === 'silver' ? 'Серебро' : 'Бронза'} 🏆`;
       return '—';
     }
 
@@ -1791,6 +1797,9 @@
         renderBattlePass(result);
         if (result.granted?.type === 'pack' && result.granted.card) {
           alertMsg(`Уровень ${level}: пак принёс ${result.granted.card.name} (${result.granted.card.rating} OVR)!`);
+        } else if (result.granted?.type === 'pack_bundle' && result.granted.cards) {
+          const names = result.granted.cards.map(c => `${c.name} (${c.rating})`).join(', ');
+          alertMsg(`🏆 Финальный набор уровня ${level}: ${names}!`);
         }
       } catch (err) {
         alertMsg('Не удалось забрать награду: ' + (err.data?.error || err.message));
@@ -2631,6 +2640,13 @@
       sliveBtn.disabled = !draftState.canFreeEntry;
       sliveBtn.classList.toggle('opacity-40', !draftState.canFreeEntry);
 
+      const tokensBtn = document.getElementById('draft-entry-tokens-btn');
+      const tokenPrice = draftState.entryPrices?.tokens ?? 3;
+      const enoughTokens = (draftState.draftTokens || 0) >= tokenPrice;
+      tokensBtn.disabled = !enoughTokens;
+      tokensBtn.classList.toggle('opacity-40', !enoughTokens);
+      document.getElementById('draft-tokens-balance').innerText = `есть: ${draftState.draftTokens || 0}`;
+
       const squadBlock = document.getElementById('draft-squad-block');
       if (!draftState.squad) {
         squadBlock.classList.add('hidden');
@@ -2661,8 +2677,8 @@
       }
     }
 
-    // currency: 'slive' (🪙1000, лимит 1/сутки — лимит проверяет сервер) или
-    // 'stars' (⭐️100, без лимита).
+    // currency: 'slive' (🪙1000, лимит 1/сутки — лимит проверяет сервер),
+    // 'stars' (⭐️100, без лимита) или 'tokens' (🎟️3, жетоны Батл Пасса, без лимита).
     async function startDraftEntry(currency) {
       if (!tg?.initData) {
         return alertMsg('Драфт работает только внутри Telegram.');
@@ -2670,9 +2686,13 @@
       if (currency === 'slive' && draftState && !draftState.canFreeEntry) {
         return alertMsg('Бесплатный (за $SLive) вход уже использован сегодня. Возьми вход за ⭐️ 100 или загляни завтра.');
       }
+      if (currency === 'tokens' && draftState && (draftState.draftTokens || 0) < (draftState.entryPrices?.tokens ?? 3)) {
+        return alertMsg('Не хватает жетонов Драфта. Зарабатывай их наградами Батл Пасса.');
+      }
       try {
         const result = await apiPost('/api/draft/start', { currency });
-        if (currency === 'slive') sliveTokens = result.balance; else tgStars = result.balance;
+        if (currency === 'slive') sliveTokens = result.balance;
+        else if (currency === 'stars') tgStars = result.balance;
         updateHeader();
         document.getElementById('draft-last-result').classList.add('hidden');
         await loadDraftState();
@@ -2683,6 +2703,8 @@
         } else if (e.message === 'insufficient_funds') {
           if (currency === 'slive') {
             alertMsg('Не хватает $SLive на балансе.');
+          } else if (currency === 'tokens') {
+            alertMsg('Не хватает жетонов Драфта. Зарабатывай их наградами Батл Пасса.');
           } else {
             purchaseStars('custom', e.data?.required || 100);
           }
