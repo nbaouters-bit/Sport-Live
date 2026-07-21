@@ -1,1921 +1,1408 @@
-// db.js
-// Вся денежная и игровая экономика живёт только тут (SQLite через better-sqlite3).
-// Клиент никогда напрямую не пишет в баланс — только через функции этого файла,
-// вызванные из server.js после проверки initData.
-import Database from 'better-sqlite3';
+// server.js
+import 'dotenv/config';
+import fs from 'fs';
+import express from 'express';
+import cors from 'cors';
+import fetch from 'node-fetch';
 import { randomUUID } from 'crypto';
-import { PLAYERS_BY_ID, getSellPrice, getRandomPlayer } from './players-data.js';
+import { validateInitData } from './telegramAuth.js';
+import {
+  ensureUser,
+  getUser,
+  creditStarsFromPayment,
+  spendStars,
+  spendSlive,
+  tap,
+  buyVip,
+  getReferralInfo,
+  requestReferralAccess,
+  getPendingReferralRequests,
+  approveReferralRequest,
+  rejectReferralRequest,
+  getReferralChannelLink,
+  setReferralChannelLink,
+  addPlayerToInventory,
+  sellCard,
+  saveUserState,
+  listUsers,
+  getStats,
+  adjustStarsAdmin,
+  adjustSliveAdmin,
+  getLeaderboard,
+  canUseFreeDraftEntry,
+  startDraft,
+  getDraftState,
+  beginDraftBattle,
+  simulateDraftSegment,
+  finalizeDraftBattle,
+  getDraftLeaderboard,
+  beginSquadBattle,
+  getSquadBattleState,
+  buySquadBattleEnergy,
+  finalizeSquadBattle,
+  getSquadBattleLeaderboard,
+  payoutDraftTopIfNeeded,
+  getBattlePassState,
+  claimBattlePassReward,
+  buyBattlePass,
+  BATTLE_PASS_PRICE_STARS,
+  getDraftTokenBalance,
+  spendDraftTokens,
+  createBetEvent,
+  closeBetEvent,
+  openBetEvent,
+  deleteBetEvent,
+  resolveBetEvent,
+  updateBetOptionPercent,
+  getAdminBetEvents,
+  getVisibleBetEvents,
+  placeBet,
+  getMyBets,
+  exchangeStarsToSlive,
+  getAllUserIds,
+  STARS_TO_SLIVE_RATE,
+  DB_PATH,
+} from './db.js';
+import { getRandomPlayer, PLAYERS_BY_ID, MARKET_PRICE, SELL_RATE } from './players-data.js';
 
-export const DB_PATH = process.env.DB_PATH || 'sportlive.db';
-const db = new Database(DB_PATH);
-db.pragma('journal_mode = WAL');
+const { BOT_TOKEN, WEBHOOK_SECRET, ADMIN_TELEGRAM_ID, BOT_USERNAME, MINI_APP_URL, PORT = 3000 } = process.env;
 
-// ВАЖНО: раньше здесь была функция checkpointForBackup(), которая перед
-// бэкапом в Telegram форсировала wal_checkpoint(TRUNCATE). Если в проекте
-// используется Litestream (см. litestream.yml/start.sh) — так делать нельзя:
-// Litestream сам вычитывает WAL-журнал по частям, чтобы стримить изменения
-// в R2, а принудительный TRUNCATE обрезает журнал раньше, чем Litestream
-// успевает забрать самые свежие записи (это и было причиной пропажи
-// недавно созданных ивентов со ставками после редеплоя). Функцию убрали —
-// копия файла для Telegram-бэкапа теперь читается как есть, без вмешательства
-// в WAL; Litestream остаётся единственным, кто управляет чекпоинтами.
-
-// Награда рефереру за каждого друга, который впервые открыл приложение по его ссылке.
-const REFERRAL_REWARD_SLIVE = 1000;
-// Курс обмена Telegram Stars -> $SLive (кнопка "Обменять" в плашке пополнения).
-// Ориентировался на цену бронзового пака (20 ⭐️ = 500 $SLive = 25 $SLive за 1 ⭐️),
-// чтобы обмен не был ни выгоднее, ни хуже покупки паков напрямую за звёзды.
-export const STARS_TO_SLIVE_RATE = 25;
-// Максимум энергии в сутки (см. refreshEnergyIfNeeded) — 1 клик = 1 единица энергии.
-const DAILY_ENERGY = 1000;
-// Не даём одним запросом /api/tap списать больше, чем можно нафармить за
-// разумное окно (защита от руками собранного запроса с гигантским count).
-const MAX_TAP_PER_REQUEST = 50;
-
-// ---------- Драфт: константы наград/очков ----------
-// Награда $SLive за одну победу в PvP-бою драфта.
-const DRAFT_WIN_REWARD_SLIVE = 300;
-// Очки в лидерборд драфта за победу — копятся в рамках ТЕКУЩЕГО 24-часового
-// сезона лидерборда: раз в сутки (см. payoutDraftTopIfNeeded) лидер получает
-// награду и total_points у ВСЕХ игроков обнуляется — топ начинается заново
-// (обнуляется только wins текущей серии).
-const DRAFT_WIN_POINTS = 3;
-// Шкала ELO-подобной формулы шанса победы: чем МЕНЬШЕ значение, тем сильнее
-// разница в рейтинге решает исход (меньше шансов на апсет). При равных
-// рейтингах шанс всегда 50/50.
-const DRAFT_ELO_SCALE = 12;
-// Ежедневная награда игроку №1 в лидерборде драфта (по total_points).
-const DRAFT_TOP_REWARD_SLIVE = 1000;
-
-// ---------- Битвы составами: константы ----------
-// Сколько боёв в сутки можно провести бесплатно (тратят энергию тапалки —
-// тот же общий ресурс, что и тап, чтобы не плодить отдельную сущность).
-const SQUAD_BATTLE_ENERGY_COST = 60;
-// Сколько боёв в сутки доступно ВООБЩЕ без учёта энергии (страховка от
-// читерского накопления энергии VIP-игроками) — после этого лимита бой
-// можно провести только за билет (Stars/$SLive).
-const SQUAD_BATTLE_FREE_DAILY = 8;
-const SQUAD_BATTLE_TICKET_STARS = 25;
-const SQUAD_BATTLE_TICKET_SLIVE = 400;
-// Шкала ELO-формулы для битв составами — используется как для доли атаки,
-// так и для базового шанса победы; меньше значение = рейтинг решает жёстче.
-const SQUAD_BATTLE_ELO_SCALE = 14;
-// Сколько опасных моментов разыгрывается за один бой (чуть больше, чем в
-// Драфте — бой составами воспринимается как "главное" PvP-событие).
-const SQUAD_BATTLE_MOMENTS = 6;
-const SQUAD_BATTLE_MOMENT_SCORE_CHANCE = 0.42;
-// Кубки за победу/поражение. Победная награда растёт со стрейком (см.
-// playSquadBattle) — не больше SQUAD_BATTLE_STREAK_CAP побед подряд считаются
-// в бонус, дальше бонус не растёт (чтобы не улетать в бесконечность).
-const SQUAD_BATTLE_WIN_TROPHIES = 20;
-const SQUAD_BATTLE_LOSS_TROPHIES = -14;
-const SQUAD_BATTLE_STREAK_CAP = 6;
-const SQUAD_BATTLE_STREAK_TROPHY_BONUS = 3; // за каждую победу в стрейке (до кэпа)
-const SQUAD_BATTLE_WIN_REWARD_SLIVE = 180;
-const SQUAD_BATTLE_LOSS_CONSOLATION_SLIVE = 30; // небольшое утешение за поражение — участие тоже вознаграждается
-// Лиги — чисто косметическая (но влияющая на множитель награды) прогрессия
-// по накопленным кубкам. Чем выше лига — тем выше множитель награды $SLive,
-// это стимулирует не размениваться на бои с заведомо слабым составом.
-const SQUAD_LEAGUES = [
-  { id: 'wood', name: 'Дерево', icon: '🪵', min: 0, rewardMult: 1.0 },
-  { id: 'bronze', name: 'Бронза', icon: '🥉', min: 100, rewardMult: 1.15 },
-  { id: 'silver', name: 'Серебро', icon: '🥈', min: 300, rewardMult: 1.3 },
-  { id: 'gold', name: 'Золото', icon: '🥇', min: 600, rewardMult: 1.5 },
-  { id: 'diamond', name: 'Алмаз', icon: '💎', min: 1000, rewardMult: 1.75 },
-  { id: 'legend', name: 'Легенда', icon: '👑', min: 1600, rewardMult: 2.0 },
-];
-function leagueForTrophies(trophies) {
-  let result = SQUAD_LEAGUES[0];
-  for (const l of SQUAD_LEAGUES) {
-    if (trophies >= l.min) result = l;
-  }
-  return result;
+if (!ADMIN_TELEGRAM_ID) {
+  console.warn(
+    'ADMIN_TELEGRAM_ID не задан в .env — админ-панель будет недоступна никому. ' +
+    'Узнайте свой Telegram ID через бота @userinfobot и впишите его в .env.'
+  );
 }
 
-// ---------- Ставки: константы ----------
-const MIN_BET_AMOUNT = 10;
-const MAX_BET_AMOUNT = 1_000_000;
-const MIN_OPTION_PERCENT = 1;
-const MAX_OPTION_PERCENT = 95; // не даём поставить 100% — тогда коэффициент был бы x1, ставка не имела бы смысла
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    telegram_id     TEXT PRIMARY KEY,
-    username        TEXT,
-    tg_stars        INTEGER NOT NULL DEFAULT 0,
-    slive_tokens    INTEGER NOT NULL DEFAULT 1000,
-    squad           TEXT NOT NULL DEFAULT '{}',
-    is_vip          INTEGER NOT NULL DEFAULT 0,
-    energy          INTEGER NOT NULL DEFAULT 1000,
-    energy_day      INTEGER NOT NULL DEFAULT 0,
-    referred_by     TEXT,
-    last_update_at  INTEGER NOT NULL,
-    created_at      INTEGER NOT NULL
+if (!BOT_USERNAME) {
+  console.warn(
+    'BOT_USERNAME не задан в .env — реферальные ссылки не будут формироваться. ' +
+    'Впишите username бота без @ (например BOT_USERNAME=sportlivefc_bot).'
   );
+}
 
-  CREATE TABLE IF NOT EXISTS inventory (
-    inst_id      TEXT PRIMARY KEY,
-    telegram_id  TEXT NOT NULL,
-    player_id    TEXT NOT NULL,
-    acquired_at  INTEGER NOT NULL
-  );
-  CREATE INDEX IF NOT EXISTS idx_inventory_user ON inventory(telegram_id);
+if (!BOT_TOKEN || BOT_TOKEN.includes('PUT_YOUR_NEW_TOKEN_HERE')) {
+  console.error('BOT_TOKEN не задан в .env — заполните его перед запуском (см. .env.example).');
+  process.exit(1);
+}
 
-  CREATE TABLE IF NOT EXISTS payments (
-    charge_id    TEXT PRIMARY KEY,
-    telegram_id  TEXT NOT NULL,
-    amount       INTEGER NOT NULL,
-    created_at   INTEGER NOT NULL
-  );
+const TG_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
-  CREATE TABLE IF NOT EXISTS star_ledger (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    telegram_id  TEXT NOT NULL,
-    delta        INTEGER NOT NULL,
-    reason       TEXT,
-    created_at   INTEGER NOT NULL
-  );
+// Каталог покупаемых пакетов звёзд (готовые пресеты для быстрого пополнения).
+// Кроме них клиент может прислать packageId: 'custom' + customAmount — тогда
+// сумму задаёт сам игрок (см. /api/create-invoice).
+const STAR_PACKAGES = {
+  pack_100: { amount: 100, title: '100 Stars', description: 'Пополнение баланса на 100 ⭐️' },
+  pack_500: { amount: 500, title: '500 Stars', description: 'Пополнение баланса на 500 ⭐️' },
+  pack_1000: { amount: 1000, title: '1000 Stars', description: 'Пополнение баланса на 1000 ⭐️' },
+};
+const MIN_CUSTOM_STARS = 50;
+const MAX_CUSTOM_STARS = 100000;
 
-  -- Драфт: отдельный от основного Клуба состав из 5 карт. Не пересекается с
-  -- inventory/squad — карты драфта нельзя поставить в обычный состав или продать.
-  CREATE TABLE IF NOT EXISTS draft_squads (
-    telegram_id          TEXT PRIMARY KEY,
-    players              TEXT NOT NULL,             -- JSON-массив из 5 id игроков (players-data.js)
-    rating               INTEGER NOT NULL,           -- сумма OVR состава
-    active               INTEGER NOT NULL DEFAULT 1, -- 0 = серия закончена (было поражение), нужен новый вход
-    wins                 INTEGER NOT NULL DEFAULT 0, -- побед в ТЕКУЩЕЙ серии (обнуляется при новом входе)
-    total_points         INTEGER NOT NULL DEFAULT 0, -- очки лидерборда — накопительно, никогда не обнуляются
-    last_free_entry_day  INTEGER NOT NULL DEFAULT -1,-- dayIndex() последнего входа ЗА $SLIVE (для лимита 1/сутки)
-    drafted_at           INTEGER NOT NULL
-  );
+// Внутриигровые паки ("Драфт"), которые покупаются за уже пополненный баланс.
+// ВАЖНО: цены здесь были рассинхронизированы с ценами, нарисованными на
+// кнопках в index.html (сервер считал silver=150/gold=400/legend=900,
+// а кнопки показывали 50/200/1000) — из-за этого buy-pack иногда списывал
+// не ту сумму, которую видел игрок, и Telegram/клиент ругался на несостыковку.
+// Цены ниже — единственный источник правды, ПОДГОНЯЙТЕ КНОПКИ В index.html ПОД НИХ,
+// а не наоборот.
+const GAME_PACKS = {
+  bronze: { price: 50, currency: 'stars' },
+  silver: { price: 100, currency: 'stars' },
+  gold: { price: 400, currency: 'stars' },
+  legend: { price: 2000, currency: 'stars' },
+};
 
-  -- Служебная таблица из одной строки — отслеживает, за какие сутки уже
-  -- выплачена ежедневная награда лидеру драфт-рейтинга (чтобы не задвоить
-  -- выплату при перезапуске сервера или при нескольких проверках подряд).
-  CREATE TABLE IF NOT EXISTS draft_meta (
-    id                INTEGER PRIMARY KEY CHECK (id = 1),
-    last_payout_day   INTEGER NOT NULL DEFAULT -1
-  );
+// Паки за внутриигровую валюту $SLive — те же паки, но с ценой в SLive.
+// Цены в SLive подняты ещё раз относительно Stars-цен (SLive легче фармить
+// пассивно, чем купить Stars, так что цену в SLive держим ощутимо выше).
+const GAME_PACKS_SLIVE = {
+  bronze: 1500,
+  silver: 7500,
+  gold: 30000,
+  legend: 150000,
+};
 
-  -- Битвы составами ("Битвы") — PvP-режим НА ОСНОВНОМ составе клуба (squad
-  -- игрока из users.squad), а не на отдельных драфт-картах. В отличие от
-  -- Драфта тут нет "серии до первого поражения": рейтинг выражен в кубках
-  -- (trophies) как в лиге — победа поднимает, поражение опускает (не ниже 0),
-  -- лига (league) определяется порогом кубков (см. SQUAD_LEAGUES). Серия
-  -- побед подряд (streak) даёт нарастающий бонус к награде и очкам.
-  CREATE TABLE IF NOT EXISTS squad_battles (
-    telegram_id          TEXT PRIMARY KEY,
-    trophies             INTEGER NOT NULL DEFAULT 0,
-    wins                 INTEGER NOT NULL DEFAULT 0,
-    losses               INTEGER NOT NULL DEFAULT 0,
-    streak               INTEGER NOT NULL DEFAULT 0, -- побед подряд ПРЯМО СЕЙЧАС, сбрасывается поражением
-    best_streak          INTEGER NOT NULL DEFAULT 0,
-    daily_battles_used    INTEGER NOT NULL DEFAULT 0,
-    daily_battles_day     INTEGER NOT NULL DEFAULT -1,
-    last_battle_at         INTEGER
-  );
+// Цена VIP-статуса в Stars (разовая покупка, см. /api/buy-vip).
+const VIP_PRICE_STARS = 300;
 
-  -- Ставки за $SLive (раздел "СТАВКИ") — полностью управляются админом:
-  -- он создаёт ивент с вариантами исхода и процентом (шансом) на каждый,
-  -- игроки ставят $SLive на вариант, админ подтверждает исход вручную.
-  CREATE TABLE IF NOT EXISTS bet_events (
-    id                  TEXT PRIMARY KEY,
-    title               TEXT NOT NULL,
-    description         TEXT,
-    status              TEXT NOT NULL DEFAULT 'open', -- open | closed | resolved
-    resolved_option_id  TEXT,
-    created_at          INTEGER NOT NULL,
-    closes_at           INTEGER,
-    resolved_at         INTEGER
-  );
+// ---------- Драфт (отдельный от основного Клуба режим: 5 случайных карт + PvP) ----------
+// Вход за $SLive — раз в сутки (лимит проверяется в db.js через
+// canUseFreeDraftEntry/last_free_entry_day, не на клиенте). Вход за Stars —
+// без ограничений, можно пересобирать состав сколько угодно раз в день.
+const DRAFT_ENTRY_SLIVE = 1000;
+const DRAFT_ENTRY_STARS = 100;
+// Вход за жетоны Драфта — валюта, которую выдаёт ТОЛЬКО Батл Пасс (см.
+// battlepass_users.draft_tokens в db.js). Без дневного лимита: жетоны сами по
+// себе дефицитны (зарабатываются только уровнями Батл Пасса), так что
+// дополнительный лимит не нужен — сколько накопил, столько входов и есть.
+const DRAFT_ENTRY_TOKENS = 3;
+// Прогрессия паков для 5 карт драфт-состава (по одной карте на шаг) —
+// используем ту же getRandomPlayer(), что и обычные паки, но повыше рангом,
+// потому что это отдельная платная активность.
+const DRAFT_PACK_SEQUENCE = ['silver', 'silver', 'gold', 'gold', 'legend'];
 
-  -- percent — шанс/вероятность в %, который вручную задаёт админ при
-  -- создании ивента (как в Binance/Fanton — процентная полоса на каждый
-  -- исход). Коэффициент выплаты считается как 100/percent и ФИКСИРУЕТСЯ
-  -- в ставке (bets.multiplier) в момент, когда игрок ставит — так более
-  -- поздние ставки или правки процентов админом не задним числом меняют
-  -- выплату по уже сделанным ставкам.
-  CREATE TABLE IF NOT EXISTS bet_options (
-    id           TEXT PRIMARY KEY,
-    event_id     TEXT NOT NULL,
-    label        TEXT NOT NULL,
-    percent      REAL NOT NULL,
-    sort_order   INTEGER NOT NULL DEFAULT 0
-  );
-  CREATE INDEX IF NOT EXISTS idx_bet_options_event ON bet_options(event_id);
+const app = express();
+// Мини-приложение (index.html) отдаётся не с этого же домена, а из Telegram
+// (или GitHub Pages / другого хостинга), поэтому без CORS браузер молча
+// блокирует все fetch() к API — это тоже выглядело бы как "не удалось списать Stars".
+app.use(cors());
+app.use(express.json());
 
-  CREATE TABLE IF NOT EXISTS bets (
-    id           TEXT PRIMARY KEY,
-    event_id     TEXT NOT NULL,
-    option_id    TEXT NOT NULL,
-    telegram_id  TEXT NOT NULL,
-    amount       INTEGER NOT NULL,
-    multiplier   REAL NOT NULL,
-    status       TEXT NOT NULL DEFAULT 'pending', -- pending | won | lost
-    payout       INTEGER NOT NULL DEFAULT 0,
-    created_at   INTEGER NOT NULL
-  );
-  CREATE INDEX IF NOT EXISTS idx_bets_event ON bets(event_id);
-  CREATE INDEX IF NOT EXISTS idx_bets_user ON bets(telegram_id);
+// Лёгкий эндпоинт для внешнего keep-alive пинга (см. инструкцию по cron-job.org).
+// Не трогает БД, отвечает мгновенно — идеален, чтобы Render Free не засыпал.
+app.get('/health', (req, res) => res.status(200).send('ok'));
 
-  -- Боевой пропуск (БП) — сезон на 14 дней, как в Fortnite: бесплатная и
-  -- платная (200 ⭐️) ветки наград на 14 уровней, уровень растёт от XP за
-  -- ежедневные задания (см. battle_pass_quests ниже), а не просто от времени.
-  CREATE TABLE IF NOT EXISTS battle_pass (
-    telegram_id      TEXT PRIMARY KEY,
-    season_id        INTEGER NOT NULL DEFAULT 1,
-    xp               INTEGER NOT NULL DEFAULT 0,
-    premium          INTEGER NOT NULL DEFAULT 0,
-    claimed_free     TEXT NOT NULL DEFAULT '[]',
-    claimed_premium  TEXT NOT NULL DEFAULT '[]',
-    quest_day        INTEGER NOT NULL DEFAULT -1,
-    quests           TEXT NOT NULL DEFAULT '[]'
-  );
-`);
-db.prepare('INSERT OR IGNORE INTO draft_meta (id, last_payout_day) VALUES (1, -1)').run();
+// ---------- Auth middleware ----------
+function requireTelegramAuth(req, res, next) {
+  const initData = req.body.initData || req.query.initData;
+  const result = validateInitData(initData, BOT_TOKEN);
+  if (!result.valid) {
+    return res.status(401).json({ error: 'unauthorized', reason: result.reason });
+  }
+  req.telegramUser = result.user;
+  next();
+}
 
-// Миграция для БД, созданных до появления VIP/энергии/рефералки —
-// ALTER TABLE ADD COLUMN не поддерживает IF NOT EXISTS, поэтому просто
-// глушим ошибку "duplicate column name", если колонка уже есть.
-function tryAlter(sql) {
+function requireAdmin(req, res, next) {
+  if (!ADMIN_TELEGRAM_ID) {
+    return res.status(403).json({ error: 'admin_not_configured' });
+  }
+  if (String(req.telegramUser.id) !== String(ADMIN_TELEGRAM_ID)) {
+    return res.status(403).json({ error: 'forbidden' });
+  }
+  next();
+}
+
+// Отправка уведомления игроку в личку бота. Не роняем запрос, если бот не
+// смог написать (например, юзер ни разу не жал /start) — это не критично.
+// Возвращает true/false — рассылке (см. /api/admin/broadcast) нужно знать,
+// сколько сообщений реально доставлено.
+async function notifyUser(telegramId, text) {
   try {
-    db.exec(sql);
-  } catch (e) {
-    if (!String(e.message).includes('duplicate column name')) throw e;
-  }
-}
-tryAlter('ALTER TABLE users ADD COLUMN is_vip INTEGER NOT NULL DEFAULT 0');
-tryAlter('ALTER TABLE users ADD COLUMN energy INTEGER NOT NULL DEFAULT 1000');
-tryAlter('ALTER TABLE users ADD COLUMN energy_day INTEGER NOT NULL DEFAULT 0');
-tryAlter('ALTER TABLE users ADD COLUMN referred_by TEXT');
-// Дробный "хвост" пассивного фарма, который ещё не набежал на целый $SLive
-// (см. applyOfflineFarm) — без него дробная часть терялась бы при каждом
-// вызове applyOfflineFarm, а он вызывается ОЧЕНЬ часто (на каждый тап,
-// каждое действие, и even просто при просмотре списка игроков в админке).
-tryAlter('ALTER TABLE users ADD COLUMN slive_farm_remainder REAL NOT NULL DEFAULT 0');
-// referral_unlocked: устаревшее поле старой (авто-открывающейся) версии
-// рефералки, оставлено ради обратной совместимости со старыми БД, но больше
-// не используется — теперь статус хранится в referral_status.
-tryAlter('ALTER TABLE users ADD COLUMN referral_unlocked INTEGER NOT NULL DEFAULT 0');
-// Новый флоу заявок на рефералку: 'none' | 'pending' | 'approved'.
-tryAlter("ALTER TABLE users ADD COLUMN referral_status TEXT NOT NULL DEFAULT 'none'");
-// Ссылку сюда вручную вписывает админ при подтверждении заявки (см.
-// approveReferralRequest) — не обязательно t.me/bot?startapp=id.
-tryAlter('ALTER TABLE users ADD COLUMN referral_link TEXT');
-tryAlter('ALTER TABLE users ADD COLUMN referral_requested_at INTEGER');
-// Жетоны Драфта — начисляются наградами Боевого пропуска, тратятся как
-// альтернативный вход в Драфт (см. DRAFT_ENTRY_TOKENS/spendDraftTokens) —
-// без дневного лимита, в отличие от бесплатного входа за $SLive.
-tryAlter('ALTER TABLE users ADD COLUMN draft_tokens INTEGER NOT NULL DEFAULT 0');
-
-// Служебная таблица key/value для настроек, которые задаёт админ из панели
-// (сейчас — ссылка на канал/чат, на который нужно подписаться перед тем как
-// стать рефералом). Не хардкодим в .env, чтобы админ мог менять её на лету,
-// не передеплоивая сервер.
-db.exec(`
-  CREATE TABLE IF NOT EXISTS settings (
-    key    TEXT PRIMARY KEY,
-    value  TEXT
-  );
-`);
-
-function getSetting(key) {
-  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
-  return row ? row.value : null;
-}
-
-function setSetting(key, value) {
-  db.prepare(
-    `INSERT INTO settings (key, value) VALUES (?, ?)
-     ON CONFLICT(key) DO UPDATE SET value = excluded.value`
-  ).run(key, value);
-}
-
-const REFERRAL_CHANNEL_LINK_KEY = 'referral_channel_link';
-
-// ---------- helpers ----------
-
-function now() {
-  return Date.now();
-}
-
-// Номер календарных суток (UTC) — используется, чтобы понять, наступил ли
-// новый день и пора ли выдать игроку свежие 1000 энергии.
-function dayIndex(ts = now()) {
-  return Math.floor(ts / 86400000);
-}
-
-function rowToPlayer(instRow) {
-  const meta = PLAYERS_BY_ID[instRow.player_id];
-  if (!meta) return null; // на случай если карта была удалена из players-data.js
-  return { ...meta, instId: instRow.inst_id, acquiredAt: instRow.acquired_at };
-}
-
-function getInventory(telegramId) {
-  const rows = db
-    .prepare('SELECT * FROM inventory WHERE telegram_id = ? ORDER BY acquired_at ASC')
-    .all(telegramId);
-  return rows.map(rowToPlayer).filter(Boolean);
-}
-
-// Если наступили новые сутки (по UTC) — обнуляем энергию до DAILY_ENERGY.
-// Вызывается на каждый запрос, который читает энергию, так что не важно,
-// когда именно игрок зайдёт в течение дня — лимит применится один раз в сутки.
-function refreshEnergyIfNeeded(telegramId) {
-  const user = db.prepare('SELECT energy, energy_day FROM users WHERE telegram_id = ?').get(telegramId);
-  if (!user) return;
-  const today = dayIndex();
-  if (user.energy_day !== today) {
-    db.prepare('UPDATE users SET energy = ?, energy_day = ? WHERE telegram_id = ?').run(DAILY_ENERGY, today, telegramId);
-  }
-}
-
-// Ставка фарма в SLive/СУТКИ — сумма income карт в составе, с той же бустной
-// "химией" за одинаковую nation, что и в клиентском renderSquad() (иначе
-// офлайн-начисление на сервере тихо не совпадало бы с тем, что игрок видит
-// на экране, пока приложение открыто). Состав валидируется против
-// инвентаря: клиент присылает только instId, а не income/rating, поэтому
-// подделать ставку фарма нельзя.
-function computeFarmRate(telegramId, squad, inventoryByInstId) {
-  let baseIncome = 0;
-  const nationsCount = {};
-
-  for (const instId of Object.values(squad || {})) {
-    if (!instId) continue;
-    const inst = inventoryByInstId.get(instId);
-    if (!inst || inst.telegram_id !== telegramId) continue; // не своя карта — игнорируем
-    const meta = PLAYERS_BY_ID[inst.player_id];
-    if (!meta) continue;
-    baseIncome += meta.income;
-    nationsCount[meta.nation] = (nationsCount[meta.nation] || 0) + 1;
-  }
-
-  const maxSameNation = Math.max(0, ...Object.values(nationsCount));
-  const chemMultiplier = maxSameNation > 1 ? 1 + maxSameNation * 0.1 : 1;
-
-  return Math.floor(baseIncome * chemMultiplier);
-}
-
-// Применяет офлайн-фарм: сколько SLive накапало с last_update_at по сейчас,
-// исходя из ставки фарма ТЕКУЩЕГО состава. Вызывается на каждый запрос,
-// который читает или меняет баланс/состав, так что баланс в БД всегда актуален.
-function applyOfflineFarm(telegramId) {
-  const user = db.prepare('SELECT * FROM users WHERE telegram_id = ?').get(telegramId);
-  if (!user) return null;
-
-  const squad = JSON.parse(user.squad || '{}');
-  const instIds = Object.values(squad).filter(Boolean);
-  let inventoryByInstId = new Map();
-  if (instIds.length) {
-    const placeholders = instIds.map(() => '?').join(',');
-    const rows = db
-      .prepare(`SELECT * FROM inventory WHERE inst_id IN (${placeholders})`)
-      .all(...instIds);
-    inventoryByInstId = new Map(rows.map(r => [r.inst_id, r]));
-  }
-
-  // ВАЖНО: farmRate — это SLive/СУТКИ (см. комментарий в players-data.js и
-  // computeFarmRate ниже), а не SLive/секунду. Раньше earned считался как
-  // deltaSeconds * farmRate напрямую — то есть карта с income=500/сутки в
-  // составе приносила бы 500 SLive КАЖДУЮ секунду (легенду можно было
-  // окупить быстрее, чем открывался следующий пак). Здесь мы явно переводим
-  // прошедшее время в долю суток, прежде чем умножать на суточную ставку —
-  // это единственное место в игре, где начисляется реальный (не визуальный)
-  // баланс, поэтому именно тут должна жить правильная единица измерения.
-  const farmRate = computeFarmRate(telegramId, squad, inventoryByInstId); // SLive/сутки
-  const t = now();
-  const deltaSeconds = Math.max(0, (t - user.last_update_at) / 1000);
-
-  // БАГ, который чинит remainder: applyOfflineFarm вызывается на КАЖДЫЙ тап,
-  // каждую покупку, каждое открытие вкладки — то есть очень часто, с очень
-  // маленькими deltaSeconds между вызовами. Если дробную часть заработанного
-  // просто отбрасывать (как было раньше — Math.floor(...) без остатка), то
-  // при активной игре почти весь пассивный доход стирается в ноль ещё до
-  // того, как накопится хотя бы 1 целый $SLive: заработанное "сгорает"
-  // между вызовами, а не копится. Игрок видел рост баланса только за счёт
-  // визуального тикера на клиенте — а после ближайшей синхронизации с
-  // сервером (раз в 30 сек или после любого действия) баланс откатывался
-  // на настоящее, сильно меньшее серверное значение — выглядело так, будто
-  // "очки пропадают". Здесь мы явно копим дробный остаток в
-  // slive_farm_remainder и переносим его в следующий вызов, а не теряем.
-  const rawEarned = (deltaSeconds / 86400) * farmRate + user.slive_farm_remainder;
-  const earned = Math.floor(rawEarned);
-  const remainder = rawEarned - earned;
-
-  if (earned > 0 || remainder !== user.slive_farm_remainder || t !== user.last_update_at) {
-    db.prepare(
-      'UPDATE users SET slive_tokens = slive_tokens + ?, slive_farm_remainder = ?, last_update_at = ? WHERE telegram_id = ?'
-    ).run(earned, remainder, t, telegramId);
-  }
-
-  return { farmRate, earned };
-}
-
-// ---------- public API ----------
-
-// referrerId — telegram_id пригласившего (из start_param мини-аппы). Награда
-// начисляется рефереру только один раз, в момент ПЕРВОГО создания записи
-// приглашённого — переписать referred_by задним числом нельзя.
-export async function ensureUser(telegramId, username = null, referrerId = null) {
-  const existing = db.prepare('SELECT * FROM users WHERE telegram_id = ?').get(telegramId);
-  if (!existing) {
-    const referrerRow = referrerId && referrerId !== telegramId
-      ? db.prepare('SELECT telegram_id FROM users WHERE telegram_id = ?').get(referrerId)
-      : null;
-
-    const tx = db.transaction(() => {
-      db.prepare(
-        `INSERT INTO users (telegram_id, username, tg_stars, slive_tokens, squad, is_vip, energy, energy_day, referred_by, last_update_at, created_at)
-         VALUES (?, ?, 0, 1000, '{}', 0, ?, ?, ?, ?, ?)`
-      ).run(telegramId, username, DAILY_ENERGY, dayIndex(), referrerRow ? referrerId : null, now(), now());
-
-      if (referrerRow) {
-        db.prepare('UPDATE users SET slive_tokens = slive_tokens + ? WHERE telegram_id = ?')
-          .run(REFERRAL_REWARD_SLIVE, referrerId);
-      }
+    const resp = await fetch(`${TG_API}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: telegramId, text, parse_mode: 'HTML' }),
     });
-    tx();
-  } else if (username && username !== existing.username) {
-    db.prepare('UPDATE users SET username = ? WHERE telegram_id = ?').run(username, telegramId);
+    const data = await resp.json();
+    return Boolean(data.ok);
+  } catch (err) {
+    console.error('notifyUser failed', err);
+    return false;
   }
-  return getUser(telegramId);
 }
 
-export async function getUser(telegramId) {
-  applyOfflineFarm(telegramId);
-  refreshEnergyIfNeeded(telegramId);
-  const row = db.prepare('SELECT * FROM users WHERE telegram_id = ?').get(telegramId);
-  if (!row) return null;
+// Приветственное сообщение с краткой инструкцией — отправляется по команде
+// /start (см. обработку update.message в /webhook ниже). Если задан
+// MINI_APP_URL — добавляем кнопку, которая сразу открывает мини-приложение
+// (тип web_app), иначе просто просим воспользоваться кнопкой меню бота.
+async function sendWelcomeMessage(chatId) {
+  const text =
+    '👋 <b>Добро пожаловать в Sport Live FC!</b>\n\n' +
+    'Это футбольный клуб-менеджер прямо в Telegram:\n' +
+    '⚽️ <b>Тапай</b> — зарабатывай $SLive за каждый клик (энергия обновляется раз в сутки).\n' +
+    '🎁 <b>Открывай паки</b> — получай карточки игроков от бронзы до легенды.\n' +
+    '🧩 <b>Собирай состав</b> — карточки в составе приносят пассивный доход, игроки одной национальности дают бонус к доходу (химия).\n' +
+    '🛒 <b>Маркет</b> — покупай конкретного игрока напрямую или продавай дубликаты карт.\n' +
+    '⚔️ <b>Драфт</b> — собери состав из 5 карт и бейся с другими игроками за очки и награды.\n' +
+    '🏆 <b>Топ</b> — соревнуйся в лидерборде по балансу и по очкам Драфта.\n' +
+    '👥 <b>Реферальная программа</b> — приглашай друзей и получай награду за каждого.\n\n' +
+    'Жми кнопку ниже (или кнопку меню), чтобы открыть игру 👇';
 
-  const myClub = getInventory(telegramId);
-  const squad = JSON.parse(row.squad || '{}');
-  const squadPower = myClub.reduce((sum, p) => sum + p.rating, 0); // сумма рейтингов ВСЕХ купленных карт
-  const inventoryByInstId = new Map(myClub.map(p => [p.instId, { telegram_id: telegramId, player_id: p.id }]));
-  const farmRate = computeFarmRate(telegramId, squad, inventoryByInstId);
+  const replyMarkup = MINI_APP_URL
+    ? { inline_keyboard: [[{ text: '🎮 Играть', web_app: { url: MINI_APP_URL } }]] }
+    : undefined;
 
-  return {
-    telegramId: row.telegram_id,
-    username: row.username,
-    tgStars: row.tg_stars,
-    sliveTokens: row.slive_tokens,
-    isVip: Boolean(row.is_vip),
-    energy: row.energy,
-    dailyEnergy: DAILY_ENERGY,
-    squad,
-    myClub,
-    farmRate,
-    squadPower,
-    draftTokens: row.draft_tokens || 0,
-  };
-}
-
-// ---------- Жетоны Драфта ----------
-export async function spendDraftTokens({ telegramId, amount }) {
-  const tx = db.transaction(() => {
-    const user = db.prepare('SELECT draft_tokens FROM users WHERE telegram_id = ?').get(telegramId);
-    if (!user) return { ok: false, reason: 'no_user', balance: 0 };
-    if (user.draft_tokens < amount) return { ok: false, reason: 'insufficient_funds', balance: user.draft_tokens };
-    db.prepare('UPDATE users SET draft_tokens = draft_tokens - ? WHERE telegram_id = ?').run(amount, telegramId);
-    const updated = db.prepare('SELECT draft_tokens FROM users WHERE telegram_id = ?').get(telegramId);
-    return { ok: true, balance: updated.draft_tokens };
-  });
-  return tx();
-}
-
-function grantDraftTokens(telegramId, amount) {
-  if (!amount) return;
-  db.prepare('UPDATE users SET draft_tokens = draft_tokens + ? WHERE telegram_id = ?').run(amount, telegramId);
-}
-
-// ---------- Stars (реальные деньги) ----------
-
-export async function creditStarsFromPayment({ telegramId, amount, paymentChargeId }) {
-  let creditedNow = false;
-  const tx = db.transaction(() => {
-    // ВАЖНО (фикс бага "звёзды списались, а баланс не начислился"): раньше
-    // тут не было ensureUserSync(), и если строка пользователя в users ещё
-    // не была создана к моменту оплаты (например, инвойс оплачен раньше,
-    // чем /api/me успел создать профиль, либо после сброса БД) — UPDATE
-    // ниже молча обновлял 0 строк. Ошибки при этом НЕ возникает (better-sqlite3
-    // не бросает исключение на 0 affected rows), поэтому платёж тихо "терялся":
-    // запись в payments создавалась (платёж выглядел учтённым), а tg_stars
-    // никогда не увеличивался. ensureUserSync создаёт строку, если её ещё нет,
-    // — точно так же, как уже делают adjustStarsAdmin/adjustSliveAdmin ниже.
-    ensureUserSync(telegramId);
-
-    // Идемпотентность: telegram_payment_charge_id уникален для каждого платежа.
-    // Раньше проверка была отдельным SELECT ДО транзакции, а INSERT — внутри
-    // неё: между этими двумя шагами теоретически мог проскочить повторный
-    // вызов (Telegram повторно доставляет вебхук, если сервер не ответил
-    // достаточно быстро) — INSERT OR IGNORE прямо внутри транзакции убирает
-    // это окно гонки полностью: строка либо создаётся и мы начисляем один
-    // раз, либо (при повторе) insertResult.changes === 0 и мы просто выходим.
-    const insertResult = db.prepare(
-      'INSERT OR IGNORE INTO payments (charge_id, telegram_id, amount, created_at) VALUES (?, ?, ?, ?)'
-    ).run(paymentChargeId, telegramId, amount, now());
-    if (insertResult.changes === 0) return; // уже начислено по этому charge_id ранее
-
-    creditedNow = true;
-    db.prepare('UPDATE users SET tg_stars = tg_stars + ? WHERE telegram_id = ?').run(amount, telegramId);
-    db.prepare('INSERT INTO star_ledger (telegram_id, delta, reason, created_at) VALUES (?, ?, ?, ?)')
-      .run(telegramId, amount, 'topup:' + paymentChargeId, now());
-  });
-  tx();
-  return { ok: true, duplicate: !creditedNow };
-}
-
-export async function spendStars({ telegramId, amount }) {
-  const tx = db.transaction(() => {
-    const user = db.prepare('SELECT tg_stars FROM users WHERE telegram_id = ?').get(telegramId);
-    if (!user) return { ok: false, reason: 'no_user', balance: 0 };
-    if (user.tg_stars < amount) return { ok: false, reason: 'insufficient_funds', balance: user.tg_stars };
-
-    db.prepare('UPDATE users SET tg_stars = tg_stars - ? WHERE telegram_id = ?').run(amount, telegramId);
-    db.prepare('INSERT INTO star_ledger (telegram_id, delta, reason, created_at) VALUES (?, ?, ?, ?)')
-      .run(telegramId, -amount, 'spend', now());
-    const updated = db.prepare('SELECT tg_stars FROM users WHERE telegram_id = ?').get(telegramId);
-    return { ok: true, balance: updated.tg_stars };
-  });
-  return tx();
-}
-
-// ---------- $SLive (внутриигровая валюта) ----------
-
-// Обмен Telegram Stars -> $SLive по фиксированному курсу STARS_TO_SLIVE_RATE.
-// Обратного обмена ($SLive -> Stars, вывод) пока НЕТ — кнопка "Обменять" в
-// блоке "Вывод" на клиенте намеренно задизейблена ("Скоро"), здесь для неё
-// сознательно нет функции, чтобы не создавать видимость рабочего API.
-export async function exchangeStarsToSlive({ telegramId, starsAmount }) {
-  const numStars = Math.floor(Number(starsAmount));
-  if (!Number.isFinite(numStars) || numStars <= 0) {
-    return { ok: false, reason: 'invalid_amount' };
+  try {
+    await fetch(`${TG_API}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        parse_mode: 'HTML',
+        ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+      }),
+    });
+  } catch (err) {
+    console.error('sendWelcomeMessage failed', err);
   }
-
-  applyOfflineFarm(telegramId); // фиксируем накапавшее ДО того, как баланс поменяется от обмена
-
-  const tx = db.transaction(() => {
-    const user = db.prepare('SELECT tg_stars, slive_tokens FROM users WHERE telegram_id = ?').get(telegramId);
-    if (!user) return { ok: false, reason: 'no_user' };
-    if (user.tg_stars < numStars) return { ok: false, reason: 'insufficient_funds', balance: user.tg_stars };
-
-    const gained = numStars * STARS_TO_SLIVE_RATE;
-    db.prepare('UPDATE users SET tg_stars = tg_stars - ?, slive_tokens = slive_tokens + ? WHERE telegram_id = ?')
-      .run(numStars, gained, telegramId);
-    db.prepare('INSERT INTO star_ledger (telegram_id, delta, reason, created_at) VALUES (?, ?, ?, ?)')
-      .run(telegramId, -numStars, 'exchange_to_slive', now());
-
-    const updated = db.prepare('SELECT tg_stars, slive_tokens FROM users WHERE telegram_id = ?').get(telegramId);
-    return { ok: true, starsBalance: updated.tg_stars, sliveBalance: updated.slive_tokens, gained };
-  });
-
-  return tx();
 }
 
-export async function spendSlive({ telegramId, amount }) {
-  applyOfflineFarm(telegramId); // сначала зачисляем то, что накапало, потом списываем
-  const tx = db.transaction(() => {
-    const user = db.prepare('SELECT slive_tokens FROM users WHERE telegram_id = ?').get(telegramId);
-    if (!user) return { ok: false, reason: 'no_user', balance: 0 };
-    if (user.slive_tokens < amount) return { ok: false, reason: 'insufficient_funds', balance: user.slive_tokens };
+// ---------- Каталог маркета (публичный, для отрисовки витрины) ----------
+app.get('/api/market-catalog', async (req, res) => {
+  const sellPrices = Object.fromEntries(
+    Object.entries(MARKET_PRICE).map(([type, price]) => [type, Math.floor(price.slive * SELL_RATE)])
+  );
+  res.json({ players: Object.values(PLAYERS_BY_ID), prices: MARKET_PRICE, sellPrices, vipPriceStars: VIP_PRICE_STARS });
+});
 
-    db.prepare('UPDATE users SET slive_tokens = slive_tokens - ? WHERE telegram_id = ?').run(amount, telegramId);
-    const updated = db.prepare('SELECT slive_tokens FROM users WHERE telegram_id = ?').get(telegramId);
-    return { ok: true, balance: updated.slive_tokens };
-  });
-  return tx();
-}
+// ---------- Профиль / баланс ----------
+// Каждый вызов пересчитывает офлайн-фарм и суточную энергию внутри
+// getUser/ensureUser — клиент просто читает готовые актуальные цифры.
+// startParam — это start_param мини-аппы (Telegram.WebApp.initDataUnsafe.start_param):
+// если это telegram_id другого игрока, засчитываем реферальную привязку
+// (см. ensureUser в db.js — сработает только для НОВОГО пользователя).
+app.post('/api/me', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  const startParam = req.body.startParam;
+  const referrerId = startParam && /^\d+$/.test(String(startParam)) && String(startParam) !== telegramId
+    ? String(startParam)
+    : null;
 
-// ---------- Тапалка (1 клик = 1 энергия = 1 $SLive) ----------
-// Прогресс кликов теперь считается и хранится на сервере, а не только в
-// localStorage браузера — клиент присылает пачку накопленных тапов
-// (см. flushTaps() в index.html), сервер сам проверяет остаток энергии на
-// сегодня и не даст списать больше, чем реально есть.
-export async function tap({ telegramId, count = 1 }) {
-  applyOfflineFarm(telegramId);
-  refreshEnergyIfNeeded(telegramId);
+  const user = await ensureUser(telegramId, req.telegramUser.username || null, referrerId);
+  const isAdmin = Boolean(ADMIN_TELEGRAM_ID) && telegramId === String(ADMIN_TELEGRAM_ID);
+  res.json({ user, isAdmin, starsToSliveRate: STARS_TO_SLIVE_RATE });
+});
 
-  const safeCount = Math.max(1, Math.min(MAX_TAP_PER_REQUEST, Math.floor(Number(count)) || 1));
+// ---------- Тапалка ----------
+// Клиент батчит клики и присылает их пачкой (см. flushTaps() в index.html).
+// Сервер сам решает, сколько энергии реально можно списать сегодня — это
+// единственное место, где прогресс тапалки надёжно сохраняется между сессиями.
+app.post('/api/tap', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  const { count = 1 } = req.body;
 
-  const tx = db.transaction(() => {
-    const user = db.prepare('SELECT energy, slive_tokens FROM users WHERE telegram_id = ?').get(telegramId);
-    if (!user) return { ok: false, reason: 'no_user', energy: 0, balance: 0 };
+  const result = await tap({ telegramId, count });
+  if (!result.ok) {
+    return res.status(409).json({ error: result.reason, energy: result.energy, balance: result.balance });
+  }
+  res.json({ ok: true, gained: result.gained, energy: result.energy, balance: result.balance });
+});
 
-    const spend = Math.min(safeCount, user.energy);
-    if (spend <= 0) {
-      return { ok: false, reason: 'no_energy', energy: user.energy, balance: user.slive_tokens };
+// ---------- VIP-статус ----------
+app.post('/api/buy-vip', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  const result = await buyVip({ telegramId, amount: VIP_PRICE_STARS });
+
+  if (!result.ok) {
+    if (result.reason === 'insufficient_funds') {
+      return res.status(402).json({ error: result.reason, balance: result.balance, required: VIP_PRICE_STARS - result.balance });
     }
-
-    db.prepare('UPDATE users SET energy = energy - ?, slive_tokens = slive_tokens + ? WHERE telegram_id = ?')
-      .run(spend, spend, telegramId);
-    const updated = db.prepare('SELECT energy, slive_tokens FROM users WHERE telegram_id = ?').get(telegramId);
-    return { ok: true, gained: spend, energy: updated.energy, balance: updated.slive_tokens };
-  });
-  const result = tx();
-  if (result.ok) {
-    bumpBattlePassQuestProgress(telegramId, 'tap', result.gained);
-    bumpBattlePassQuestProgress(telegramId, 'earn_slive', result.gained);
+    return res.status(409).json({ error: result.reason, balance: result.balance });
   }
-  return result;
-}
 
-// ---------- VIP-статус (разовая покупка за Stars) ----------
+  notifyUser(telegramId, `🏆 Поздравляем! Ты получил VIP-статус за ${VIP_PRICE_STARS} ⭐️!`);
+  res.json({ ok: true, balance: result.balance, price: VIP_PRICE_STARS });
+});
 
-export async function buyVip({ telegramId, amount }) {
-  const tx = db.transaction(() => {
-    const user = db.prepare('SELECT tg_stars, is_vip FROM users WHERE telegram_id = ?').get(telegramId);
-    if (!user) return { ok: false, reason: 'no_user', balance: 0 };
-    if (user.is_vip) return { ok: false, reason: 'already_vip', balance: user.tg_stars };
-    if (user.tg_stars < amount) return { ok: false, reason: 'insufficient_funds', balance: user.tg_stars };
+// ---------- Обмен Stars -> $SLive ----------
+// Курс фиксированный (см. STARS_TO_SLIVE_RATE в db.js). Обратного обмена
+// ($SLive -> Stars, вывод) пока нет — см. плашку "Вывод" на клиенте.
+app.post('/api/exchange-stars', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  const { amount } = req.body;
 
-    db.prepare('UPDATE users SET tg_stars = tg_stars - ?, is_vip = 1 WHERE telegram_id = ?').run(amount, telegramId);
-    db.prepare('INSERT INTO star_ledger (telegram_id, delta, reason, created_at) VALUES (?, ?, ?, ?)')
-      .run(telegramId, -amount, 'vip_purchase', now());
-    const updated = db.prepare('SELECT tg_stars FROM users WHERE telegram_id = ?').get(telegramId);
-    return { ok: true, balance: updated.tg_stars };
-  });
-  return tx();
-}
+  const result = await exchangeStarsToSlive({ telegramId, starsAmount: amount });
+  if (!result.ok) {
+    return res.status(409).json({ error: result.reason, balance: result.balance });
+  }
+
+  res.json({ ok: true, starsBalance: result.starsBalance, sliveBalance: result.sliveBalance, gained: result.gained });
+});
 
 // ---------- Рефералка ----------
-// Флоу теперь трёхстадийный:
-//   none     — игрок ещё не запрашивал ссылку (видит канал для подписки + кнопку запроса)
-//   pending  — запрос отправлен, ждёт подтверждения админом ("Ожидай подтверждения")
-//   approved — админ вставил ссылку и подтвердил, игрок видит её (и получает уведомление от бота)
-// referral_link — САМА ссылка, которую вручную вписывает админ при подтверждении
-// (см. approveReferralRequest) — это НЕ обязательно t.me/bot?startapp=id,
-// админ может вписать любую нужную ссылку.
+// Отдаёт invited/rewardPerFriend/status/link/channelLink. status: 'none' —
+// заявки не было, 'pending' — ждёт подтверждения админом, 'approved' —
+// ссылка (link) вписана админом и видна игроку (см. /api/referral-request
+// и /api/admin/referral-approve).
+app.post('/api/referral-info', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  const info = await getReferralInfo(telegramId);
+  res.json({ ...info, telegramId, botUsername: BOT_USERNAME || null });
+});
 
-export async function getReferralInfo(telegramId) {
-  const { cnt } = db.prepare('SELECT COUNT(*) AS cnt FROM users WHERE referred_by = ?').get(telegramId);
-  const user = db
-    .prepare('SELECT referral_status, referral_link FROM users WHERE telegram_id = ?')
-    .get(telegramId);
-  return {
-    invited: cnt,
-    rewardPerFriend: REFERRAL_REWARD_SLIVE,
-    status: user?.referral_status || 'none',
-    link: user?.referral_status === 'approved' ? (user.referral_link || null) : null,
-    channelLink: getSetting(REFERRAL_CHANNEL_LINK_KEY) || null,
-  };
-}
+// Игрок отправляет заявку на реферальную ссылку (обычно после того, как
+// увидел ссылку на канал в channelLink и подписался на него). Статус сразу
+// становится 'pending' — саму ссылку выдаёт только админ через
+// /api/admin/referral-approve, до этого клиент показывает "Ожидай подтверждения".
+app.post('/api/referral-request', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  const result = await requestReferralAccess(telegramId);
+  if (!result.ok) {
+    return res.status(409).json({ error: result.reason });
+  }
+  const info = await getReferralInfo(telegramId);
+  res.json({ ok: true, ...info, telegramId, botUsername: BOT_USERNAME || null });
+});
 
-// Игрок отправляет заявку на получение реферальной ссылки (обычно после
-// того, как подписался на канал из channelLink). Переводит статус в
-// 'pending' — саму ссылку выдаёт только админ через approveReferralRequest.
-// Идемпотентно: повторный запрос уже одобренной заявки ничего не ломает.
-export async function requestReferralAccess(telegramId) {
-  const existing = db.prepare('SELECT referral_status FROM users WHERE telegram_id = ?').get(telegramId);
-  if (!existing) return { ok: false, reason: 'no_user' };
-  if (existing.referral_status === 'approved') return { ok: true, status: 'approved' };
-  if (existing.referral_status === 'pending') return { ok: true, status: 'pending' };
+// ---------- Создание счёта на пополнение Stars ----------
+// packageId: один из готовых пресетов STAR_PACKAGES, либо 'custom' — тогда
+// сумму задаёт customAmount (число от MIN_CUSTOM_STARS до MAX_CUSTOM_STARS).
+app.post('/api/create-invoice', requireTelegramAuth, async (req, res) => {
+  const { packageId, customAmount } = req.body;
 
-  db.prepare('UPDATE users SET referral_status = ?, referral_requested_at = ? WHERE telegram_id = ?')
-    .run('pending', now(), telegramId);
-  return { ok: true, status: 'pending' };
-}
-
-// ---------- Админка: заявки на рефералку ----------
-
-// Список заявок, ожидающих подтверждения — показывается в админ-панели.
-export async function getPendingReferralRequests() {
-  return db
-    .prepare(
-      `SELECT telegram_id AS telegramId, username, referral_requested_at AS requestedAt
-       FROM users
-       WHERE referral_status = 'pending'
-       ORDER BY referral_requested_at ASC`
-    )
-    .all();
-}
-
-// Админ вписывает ссылку и подтверждает заявку — только после этого у игрока
-// в интерфейсе появляется ссылка (см. server.js: после успешного вызова этой
-// функции сервер ещё и шлёт игроку уведомление ботом).
-export async function approveReferralRequest({ telegramId, link }) {
-  const user = db.prepare('SELECT referral_status FROM users WHERE telegram_id = ?').get(telegramId);
-  if (!user) return { ok: false, reason: 'no_user' };
-  if (user.referral_status !== 'pending') return { ok: false, reason: 'not_pending' };
-  if (!link) return { ok: false, reason: 'invalid_link' };
-
-  db.prepare('UPDATE users SET referral_status = ?, referral_link = ? WHERE telegram_id = ?')
-    .run('approved', link, telegramId);
-  return { ok: true };
-}
-
-// Отклонить заявку — статус возвращается в 'none', игрок может запросить снова.
-export async function rejectReferralRequest(telegramId) {
-  const user = db.prepare('SELECT referral_status FROM users WHERE telegram_id = ?').get(telegramId);
-  if (!user) return { ok: false, reason: 'no_user' };
-  db.prepare('UPDATE users SET referral_status = ? WHERE telegram_id = ?').run('none', telegramId);
-  return { ok: true };
-}
-
-// ---------- Настройки (админка) ----------
-
-export async function getReferralChannelLink() {
-  return getSetting(REFERRAL_CHANNEL_LINK_KEY) || null;
-}
-
-export async function setReferralChannelLink(link) {
-  setSetting(REFERRAL_CHANNEL_LINK_KEY, link || '');
-  return { ok: true, link: link || '' };
-}
-
-// ---------- Инвентарь / драфт ----------
-
-export function addPlayerToInventory({ telegramId, playerId }) {
-  const instId = randomUUID();
-  db.prepare('INSERT INTO inventory (inst_id, telegram_id, player_id, acquired_at) VALUES (?, ?, ?, ?)')
-    .run(instId, telegramId, playerId, now());
-  return { instId, ...PLAYERS_BY_ID[playerId] };
-}
-
-// Продажа ЛИШНЕЙ (дублирующейся) карты за фиксированную долю цены Маркета
-// (см. SELL_RATE/getSellPrice в players-data.js). Все проверки — только тут,
-// на сервере, клиент (sellDuplicate в index.html) их не может обойти:
-//   - not_owned      — карта не найдена в инвентаре ИМЕННО этого игрока
-//   - card_equipped  — карта прямо сейчас стоит в составе (squad), продавать нельзя
-//   - last_copy      — это единственный экземпляр игрока, продавать нельзя
-export async function sellCard({ telegramId, instId }) {
-  applyOfflineFarm(telegramId); // сначала фиксируем то, что накапало, потом уже меняем баланс
-
-  const tx = db.transaction(() => {
-    const inst = db.prepare('SELECT * FROM inventory WHERE inst_id = ?').get(instId);
-    if (!inst || inst.telegram_id !== telegramId) return { ok: false, reason: 'not_owned' };
-
-    const user = db.prepare('SELECT squad FROM users WHERE telegram_id = ?').get(telegramId);
-    const squad = JSON.parse(user?.squad || '{}');
-    const isEquipped = Object.values(squad).some(slotInstId => slotInstId === instId);
-    if (isEquipped) return { ok: false, reason: 'card_equipped' };
-
-    const { copies } = db
-      .prepare('SELECT COUNT(*) AS copies FROM inventory WHERE telegram_id = ? AND player_id = ?')
-      .get(telegramId, inst.player_id);
-    if (copies <= 1) return { ok: false, reason: 'last_copy' };
-
-    const gained = getSellPrice(inst.player_id);
-    db.prepare('DELETE FROM inventory WHERE inst_id = ?').run(instId);
-    db.prepare('UPDATE users SET slive_tokens = slive_tokens + ? WHERE telegram_id = ?').run(gained, telegramId);
-
-    const updated = db.prepare('SELECT slive_tokens FROM users WHERE telegram_id = ?').get(telegramId);
-    return { ok: true, balance: updated.slive_tokens, gained };
-  });
-
-  return tx();
-}
-
-// ---------- Состав ----------
-
-export async function saveUserState({ telegramId, patch }) {
-  // Сначала фиксируем офлайн-фарм по СТАРОМУ составу, потом уже применяем новый —
-  // иначе смена состава задним числом могла бы задним числом поднять ставку фарма.
-  applyOfflineFarm(telegramId);
-
-  if (patch.squad) {
-    const inventory = getInventory(telegramId);
-    const ownedInstIds = new Set(inventory.map(p => p.instId));
-    const cleanSquad = {};
-    for (const [slot, instId] of Object.entries(patch.squad)) {
-      // Игнорируем слоты с картами, которых у игрока на самом деле нет —
-      // так клиент не может "телепортировать" в состав чужую/несуществующую карту.
-      cleanSquad[slot] = instId && ownedInstIds.has(instId) ? instId : null;
+  let amount, title, description;
+  if (packageId === 'custom') {
+    amount = Math.floor(Number(customAmount));
+    if (!Number.isFinite(amount) || amount < MIN_CUSTOM_STARS || amount > MAX_CUSTOM_STARS) {
+      return res.status(400).json({ error: 'invalid_amount', min: MIN_CUSTOM_STARS, max: MAX_CUSTOM_STARS });
     }
-    db.prepare('UPDATE users SET squad = ? WHERE telegram_id = ?').run(JSON.stringify(cleanSquad), telegramId);
-  }
-
-  return getUser(telegramId);
-}
-
-// ---------- Лидерборд / сила состава ----------
-
-// Список telegram_id всех зарегистрированных игроков — используется
-// рассылкой из админки (см. /api/admin/broadcast в server.js), чтобы не
-// дублировать сырой SQL-запрос там.
-export async function getAllUserIds() {
-  return db.prepare('SELECT telegram_id FROM users').all().map(r => r.telegram_id);
-}
-
-export async function getLeaderboard(limit = 10) {
-  const rows = db.prepare('SELECT telegram_id FROM users').all();
-  // Прогоняем офлайн-фарм по каждому, чтобы топ был честным на момент запроса.
-  for (const r of rows) applyOfflineFarm(r.telegram_id);
-
-  return db
-    .prepare(
-      `SELECT telegram_id AS telegramId, username, slive_tokens AS balance, is_vip AS isVip
-       FROM users ORDER BY slive_tokens DESC LIMIT ?`
-    )
-    .all(limit)
-    .map(r => ({ ...r, isVip: Boolean(r.isVip) }));
-}
-
-// ---------- Админка ----------
-
-// "База игроков" для админки — не просто баланс, а полный прогресс каждого:
-// пассивный доход состава (farmRate), сила всего клуба (сумма рейтингов ВСЕХ
-// купленных карт, как в getUser) и разбивка инвентаря по редкости. offline-farm
-// применяется через тот же remainder-safe applyOfflineFarm, что и везде —
-// значит открытие этого списка больше не может "съесть" дробный прогресс
-// игроков (см. slive_farm_remainder).
-export async function listUsers() {
-  const rows = db.prepare('SELECT telegram_id FROM users').all();
-  for (const r of rows) {
-    applyOfflineFarm(r.telegram_id);
-    refreshEnergyIfNeeded(r.telegram_id);
-  }
-
-  const baseRows = db
-    .prepare(
-      `SELECT u.telegram_id AS telegramId, u.username, u.tg_stars AS tgStars, u.slive_tokens AS sliveTokens,
-              u.is_vip AS isVip, u.energy AS energy, u.squad AS squadJson,
-              (SELECT COUNT(*) FROM users r WHERE r.referred_by = u.telegram_id) AS invited
-       FROM users u ORDER BY u.tg_stars DESC`
-    )
-    .all();
-
-  return baseRows.map(u => {
-    const inventory = getInventory(u.telegramId);
-    const squad = JSON.parse(u.squadJson || '{}');
-    const inventoryByInstId = new Map(inventory.map(p => [p.instId, { telegram_id: u.telegramId, player_id: p.id }]));
-    const farmRate = computeFarmRate(u.telegramId, squad, inventoryByInstId); // SLive/сутки
-    const clubPower = inventory.reduce((sum, p) => sum + p.rating, 0);
-    const rarityCounts = inventory.reduce((acc, p) => {
-      acc[p.type] = (acc[p.type] || 0) + 1;
-      return acc;
-    }, {});
-
-    return {
-      telegramId: u.telegramId,
-      username: u.username,
-      tgStars: u.tgStars,
-      sliveTokens: u.sliveTokens,
-      isVip: Boolean(u.isVip),
-      energy: u.energy,
-      invited: u.invited,
-      farmRate,
-      clubPower,
-      cardsTotal: inventory.length,
-      rarityCounts,
-    };
-  });
-}
-
-export async function getStats() {
-  const { totalUsers } = db.prepare('SELECT COUNT(*) AS totalUsers FROM users').get();
-  const { totalStarsBalance } = db.prepare('SELECT COALESCE(SUM(tg_stars),0) AS totalStarsBalance FROM users').get();
-  const { totalSliveBalance } = db.prepare('SELECT COALESCE(SUM(slive_tokens),0) AS totalSliveBalance FROM users').get();
-  const { vipUsers } = db.prepare('SELECT COUNT(*) AS vipUsers FROM users WHERE is_vip = 1').get();
-  const { totalPaymentsCount } = db.prepare('SELECT COUNT(*) AS totalPaymentsCount FROM payments').get();
-  return { totalUsers, totalStarsBalance, totalSliveBalance, vipUsers, totalPaymentsCount };
-}
-
-export async function adjustStarsAdmin({ telegramId, amount, reason }) {
-  const tx = db.transaction(() => {
-    ensureUserSync(telegramId);
-    db.prepare('UPDATE users SET tg_stars = MAX(0, tg_stars + ?) WHERE telegram_id = ?').run(amount, telegramId);
-    db.prepare('INSERT INTO star_ledger (telegram_id, delta, reason, created_at) VALUES (?, ?, ?, ?)')
-      .run(telegramId, amount, 'admin:' + (reason || ''), now());
-    const updated = db.prepare('SELECT tg_stars FROM users WHERE telegram_id = ?').get(telegramId);
-    return { ok: true, balance: updated.tg_stars };
-  });
-  return tx();
-}
-
-export async function adjustSliveAdmin({ telegramId, amount, reason }) {
-  const tx = db.transaction(() => {
-    ensureUserSync(telegramId);
-    applyOfflineFarm(telegramId);
-    db.prepare('UPDATE users SET slive_tokens = MAX(0, slive_tokens + ?) WHERE telegram_id = ?').run(amount, telegramId);
-    const updated = db.prepare('SELECT slive_tokens FROM users WHERE telegram_id = ?').get(telegramId);
-    return { ok: true, balance: updated.slive_tokens, reason };
-  });
-  return tx();
-}
-
-function ensureUserSync(telegramId) {
-  const existing = db.prepare('SELECT 1 FROM users WHERE telegram_id = ?').get(telegramId);
-  if (!existing) {
-    db.prepare(
-      `INSERT INTO users (telegram_id, username, tg_stars, slive_tokens, squad, is_vip, energy, energy_day, referred_by, last_update_at, created_at)
-       VALUES (?, NULL, 0, 1000, '{}', 0, ?, ?, NULL, ?, ?)`
-    ).run(telegramId, DAILY_ENERGY, dayIndex(), now(), now());
-  }
-}
-
-// ---------- Драфт (отдельный PvP-режим: 5 случайных карт + бои) ----------
-
-function rowToDraftSquad(row) {
-  if (!row) return null;
-  const playerIds = JSON.parse(row.players || '[]');
-  const players = playerIds.map(id => PLAYERS_BY_ID[id]).filter(Boolean);
-  return {
-    players,
-    rating: row.rating,
-    active: Boolean(row.active),
-    wins: row.wins,
-    totalPoints: row.total_points,
-    draftedAt: row.drafted_at,
-  };
-}
-
-// Бесплатный (за $SLive) вход разрешён только РАЗ В СУТКИ — проверяем это
-// здесь, а не на клиенте, иначе игрок мог бы просто не показывать таймер.
-export async function canUseFreeDraftEntry(telegramId) {
-  const row = db.prepare('SELECT last_free_entry_day FROM draft_squads WHERE telegram_id = ?').get(telegramId);
-  if (!row) return true;
-  return row.last_free_entry_day !== dayIndex();
-}
-
-export async function getDraftState(telegramId) {
-  const row = db.prepare('SELECT * FROM draft_squads WHERE telegram_id = ?').get(telegramId);
-  const canFreeEntry = !row || row.last_free_entry_day !== dayIndex();
-  return { squad: rowToDraftSquad(row), canFreeEntry };
-}
-
-// currency: 'slive' (лимит 1/сутки, проверяется снаружи через canUseFreeDraftEntry
-// ДО списания денег) или 'stars' (без лимита). Каждый новый вход полностью
-// заменяет предыдущий состав драфта и обнуляет wins/active текущей серии —
-// total_points (лидерборд) при этом НЕ трогаем, он накопительный.
-export async function startDraft({ telegramId, playerIds, currency }) {
-  const rating = playerIds.reduce((sum, id) => sum + (PLAYERS_BY_ID[id]?.rating || 0), 0);
-  const today = dayIndex();
-  const freeEntryValueForInsert = currency === 'slive' ? today : -1;
-
-  const tx = db.transaction(() => {
-    db.prepare(
-      `INSERT INTO draft_squads (telegram_id, players, rating, active, wins, total_points, last_free_entry_day, drafted_at)
-       VALUES (?, ?, ?, 1, 0, 0, ?, ?)
-       ON CONFLICT(telegram_id) DO UPDATE SET
-         players = excluded.players,
-         rating = excluded.rating,
-         active = 1,
-         wins = 0,
-         last_free_entry_day = CASE WHEN ? = 'slive' THEN ? ELSE draft_squads.last_free_entry_day END,
-         drafted_at = excluded.drafted_at`
-    ).run(telegramId, JSON.stringify(playerIds), rating, freeEntryValueForInsert, now(), currency, today);
-  });
-  tx();
-
-  const row = db.prepare('SELECT * FROM draft_squads WHERE telegram_id = ?').get(telegramId);
-  bumpBattlePassQuestProgress(telegramId, 'draft_entry', 1);
-  return { squad: rowToDraftSquad(row) };
-}
-
-// Сколько опасных моментов разыгрывается за один симулированный матч драфта.
-const DRAFT_MATCH_MOMENTS = 5;
-// Вероятность того, что КОНКРЕТНЫЙ опасный момент реализуется в гол
-// (не каждый шанс становится взятием ворот — иначе итоговый счёт при 5
-// моментах выглядел бы нереалистично высоким).
-const DRAFT_MOMENT_SCORE_CHANCE = 0.45;
-
-// Полноценная симуляция матча вместо мгновенного объявления победы/поражения:
-// разыгрываем несколько опасных моментов, каждый достаётся одной из команд
-// с вероятностью по той же логистической ELO-формуле (чем сильнее разница
-// рейтингов — тем реже слабая сторона получает моменты), и часть моментов
-// реализуется в гол. Итог решает счёт; при равенстве голов — как и в реальном
-// плей-офф — решает "серия пенальти" по той же вероятности, чтобы более
-// сильный состав оставался фаворитом, а не был отдан монетке 50/50.
-function simulateDraftMatch(attackerRating, defenderRating) {
-  const attackShare = 1 / (1 + Math.pow(10, (defenderRating - attackerRating) / DRAFT_ELO_SCALE));
-  const usedMinutes = new Set();
-  const events = [];
-  let attackerGoals = 0;
-  let defenderGoals = 0;
-
-  for (let i = 0; i < DRAFT_MATCH_MOMENTS; i++) {
-    let minute;
-    do {
-      minute = 3 + Math.floor(Math.random() * 87);
-    } while (usedMinutes.has(minute));
-    usedMinutes.add(minute);
-
-    const side = Math.random() < attackShare ? 'attacker' : 'defender';
-    const scored = Math.random() < DRAFT_MOMENT_SCORE_CHANCE;
-    if (scored) {
-      if (side === 'attacker') attackerGoals++;
-      else defenderGoals++;
-    }
-    events.push({ minute, side, type: scored ? 'goal' : 'miss' });
-  }
-  events.sort((a, b) => a.minute - b.minute);
-
-  let won;
-  if (attackerGoals !== defenderGoals) {
-    won = attackerGoals > defenderGoals;
+    title = `${amount} Stars`;
+    description = `Пополнение баланса на ${amount} ⭐️`;
   } else {
-    won = Math.random() < attackShare;
-    events.push({ minute: 90, side: won ? 'attacker' : 'defender', type: 'penalty_shootout' });
+    const pack = STAR_PACKAGES[packageId];
+    if (!pack) {
+      return res.status(400).json({ error: 'unknown_package' });
+    }
+    amount = pack.amount;
+    title = pack.title;
+    description = pack.description;
   }
 
-  return { events, attackerGoals, defenderGoals, won };
-}
+  const telegramId = String(req.telegramUser.id);
+  // Сумма кладётся прямо в payload — так вебхуку не нужно повторно смотреть
+  // в STAR_PACKAGES (что раньше ломалось бы для кастомных сумм).
+  const payload = JSON.stringify({ telegramId, amount, ts: Date.now() });
 
-// PvP-бой: соперник — случайный игрок с готовым драфт-составом (не обязательно
-// "активным" — можно атаковать даже того, чья серия уже закончилась, у него
-// всё равно есть сохранённый rating). Матч разыгрывается по моментам через
-// simulateDraftMatch() (см. выше) — итог решает счёт, а не единственный бросок
-// монетки. Поражение сразу завершает СЕРИЮ атакующего (active = 0) — новый бой
-// потребует новый вход. На соперника-защитника результат боя не влияет
-// (асинхронный PvP).
-export async function playDraftBattle({ telegramId }) {
-  const attackerRow = db.prepare('SELECT * FROM draft_squads WHERE telegram_id = ?').get(telegramId);
-  if (!attackerRow) return { ok: false, reason: 'no_draft_squad' };
-  if (!attackerRow.active) return { ok: false, reason: 'draft_ended' };
-
-  const opponentRow = db
-    .prepare('SELECT * FROM draft_squads WHERE telegram_id != ? ORDER BY RANDOM() LIMIT 1')
-    .get(telegramId);
-  if (!opponentRow) return { ok: false, reason: 'no_opponents' };
-
-  const attackerRating = attackerRow.rating;
-  const defenderRating = opponentRow.rating;
-  const match = simulateDraftMatch(attackerRating, defenderRating);
-  const won = match.won;
-
-  const opponentUser = db.prepare('SELECT username FROM users WHERE telegram_id = ?').get(opponentRow.telegram_id);
-
-  const tx = db.transaction(() => {
-    if (won) {
-      db.prepare('UPDATE draft_squads SET wins = wins + 1, total_points = total_points + ? WHERE telegram_id = ?')
-        .run(DRAFT_WIN_POINTS, telegramId);
-      db.prepare('UPDATE users SET slive_tokens = slive_tokens + ? WHERE telegram_id = ?')
-        .run(DRAFT_WIN_REWARD_SLIVE, telegramId);
-    } else {
-      db.prepare('UPDATE draft_squads SET active = 0 WHERE telegram_id = ?').run(telegramId);
+  try {
+    const tgRes = await fetch(`${TG_API}/createInvoiceLink`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title,
+        description,
+        payload,
+        provider_token: '', // для Telegram Stars всегда пусто
+        currency: 'XTR',
+        prices: [{ label: title, amount }],
+      }),
+    });
+    const data = await tgRes.json();
+    if (!data.ok) {
+      return res.status(502).json({ error: 'telegram_api_error', details: data.description });
     }
-  });
-  tx();
-  if (won) bumpBattlePassQuestProgress(telegramId, 'draft_win', 1);
+    res.json({ invoiceLink: data.result });
+  } catch (err) {
+    console.error('createInvoiceLink failed', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
 
-  const updated = db.prepare('SELECT * FROM draft_squads WHERE telegram_id = ?').get(telegramId);
+// ---------- Покупка пака / "Драфт" ----------
+// Раньше клиент сам выбирал случайного игрока из PLAYER_POOL и просто просил
+// сервер списать звёзды — то есть рандом и выдача карты не были доверены
+// серверу вообще. Теперь:
+//   1) сервер списывает цену (Stars или $SLive) атомарно на своей стороне,
+//   2) сервер сам тянет случайного игрока (getRandomPlayer) и кладёт его в
+//      инвентарь игрока в БД,
+//   3) бот присылает уведомление в личку,
+//   4) клиенту возвращается уже выданная карта — рисовать её самому не нужно.
+app.post('/api/buy-pack', requireTelegramAuth, async (req, res) => {
+  const { packType, currency = 'stars' } = req.body;
+  const telegramId = String(req.telegramUser.id);
 
-  return {
+  if (!GAME_PACKS[packType]) {
+    return res.status(400).json({ error: 'unknown_pack' });
+  }
+
+  let spendResult;
+  let price;
+  if (currency === 'slive') {
+    price = GAME_PACKS_SLIVE[packType];
+    spendResult = await spendSlive({ telegramId, amount: price });
+  } else {
+    price = GAME_PACKS[packType].price;
+    spendResult = await spendStars({ telegramId, amount: price });
+  }
+
+  if (!spendResult.ok) {
+    const extra = currency !== 'slive' && spendResult.reason === 'insufficient_funds'
+      ? { required: price - spendResult.balance }
+      : {};
+    return res.status(402).json({ error: spendResult.reason, balance: spendResult.balance, ...extra });
+  }
+
+  const drawn = getRandomPlayer(packType);
+  const card = addPlayerToInventory({ telegramId, playerId: drawn.id });
+
+  notifyUser(telegramId, `🎉 Вам выпал <b>${card.name}</b> (${card.rating} OVR, ${card.type})!`);
+
+  res.json({
     ok: true,
-    won,
-    attackerRating,
-    defenderRating,
-    score: { attacker: match.attackerGoals, defender: match.defenderGoals },
-    matchLog: match.events,
-    reward: won ? DRAFT_WIN_REWARD_SLIVE : 0,
-    pointsGained: won ? DRAFT_WIN_POINTS : 0,
-    opponent: { username: opponentUser?.username || null, rating: defenderRating },
-    squad: rowToDraftSquad(updated),
-  };
-}
-
-export async function getDraftLeaderboard(limit = 10) {
-  return db
-    .prepare(
-      `SELECT ds.telegram_id AS telegramId, u.username, ds.rating, ds.wins,
-              ds.total_points AS totalPoints, ds.active
-       FROM draft_squads ds
-       JOIN users u ON u.telegram_id = ds.telegram_id
-       ORDER BY ds.total_points DESC, ds.wins DESC, ds.rating DESC
-       LIMIT ?`
-    )
-    .all(limit)
-    .map(r => ({ ...r, active: Boolean(r.active) }));
-}
-
-// Раз в календарные сутки (UTC) начисляет 1000 $SLive лидеру драфт-рейтинга
-// (по total_points) и ОБНУЛЯЕТ total_points у всех — лидерборд драфта живёт
-// 24-часовыми сезонами, а не копится вечно. Идемпотентно: draft_meta.last_payout_day
-// гарантирует, что при повторном вызове в те же сутки (или после рестарта
-// сервера) выплата и сброс не задвоятся. Вызывается по таймеру из server.js,
-// а не от конкретного запроса игрока — так и награда, и сброс топа не зависят
-// от того, зайдёт ли вообще кто-то в лидерборд в этот день.
-export async function payoutDraftTopIfNeeded() {
-  const today = dayIndex();
-  const meta = db.prepare('SELECT last_payout_day FROM draft_meta WHERE id = 1').get();
-  if (meta && meta.last_payout_day === today) return null;
-
-  const top = db
-    .prepare('SELECT telegram_id, total_points FROM draft_squads WHERE total_points > 0 ORDER BY total_points DESC, wins DESC LIMIT 1')
-    .get();
-
-  const tx = db.transaction(() => {
-    db.prepare('UPDATE draft_meta SET last_payout_day = ? WHERE id = 1').run(today);
-    if (top) {
-      db.prepare('UPDATE users SET slive_tokens = slive_tokens + ? WHERE telegram_id = ?')
-        .run(DRAFT_TOP_REWARD_SLIVE, top.telegram_id);
-    }
-    // Новый 24-часовой сезон лидерборда — обнуляем очки всем, включая тех,
-    // у кого их 0 (на всякий случай, идемпотентно).
-    db.prepare('UPDATE draft_squads SET total_points = 0').run();
+    balance: spendResult.balance,
+    currency,
+    card,
   });
-  tx();
+});
 
-  return top ? { telegramId: top.telegram_id, reward: DRAFT_TOP_REWARD_SLIVE } : null;
-}
+// ---------- Маркет: покупка КОНКРЕТНОЙ карточки (без рандома) ----------
+// В отличие от /api/buy-pack (там случайная карта нужной редкости), тут
+// игрок выбирает точного игрока и платит фиксированную цену MARKET_PRICE
+// за его редкость. Та же схема защиты: сумма списывается на сервере,
+// карта добавляется в инвентарь на сервере, клиент только показывает результат.
+app.post('/api/buy-player', requireTelegramAuth, async (req, res) => {
+  const { playerId, currency = 'stars' } = req.body;
+  const telegramId = String(req.telegramUser.id);
 
-// ---------- Битвы составами (используют ОСНОВНОЙ состав клуба, users.squad) ----------
-// В отличие от Драфта, тут не отдельные случайные карты, а живой состав
-// игрока из вкладки "Состав" (слоты FWD1/FWD2/MID/DEF/GK) — то есть то, во
-// что игрок реально вкладывался, покупая/фармя карты. Позиция каждого слота
-// имеет игровой вес: нападающие и хавбек считаются в атаку, защитник и
-// вратарь — в оборону (см. computeSquadBattleTeam), поэтому сбалансированный
-// состав побеждает чаще, чем просто "5 самых дорогих карт подряд".
-
-const SQUAD_SLOTS = ['FWD1', 'FWD2', 'MID', 'DEF', 'GK'];
-
-// Собирает боевые данные состава игрока: сами карточки по слотам, заполнен
-// ли состав полностью (бой недоступен, если не хватает хотя бы одной карты),
-// и три силовые характеристики — attack/defense/rating. rating — это то же
-// самое OVR-сумма + химия по национальности, что видно во вкладке "Состав"
-// (см. computeFarmRate) — так сила в бою всегда согласована с тем, что
-// показывает интерфейс клуба, а не считается по отдельной непонятной формуле.
-function computeSquadBattleTeam(telegramId) {
-  const user = db.prepare('SELECT squad FROM users WHERE telegram_id = ?').get(telegramId);
-  if (!user) return null;
-  const squad = JSON.parse(user.squad || '{}');
-
-  const instIds = SQUAD_SLOTS.map(slot => squad[slot]).filter(Boolean);
-  let inventoryByInstId = new Map();
-  if (instIds.length) {
-    const placeholders = instIds.map(() => '?').join(',');
-    const rows = db.prepare(`SELECT * FROM inventory WHERE inst_id IN (${placeholders})`).all(...instIds);
-    inventoryByInstId = new Map(rows.map(r => [r.inst_id, r]));
+  const meta = PLAYERS_BY_ID[playerId];
+  if (!meta) {
+    return res.status(400).json({ error: 'unknown_player' });
   }
 
-  const players = {};
-  let filledCount = 0;
-  const nationsCount = {};
-  for (const slot of SQUAD_SLOTS) {
-    const instId = squad[slot];
-    const inst = instId ? inventoryByInstId.get(instId) : null;
-    const meta = inst && inst.telegram_id === telegramId ? PLAYERS_BY_ID[inst.player_id] : null;
-    players[slot] = meta ? { ...meta, instId } : null;
-    if (meta) {
-      filledCount++;
-      nationsCount[meta.nation] = (nationsCount[meta.nation] || 0) + 1;
-    }
-  }
-
-  const filled = filledCount === SQUAD_SLOTS.length;
-  const baseRating = SQUAD_SLOTS.reduce((sum, slot) => sum + (players[slot]?.rating || 0), 0);
-  const maxSameNation = Math.max(0, ...Object.values(nationsCount));
-  const chemMultiplier = maxSameNation > 1 ? 1 + maxSameNation * 0.08 : 1; // чуть мягче, чем у фарма — тут это боевой бонус, не доход
-  const rating = Math.round(baseRating * chemMultiplier);
-
-  // Атака = оба форварда полностью + половина хавбека (он создаёт моменты,
-  // но сам не главный забивала). Оборона = защитник полностью + вратарь
-  // с весом повыше (сейвы решают исходы) + четверть хавбека (отрабатывает назад).
-  const attack = Math.round(
-    (players.FWD1?.rating || 0) + (players.FWD2?.rating || 0) + (players.MID?.rating || 0) * 0.5
-  );
-  const defense = Math.round(
-    (players.DEF?.rating || 0) + (players.GK?.rating || 0) * 1.15 + (players.MID?.rating || 0) * 0.25
-  );
-
-  return { players, filled, rating, attack, defense, chemistry: maxSameNation > 1 ? maxSameNation : 0 };
-}
-
-function ensureSquadBattleRow(telegramId) {
-  db.prepare(
-    `INSERT OR IGNORE INTO squad_battles (telegram_id, trophies, wins, losses, streak, best_streak, daily_battles_used, daily_battles_day)
-     VALUES (?, 0, 0, 0, 0, 0, 0, -1)`
-  ).run(telegramId);
-  return db.prepare('SELECT * FROM squad_battles WHERE telegram_id = ?').get(telegramId);
-}
-
-// Сбрасывает счётчик боёв за день, если наступили новые сутки (UTC) —
-// та же схема, что refreshEnergyIfNeeded для тапалки.
-function refreshDailyBattlesIfNeeded(row) {
-  const today = dayIndex();
-  if (row.daily_battles_day !== today) {
-    db.prepare('UPDATE squad_battles SET daily_battles_used = 0, daily_battles_day = ? WHERE telegram_id = ?')
-      .run(today, row.telegram_id);
-    row.daily_battles_used = 0;
-    row.daily_battles_day = today;
-  }
-  return row;
-}
-
-export async function getSquadBattleState(telegramId) {
-  let row = ensureSquadBattleRow(telegramId);
-  row = refreshDailyBattlesIfNeeded(row);
-  const team = computeSquadBattleTeam(telegramId);
-  const league = leagueForTrophies(row.trophies);
-  const leagueIndex = SQUAD_LEAGUES.findIndex(l => l.id === league.id);
-  const nextLeague = SQUAD_LEAGUES[leagueIndex + 1] || null;
-
-  return {
-    trophies: row.trophies,
-    wins: row.wins,
-    losses: row.losses,
-    streak: row.streak,
-    bestStreak: row.best_streak,
-    league,
-    nextLeague: nextLeague ? { name: nextLeague.name, icon: nextLeague.icon, trophiesNeeded: nextLeague.min - row.trophies } : null,
-    dailyBattlesUsed: row.daily_battles_used,
-    dailyBattlesFree: SQUAD_BATTLE_FREE_DAILY,
-    energyCost: SQUAD_BATTLE_ENERGY_COST,
-    ticketPrices: { stars: SQUAD_BATTLE_TICKET_STARS, slive: SQUAD_BATTLE_TICKET_SLIVE },
-    team,
-  };
-}
-
-// Разыгрывает бой по опасным моментам, как и Драфт (simulateDraftMatch), но
-// сила сторон считается из attack/defense (позиционная механика), а не из
-// одной общей цифры рейтинга — состав "2 форварда без обороны" будет часто
-// побеждать в счёте, но и часто пропускать сам, разброс результата шире.
-// Каждое событие дополнительно несёт имя игрока (scorer/saver) для живого
-// текстового комментария на клиенте.
-function simulateSquadBattleMatch(attackerTeam, defenderTeam) {
-  const attackerPower = attackerTeam.attack * 0.65 + attackerTeam.defense * 0.35;
-  const defenderPower = defenderTeam.attack * 0.65 + defenderTeam.defense * 0.35;
-  const attackShare = 1 / (1 + Math.pow(10, (defenderPower - attackerPower) / SQUAD_BATTLE_ELO_SCALE));
-
-  function pickScorer(team) {
-    const roll = Math.random();
-    if (roll < 0.45 && team.players.FWD1) return { name: team.players.FWD1.name, slot: 'FWD1' };
-    if (roll < 0.8 && team.players.FWD2) return { name: team.players.FWD2.name, slot: 'FWD2' };
-    if (team.players.MID) return { name: team.players.MID.name, slot: 'MID' };
-    return { name: team.players.FWD1?.name || team.players.MID?.name || 'Игрок', slot: 'FWD1' };
-  }
-  function pickSaver(team) {
-    if (team.players.GK) return { name: team.players.GK.name, slot: 'GK' };
-    if (team.players.DEF) return { name: team.players.DEF.name, slot: 'DEF' };
-    return { name: 'Оборона', slot: 'DEF' };
-  }
-
-  const usedMinutes = new Set();
-  const events = [];
-  let attackerGoals = 0;
-  let defenderGoals = 0;
-
-  for (let i = 0; i < SQUAD_BATTLE_MOMENTS; i++) {
-    let minute;
-    do {
-      minute = 2 + Math.floor(Math.random() * 88);
-    } while (usedMinutes.has(minute));
-    usedMinutes.add(minute);
-
-    const side = Math.random() < attackShare ? 'attacker' : 'defender';
-    const scored = Math.random() < SQUAD_BATTLE_MOMENT_SCORE_CHANCE;
-    const attackingTeam = side === 'attacker' ? attackerTeam : defenderTeam;
-    const defendingTeam = side === 'attacker' ? defenderTeam : attackerTeam;
-
-    if (scored) {
-      if (side === 'attacker') attackerGoals++; else defenderGoals++;
-      const scorer = pickScorer(attackingTeam);
-      events.push({ minute, side, type: 'goal', player: scorer.name, slot: scorer.slot });
-    } else {
-      const saver = pickSaver(defendingTeam);
-      events.push({ minute, side, type: 'save', player: saver.name, slot: saver.slot });
-    }
-  }
-  events.sort((a, b) => a.minute - b.minute);
-
-  let won;
-  if (attackerGoals !== defenderGoals) {
-    won = attackerGoals > defenderGoals;
+  const price = MARKET_PRICE[meta.type];
+  let spendResult;
+  if (currency === 'slive') {
+    spendResult = await spendSlive({ telegramId, amount: price.slive });
   } else {
-    won = Math.random() < attackShare;
-    const shooter = pickScorer(won ? attackerTeam : defenderTeam);
-    events.push({ minute: 90, side: won ? 'attacker' : 'defender', type: 'penalty_shootout', player: shooter.name, slot: shooter.slot });
+    spendResult = await spendStars({ telegramId, amount: price.stars });
   }
 
-  return { events, attackerGoals, defenderGoals, won };
-}
-
-// Один PvP-бой основным составом клуба. currency — 'energy' (по умолчанию,
-// тратит SQUAD_BATTLE_ENERGY_COST энергии, бесплатных боёв SQUAD_BATTLE_FREE_DAILY
-// в сутки) либо 'stars'/'slive' — билет докупается, когда бесплатные бои на
-// сегодня закончились (или просто чтобы не ждать восстановления энергии).
-export async function playSquadBattle({ telegramId, currency = 'energy' }) {
-  applyOfflineFarm(telegramId);
-  refreshEnergyIfNeeded(telegramId);
-
-  const attackerTeam = computeSquadBattleTeam(telegramId);
-  if (!attackerTeam || !attackerTeam.filled) {
-    return { ok: false, reason: 'squad_incomplete' };
+  if (!spendResult.ok) {
+    const extra = currency !== 'slive' && spendResult.reason === 'insufficient_funds'
+      ? { required: price.stars - spendResult.balance }
+      : {};
+    return res.status(402).json({ error: spendResult.reason, balance: spendResult.balance, ...extra });
   }
 
-  let row = ensureSquadBattleRow(telegramId);
-  row = refreshDailyBattlesIfNeeded(row);
+  const card = addPlayerToInventory({ telegramId, playerId, source: 'market' });
+  notifyUser(telegramId, `🛒 Куплен <b>${card.name}</b> (${card.rating} OVR) за ${currency === 'slive' ? price.slive + ' 🪙' : price.stars + ' ⭐️'}!`);
 
-  const usesFreeAttempt = row.daily_battles_used < SQUAD_BATTLE_FREE_DAILY;
-  let spentEnergy = false;
-  let spendResult = null;
+  res.json({ ok: true, balance: spendResult.balance, currency, card });
+});
 
-  if (usesFreeAttempt && currency === 'energy') {
-    const user = db.prepare('SELECT energy FROM users WHERE telegram_id = ?').get(telegramId);
-    if (!user || user.energy < SQUAD_BATTLE_ENERGY_COST) {
-      return { ok: false, reason: 'no_energy', energy: user?.energy || 0 };
+// ---------- Продажа дубликата карты ----------
+// Продать можно только карту, которой у игрока 2+ экземпляра, и только если
+// она сейчас не стоит в составе — см. все проверки в sellCard (db.js).
+// Цена — фиксированная доля от гарантированной цены в Маркете (SELL_RATE).
+app.post('/api/sell-player', requireTelegramAuth, async (req, res) => {
+  const { instId } = req.body;
+  const telegramId = String(req.telegramUser.id);
+
+  if (!instId) {
+    return res.status(400).json({ error: 'invalid_input' });
+  }
+
+  const result = await sellCard({ telegramId, instId });
+  if (!result.ok) {
+    return res.status(409).json({ error: result.reason });
+  }
+
+  res.json({ ok: true, balance: result.balance, gained: result.gained, instId });
+});
+
+// ---------- Сохранение состава ----------
+// Состав теперь хранит только instId карт из инвентаря игрока — сервер сам
+// проверяет владение картой (см. saveUserState в db.js) и пересчитывает
+// ставку фарма из своих собственных данных о картах, а не из того, что
+// прислал клиент. Полные объекты карт (myClub) клиенту отдаёт /api/me.
+app.post('/api/save-state', requireTelegramAuth, async (req, res) => {
+  const { squad } = req.body;
+  const telegramId = String(req.telegramUser.id);
+  const user = await saveUserState({ telegramId, patch: { squad } });
+  res.json({ ok: true, user });
+});
+
+// ---------- Лидерборд ($SLive) ----------
+app.post('/api/leaderboard', requireTelegramAuth, async (req, res) => {
+  const leaderboard = await getLeaderboard(10);
+  res.json({ leaderboard });
+});
+
+// ---------- ДРАФТ ----------
+// Текущее состояние драфт-состава игрока + доступна ли ещё сегодня
+// бесплатная (за $SLive) попытка входа.
+app.post('/api/draft/state', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  const state = await getDraftState(telegramId);
+  const draftTokens = getDraftTokenBalance(telegramId);
+  res.json({ ...state, draftTokens, entryPrices: { slive: DRAFT_ENTRY_SLIVE, stars: DRAFT_ENTRY_STARS, tokens: DRAFT_ENTRY_TOKENS } });
+});
+
+// Вход в драфт: собирает НОВЫЙ состав из 5 карт (по прогрессии
+// DRAFT_PACK_SEQUENCE) и полностью заменяет предыдущий, если он был.
+// currency: 'slive' (1000 🪙, лимит 1/сутки), 'stars' (100 ⭐️, без лимита)
+// или 'tokens' (3 🎟️ жетона Драфта — валюта из наград Батл Пасса, без лимита).
+app.post('/api/draft/start', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  const { currency = 'stars' } = req.body;
+
+  if (!['slive', 'stars', 'tokens'].includes(currency)) {
+    return res.status(400).json({ error: 'invalid_currency' });
+  }
+
+  if (currency === 'slive') {
+    const canFree = await canUseFreeDraftEntry(telegramId);
+    if (!canFree) {
+      return res.status(409).json({ error: 'daily_entry_used' });
     }
-    db.prepare('UPDATE users SET energy = energy - ? WHERE telegram_id = ?').run(SQUAD_BATTLE_ENERGY_COST, telegramId);
-    spentEnergy = true;
-  } else if (currency === 'slive') {
-    spendResult = await spendSlive({ telegramId, amount: SQUAD_BATTLE_TICKET_SLIVE });
-    if (!spendResult.ok) return { ok: false, reason: spendResult.reason, balance: spendResult.balance };
+  }
+
+  const price = currency === 'slive' ? DRAFT_ENTRY_SLIVE : currency === 'stars' ? DRAFT_ENTRY_STARS : DRAFT_ENTRY_TOKENS;
+  let spendResult;
+  if (currency === 'slive') {
+    spendResult = await spendSlive({ telegramId, amount: price });
   } else if (currency === 'stars') {
-    spendResult = await spendStars({ telegramId, amount: SQUAD_BATTLE_TICKET_STARS });
-    if (!spendResult.ok) return { ok: false, reason: spendResult.reason, balance: spendResult.balance };
+    spendResult = await spendStars({ telegramId, amount: price });
   } else {
-    return { ok: false, reason: 'daily_limit_reached' };
+    spendResult = await spendDraftTokens({ telegramId, amount: price });
   }
 
-  // Матчмейкинг: берём до 25 случайных соперников с ПОЛНОСТЬЮ укомплектованным
-  // составом и выбираем ближайшего по кубкам — так бой обычно приходится на
-  // сопоставимого по силе игрока, а не на первого попавшегося.
-  const candidates = db
-    .prepare(
-      `SELECT u.telegram_id AS telegramId, u.username, COALESCE(sb.trophies, 0) AS trophies
-       FROM users u
-       LEFT JOIN squad_battles sb ON sb.telegram_id = u.telegram_id
-       WHERE u.telegram_id != ? AND u.squad != '{}'
-       ORDER BY RANDOM() LIMIT 25`
-    )
-    .all(telegramId);
-
-  let opponent = null;
-  let opponentTeam = null;
-  let bestDiff = Infinity;
-  for (const c of candidates) {
-    const team = computeSquadBattleTeam(c.telegramId);
-    if (!team || !team.filled) continue;
-    const diff = Math.abs(c.trophies - row.trophies);
-    if (diff < bestDiff) {
-      bestDiff = diff;
-      opponent = c;
-      opponentTeam = team;
-    }
+  if (!spendResult.ok) {
+    const extra = currency === 'stars' && spendResult.reason === 'insufficient_funds'
+      ? { required: price - spendResult.balance }
+      : {};
+    return res.status(402).json({ error: spendResult.reason, balance: spendResult.balance, ...extra });
   }
 
-  if (!opponent) {
-    // Возвращаем потраченный ресурс — бой не состоялся не по вине игрока.
-    if (spentEnergy) db.prepare('UPDATE users SET energy = energy + ? WHERE telegram_id = ?').run(SQUAD_BATTLE_ENERGY_COST, telegramId);
-    else if (currency === 'slive') db.prepare('UPDATE users SET slive_tokens = slive_tokens + ? WHERE telegram_id = ?').run(SQUAD_BATTLE_TICKET_SLIVE, telegramId);
-    else if (currency === 'stars') db.prepare('UPDATE users SET tg_stars = tg_stars + ? WHERE telegram_id = ?').run(SQUAD_BATTLE_TICKET_STARS, telegramId);
-    return { ok: false, reason: 'no_opponents' };
+  const drawnPlayers = DRAFT_PACK_SEQUENCE.map(tier => getRandomPlayer(tier));
+  const result = await startDraft({ telegramId, playerIds: drawnPlayers.map(p => p.id), currency });
+
+  notifyUser(telegramId, `🎯 Драфт собран! Рейтинг состава: ${result.squad.rating} OVR. Одно поражение — и серия закончится, бейся с умом!`);
+
+  res.json({ ok: true, balance: spendResult.balance, currency, ...result });
+});
+
+// ---------- ДРАФТ: интерактивный матч ----------
+// Матч разыгрывается в 3 сегментах по 3 опасных момента (см.
+// simulateDraftSegment в db.js). После 1-го и 2-го сегмента игрок выбирает
+// тактику на следующий отрезок — это и есть "реальное игровое решение" в
+// бою, а не мгновенный бросок кубика. Состояние боя между запросами живёт
+// в памяти процесса (не в БД — это одноразовое эфемерное состояние ровно
+// одного текущего боя), с TTL на случай, если игрок бросил бой на середине.
+const draftMatchSessions = new Map();
+const DRAFT_SESSION_TTL_MS = 10 * 60 * 1000; // 10 минут на "зависший" бой
+setInterval(() => {
+  const cutoff = Date.now() - DRAFT_SESSION_TTL_MS;
+  for (const [matchId, session] of draftMatchSessions) {
+    if (session.createdAt < cutoff) draftMatchSessions.delete(matchId);
+  }
+}, 60 * 1000).unref();
+
+// 4 отрезка вместо 3 — матч стал заметно длиннее (12 моментов вместо 9 +
+// доп. время) и решений у игрока теперь 3 (после 1, 2 и 3 отрезков), а не 2.
+const DRAFT_SEGMENT_RANGES = [[1, 22], [23, 45], [46, 68], [69, 90]];
+const DRAFT_TOTAL_SEGMENTS = DRAFT_SEGMENT_RANGES.length;
+
+// Тактика влияет на ЭТОТ сегмент по двум независимым осям:
+//  ratingBoost — сдвигает "долю моментов" в твою пользу (сколько из 3
+//    моментов сегмента достанутся тебе, а не сопернику);
+//  scoreChance — "открытость" игры: с какой вероятностью КАЖДЫЙ момент (не
+//    важно, чей) превращается в гол. Чем выше — тем более обменный, дёрганый
+//    футбол (может влететь и тебе, и сопернику), чем ниже — тем более вязкая,
+//    закрытая игра почти в ноль.
+// Раньше выбор сводился к 4 вариантам (атака/оборона/контратака/замена).
+// Теперь у игрока 9 обычных стилей на каждое решение — они реально разные
+// по профилю риска, а не просто "сильнее/слабее" одного и того же вектора:
+//  attack      — давим по всей ширине поля, игра открытая в обе стороны
+//  gegenpress  — экстремальный прессинг: моментов ещё больше, чем в attack,
+//                и хаоса тоже больше — ва-банк, когда горим по счёту
+//  press       — умеренный прессинг: чуть больше своих моментов, умеренный хаос
+//  wings       — атака через фланги: промежуточный вариант между press и attack
+//  possession  — контроль мяча: моментов у тебя больше, но игра при этом
+//                аккуратная и низкая по хаосу (терпеливый розыгрыш, а не обмен)
+//  normal      — играть как играли, без изменений
+//  long_ball   — игра вторым темпом: отдаём часть контроля, зато каждый
+//                момент — что твой, что соперника — острый и часто голевой
+//  counter     — сознательно отдаём инициативу, зато реализуем свои редкие
+//                моменты почти без промаха
+//  defend      — компактный средний блок, надёжно, но почти без своих атак
+//  park_bus    — автобус у ворот: почти все моменты у соперника, но игра
+//                топится в ноль — не забивает почти никто
+// Плюс два разовых спецрешения (по одному использованию за матч каждое —
+// независимо друг от друга, можно применить оба в разные сегменты):
+//  substitute  — не меняет характер ЭТОГО сегмента, зато даёт ПОСТОЯННУЮ
+//                прибавку к рейтингу до конца матча — вклад в долгую
+//  motivate    — речь в раздевалке: не трогает долю моментов, но резко
+//                поднимает реализацию ТОЛЬКО в этом сегменте — ставка на один
+//                решающий отрезок здесь и сейчас
+function tacticModifiers(action, used = {}) {
+  switch (action) {
+    case 'attack': return { ratingBoost: 16, scoreChance: 0.62 };
+    case 'gegenpress': return { ratingBoost: 22, scoreChance: 0.70 };
+    case 'press': return { ratingBoost: 9, scoreChance: 0.52 };
+    case 'wings': return { ratingBoost: 12, scoreChance: 0.56 };
+    case 'possession': return { ratingBoost: 7, scoreChance: 0.34 };
+    case 'long_ball': return { ratingBoost: -6, scoreChance: 0.58 };
+    case 'counter': return { ratingBoost: -14, scoreChance: 0.72 };
+    case 'defend': return { ratingBoost: -10, scoreChance: 0.26 };
+    case 'park_bus': return { ratingBoost: -20, scoreChance: 0.14 };
+    case 'substitute':
+      if (used.substitute) return null;
+      return { ratingBoost: 0, scoreChance: 0.45, consumesSpecial: 'substitute', permanentBoost: 12 };
+    case 'motivate':
+      if (used.motivate) return null;
+      return { ratingBoost: 0, scoreChance: 0.82, consumesSpecial: 'motivate' };
+    default:
+      return { ratingBoost: 0, scoreChance: 0.45 };
+  }
+}
+
+// Начинает бой: подбирает соперника и разыгрывает 1-й сегмент (без решения —
+// матч всегда открывается обычной игрой). Дальше клиент показывает эти
+// события и предлагает выбрать тактику на 2-й сегмент через /decide.
+app.post('/api/draft/battle/start', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  const begin = await beginDraftBattle({ telegramId });
+  if (!begin.ok) {
+    return res.status(409).json({ error: begin.reason });
   }
 
-  const match = simulateSquadBattleMatch(attackerTeam, opponentTeam);
-  const won = match.won;
-
-  const leagueBefore = leagueForTrophies(row.trophies);
-  const streakBeforeCapped = Math.min(row.streak, SQUAD_BATTLE_STREAK_CAP);
-
-  let trophyDelta;
-  let reward;
-  let newStreak;
-  if (won) {
-    trophyDelta = SQUAD_BATTLE_WIN_TROPHIES + streakBeforeCapped * SQUAD_BATTLE_STREAK_TROPHY_BONUS;
-    newStreak = row.streak + 1;
-    reward = Math.round(SQUAD_BATTLE_WIN_REWARD_SLIVE * leagueBefore.rewardMult * (1 + Math.min(newStreak, SQUAD_BATTLE_STREAK_CAP) * 0.08));
-  } else {
-    trophyDelta = SQUAD_BATTLE_LOSS_TROPHIES;
-    newStreak = 0;
-    reward = SQUAD_BATTLE_LOSS_CONSOLATION_SLIVE;
-  }
-
-  const newTrophies = Math.max(0, row.trophies + trophyDelta);
-  const leagueAfter = leagueForTrophies(newTrophies);
-  const newBestStreak = Math.max(row.best_streak, newStreak);
-
-  const tx = db.transaction(() => {
-    db.prepare(
-      `UPDATE squad_battles
-       SET trophies = ?, wins = wins + ?, losses = losses + ?, streak = ?, best_streak = ?,
-           daily_battles_used = daily_battles_used + 1, last_battle_at = ?
-       WHERE telegram_id = ?`
-    ).run(newTrophies, won ? 1 : 0, won ? 0 : 1, newStreak, newBestStreak, now(), telegramId);
-    db.prepare('UPDATE users SET slive_tokens = slive_tokens + ? WHERE telegram_id = ?').run(reward, telegramId);
+  const [minuteFrom, minuteTo] = DRAFT_SEGMENT_RANGES[0];
+  const segment = simulateDraftSegment({
+    attackerRating: begin.attackerRating,
+    defenderRating: begin.defenderRating,
+    minuteFrom,
+    minuteTo,
   });
-  tx();
-  if (won) bumpBattlePassQuestProgress(telegramId, 'squad_win', 1);
 
-  const updatedUser = db.prepare('SELECT slive_tokens, energy FROM users WHERE telegram_id = ?').get(telegramId);
+  const matchId = randomUUID();
+  draftMatchSessions.set(matchId, {
+    telegramId,
+    attackerRating: begin.attackerRating,
+    defenderRating: begin.defenderRating,
+    opponent: begin.opponent,
+    segmentsPlayed: 1,
+    permanentBoost: 0,
+    usedSpecials: { substitute: false, motivate: false },
+    attackerGoals: segment.attackerGoals,
+    defenderGoals: segment.defenderGoals,
+    createdAt: Date.now(),
+  });
 
-  return {
+  res.json({
     ok: true,
-    won,
-    score: { attacker: match.attackerGoals, defender: match.defenderGoals },
-    matchLog: match.events,
-    trophyDelta,
-    trophies: newTrophies,
-    streak: newStreak,
-    leagueBefore,
-    leagueAfter,
-    promoted: leagueAfter.id !== leagueBefore.id && newTrophies > row.trophies,
-    reward,
-    sliveBalance: updatedUser.slive_tokens,
-    energy: updatedUser.energy,
-    opponent: { username: opponent.username, trophies: opponent.trophies, rating: opponentTeam.rating, team: opponentTeam.players },
-    attackerTeam: attackerTeam.players,
-  };
+    matchId,
+    events: segment.events,
+    score: { attacker: segment.attackerGoals, defender: segment.defenderGoals },
+    opponent: begin.opponent,
+    defenderRating: begin.defenderRating,
+    finished: false,
+    decisionRequired: true,
+    canSubstitute: true,
+    canMotivate: true,
+    segmentsPlayed: 1,
+  });
+});
+
+// Применяет выбранную тактику и разыгрывает следующий сегмент. Если это был
+// последний (3-й) сегмент — сразу подводит итог боя через finalizeDraftBattle
+// (начисляет награду/очки или завершает серию при поражении).
+// Доп. время: если после всех обычных сегментов счёт равный, разыгрываем ещё
+// один короткий отрезок (91-120', 2 момента, без тактики — "открытый футбол"
+// в дополнительное время) прежде чем отдавать судьбу серии пенальти. Общая
+// логика для Драфта и Битв составами — обе используют одинаковую структуру
+// сессии (attackerGoals/defenderGoals/permanentBoost).
+const EXTRA_TIME_RANGE = [91, 120];
+const EXTRA_TIME_MOMENTS = 2;
+
+function maybePlayExtraTime(session) {
+  if (session.attackerGoals !== session.defenderGoals) return [];
+  const [minuteFrom, minuteTo] = EXTRA_TIME_RANGE;
+  const extra = simulateDraftSegment({
+    attackerRating: session.attackerRating + session.permanentBoost,
+    defenderRating: session.defenderRating,
+    minuteFrom,
+    minuteTo,
+    moments: EXTRA_TIME_MOMENTS,
+  });
+  session.attackerGoals += extra.attackerGoals;
+  session.defenderGoals += extra.defenderGoals;
+  return extra.events;
 }
 
-export async function getSquadBattleLeaderboard(limit = 10) {
-  return db
-    .prepare(
-      `SELECT sb.telegram_id AS telegramId, u.username, sb.trophies, sb.wins, sb.losses, sb.streak, sb.best_streak AS bestStreak
-       FROM squad_battles sb
-       JOIN users u ON u.telegram_id = sb.telegram_id
-       WHERE sb.trophies > 0 OR sb.wins > 0
-       ORDER BY sb.trophies DESC, sb.wins DESC
-       LIMIT ?`
-    )
-    .all(limit)
-    .map(r => ({ ...r, league: leagueForTrophies(r.trophies) }));
-}
+app.post('/api/draft/battle/decide', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  const { matchId, action } = req.body;
 
-// ---------- Боевой пропуск (БП, 14-дневный сезон, как в Fortnite) ----------
-// Один ГЛОБАЛЬНЫЙ сезон на всех игроков (даты хранятся в settings), а не
-// свой отсчёт для каждого — иначе играть с друзьями "на одном сезоне" было
-// бы невозможно, и админу было бы не на что ориентироваться в рекламе.
-// Уровень растёт от XP за ежедневные задания (battle_pass.quests) — то есть
-// реальный прогресс от активности, а не просто от факта, что прошли сутки:
-// пассивно ждать без заданий бесполезно, но и наверстать пропущенные дни
-// вполне можно, догоняя квестами, пока сезон не закрылся.
-const BP_LEVELS = 14;
-const BP_XP_PER_LEVEL = 100;
-// Экономика: цена премиум-ветки — 200 ⭐️ (столько же стоит гарантированный
-// золотой пак в Маркете, см. MARKET_PRICE.gold в players-data.js) — то есть
-// сам факт получения гарантированного золотого игрока на 14 уровне уже
-// окупает пропуск, а весь путь по остальным 13 уровням — чистый бонус,
-// который удерживает игрока в игре все 14 дней (больше тапов/паков/боёв =
-// больше поводов вернуться и, как следствие, больше прямых покупок звёзд
-// по пути) при нулевой себестоимости $SLive/жетонов для нас.
-const BP_PREMIUM_PRICE_STARS = 200;
-const BP_SEASON_LENGTH_MS = BP_LEVELS * 86400000;
-const BP_SEASON_ID_KEY = 'bp_season_id';
-const BP_SEASON_START_KEY = 'bp_season_start';
-
-// Пул ежедневных заданий — каждый день игроку выпадает 3 случайных из пула
-// (см. pickDailyQuests). type привязан к местам в игре, где вызывается
-// bumpBattlePassQuestProgress(telegramId, type, amount) — тап, паки, маркет,
-// победы в Драфте и Битвах составами, вход в Драфт.
-const BP_QUEST_POOL = [
-  { id: 'tap_150', label: 'Сделай 150 тапов', type: 'tap', target: 150, xp: 25 },
-  { id: 'tap_400', label: 'Сделай 400 тапов', type: 'tap', target: 400, xp: 45 },
-  { id: 'earn_slive_400', label: 'Заработай 400 $SLive (тап + фарм)', type: 'earn_slive', target: 400, xp: 30 },
-  { id: 'open_pack_1', label: 'Открой 1 пак игроков', type: 'pack', target: 1, xp: 35 },
-  { id: 'open_pack_2', label: 'Открой 2 пака игроков', type: 'pack', target: 2, xp: 60 },
-  { id: 'buy_market_1', label: 'Купи карту на Маркете', type: 'buy_market', target: 1, xp: 40 },
-  { id: 'win_squad_1', label: 'Победи в 1 битве составами', type: 'squad_win', target: 1, xp: 55 },
-  { id: 'win_draft_1', label: 'Победи в 1 бою Драфта', type: 'draft_win', target: 1, xp: 55 },
-  { id: 'play_draft_1', label: 'Собери состав в Драфте', type: 'draft_entry', target: 1, xp: 25 },
-];
-
-function getBattlePassSeason() {
-  let seasonId = Number(getSetting(BP_SEASON_ID_KEY));
-  let start = Number(getSetting(BP_SEASON_START_KEY));
-  if (!seasonId || !start) {
-    seasonId = 1;
-    start = now();
-    setSetting(BP_SEASON_ID_KEY, String(seasonId));
-    setSetting(BP_SEASON_START_KEY, String(start));
-  } else if (now() - start >= BP_SEASON_LENGTH_MS) {
-    // Сезон закончился — следующий стартует прямо сейчас. Индивидуальные
-    // прогрессы игроков сбрасываются лениво, при первом обращении каждого
-    // (см. ensureBattlePassRow), а не все разом тут.
-    seasonId += 1;
-    start = now();
-    setSetting(BP_SEASON_ID_KEY, String(seasonId));
-    setSetting(BP_SEASON_START_KEY, String(start));
+  const session = draftMatchSessions.get(matchId);
+  if (!session || session.telegramId !== telegramId) {
+    return res.status(409).json({ error: 'no_active_match' });
   }
-  const dayOfSeason = Math.min(BP_LEVELS, Math.floor((now() - start) / 86400000) + 1);
-  return { seasonId, start, dayOfSeason };
-}
-
-function ensureBattlePassRow(telegramId, seasonId) {
-  let row = db.prepare('SELECT * FROM battle_pass WHERE telegram_id = ?').get(telegramId);
-  if (!row) {
-    db.prepare(
-      `INSERT INTO battle_pass (telegram_id, season_id, xp, premium, claimed_free, claimed_premium, quest_day, quests)
-       VALUES (?, ?, 0, 0, '[]', '[]', -1, '[]')`
-    ).run(telegramId, seasonId);
-    row = db.prepare('SELECT * FROM battle_pass WHERE telegram_id = ?').get(telegramId);
-  } else if (row.season_id !== seasonId) {
-    db.prepare(
-      `UPDATE battle_pass SET season_id = ?, xp = 0, premium = 0, claimed_free = '[]', claimed_premium = '[]', quest_day = -1, quests = '[]'
-       WHERE telegram_id = ?`
-    ).run(seasonId, telegramId);
-    row = db.prepare('SELECT * FROM battle_pass WHERE telegram_id = ?').get(telegramId);
+  if (session.segmentsPlayed >= DRAFT_TOTAL_SEGMENTS) {
+    draftMatchSessions.delete(matchId);
+    return res.status(409).json({ error: 'match_already_finished' });
   }
-  return row;
-}
 
-function pickDailyQuests() {
-  const pool = [...BP_QUEST_POOL];
-  const picked = [];
-  while (picked.length < 3 && pool.length) {
-    const idx = Math.floor(Math.random() * pool.length);
-    picked.push(pool.splice(idx, 1)[0]);
+  const mod = tacticModifiers(action, session.usedSpecials);
+  if (!mod) {
+    return res.status(409).json({ error: `${action}_already_used` });
   }
-  return picked.map(q => ({ id: q.id, label: q.label, type: q.type, target: q.target, xp: q.xp, progress: 0, completed: false }));
-}
-
-function refreshBattlePassQuestsIfNeeded(row, telegramId) {
-  const today = dayIndex();
-  if (row.quest_day !== today) {
-    const quests = pickDailyQuests();
-    db.prepare('UPDATE battle_pass SET quest_day = ?, quests = ? WHERE telegram_id = ?')
-      .run(today, JSON.stringify(quests), telegramId);
-    row.quest_day = today;
-    row.quests = JSON.stringify(quests);
+  if (mod.consumesSpecial) {
+    session.usedSpecials[mod.consumesSpecial] = true;
+    if (mod.permanentBoost) session.permanentBoost += mod.permanentBoost;
   }
-  return row;
-}
 
-function bpLevelForXp(xp) {
-  return Math.min(BP_LEVELS, 1 + Math.floor(xp / BP_XP_PER_LEVEL));
-}
+  const [minuteFrom, minuteTo] = DRAFT_SEGMENT_RANGES[session.segmentsPlayed];
+  const segment = simulateDraftSegment({
+    attackerRating: session.attackerRating + session.permanentBoost,
+    defenderRating: session.defenderRating,
+    minuteFrom,
+    minuteTo,
+    ratingBoost: mod.ratingBoost,
+    scoreChance: mod.scoreChance,
+  });
+  session.attackerGoals += segment.attackerGoals;
+  session.defenderGoals += segment.defenderGoals;
+  session.segmentsPlayed += 1;
 
-// Награда за конкретный уровень трека. Бесплатная ветка — скромный, но
-// стабильный ручеёк $SLive и изредка жетон Драфта (каждый 4 уровень).
-// Платная ветка — заметно больше $SLive и жетон через уровень, а на
-// финальном 14 уровне — гарантированный ЗОЛОТОЙ игрок (getRandomPlayer('gold')
-// в claimBattlePassReward), это и есть "фортнайтовский" крючок пропуска.
-function bpReward(level, track) {
-  if (track === 'premium') {
-    if (level === BP_LEVELS) return { slive: 900, tokens: 2, pack: 'gold' };
-    return { slive: 150 + level * 25, tokens: level % 2 === 0 ? 1 : 0 };
-  }
-  if (level === BP_LEVELS) return { slive: 500, tokens: 1 };
-  return { slive: 80 + level * 15, tokens: level % 4 === 0 ? 1 : 0 };
-}
+  const finished = session.segmentsPlayed >= DRAFT_TOTAL_SEGMENTS;
+  let allEvents = segment.events;
 
-export async function getBattlePassState(telegramId) {
-  const { seasonId, dayOfSeason } = getBattlePassSeason();
-  let row = ensureBattlePassRow(telegramId, seasonId);
-  row = refreshBattlePassQuestsIfNeeded(row, telegramId);
-
-  const level = bpLevelForXp(row.xp);
-  const xpIntoLevel = row.xp - (level - 1) * BP_XP_PER_LEVEL;
-  const claimedFree = new Set(JSON.parse(row.claimed_free || '[]'));
-  const claimedPremium = new Set(JSON.parse(row.claimed_premium || '[]'));
-
-  const track = [];
-  for (let lvl = 1; lvl <= BP_LEVELS; lvl++) {
-    track.push({
-      level: lvl,
-      unlocked: level >= lvl,
-      free: { ...bpReward(lvl, 'free'), claimed: claimedFree.has(lvl) },
-      premium: { ...bpReward(lvl, 'premium'), claimed: claimedPremium.has(lvl) },
+  if (!finished) {
+    return res.json({
+      ok: true,
+      matchId,
+      events: allEvents,
+      score: { attacker: session.attackerGoals, defender: session.defenderGoals },
+      finished: false,
+      decisionRequired: true,
+      canSubstitute: !session.usedSpecials.substitute,
+      canMotivate: !session.usedSpecials.motivate,
+      segmentsPlayed: session.segmentsPlayed,
     });
   }
 
-  return {
-    seasonId,
-    dayOfSeason,
-    seasonLengthDays: BP_LEVELS,
-    xp: row.xp,
-    level,
-    xpIntoLevel,
-    xpPerLevel: BP_XP_PER_LEVEL,
-    maxLevel: level >= BP_LEVELS,
-    premium: Boolean(row.premium),
-    premiumPriceStars: BP_PREMIUM_PRICE_STARS,
-    quests: JSON.parse(row.quests || '[]'),
-    track,
-  };
-}
+  const extraEvents = maybePlayExtraTime(session);
+  if (extraEvents.length) allEvents = allEvents.concat(extraEvents);
 
-export async function buyBattlePassPremium({ telegramId }) {
-  const { seasonId } = getBattlePassSeason();
-  const row = ensureBattlePassRow(telegramId, seasonId);
-  if (row.premium) return { ok: false, reason: 'already_premium' };
-
-  const spend = await spendStars({ telegramId, amount: BP_PREMIUM_PRICE_STARS });
-  if (!spend.ok) return { ok: false, reason: spend.reason, balance: spend.balance };
-
-  db.prepare('UPDATE battle_pass SET premium = 1 WHERE telegram_id = ?').run(telegramId);
-  return { ok: true, balance: spend.balance };
-}
-
-export async function claimBattlePassReward({ telegramId, level, track }) {
-  if (track !== 'free' && track !== 'premium') return { ok: false, reason: 'invalid_track' };
-  const lvl = Number(level);
-  if (!Number.isInteger(lvl) || lvl < 1 || lvl > BP_LEVELS) return { ok: false, reason: 'invalid_level' };
-
-  const { seasonId } = getBattlePassSeason();
-  const row = ensureBattlePassRow(telegramId, seasonId);
-  const currentLevel = bpLevelForXp(row.xp);
-  if (lvl > currentLevel) return { ok: false, reason: 'level_locked' };
-  if (track === 'premium' && !row.premium) return { ok: false, reason: 'premium_required' };
-
-  const claimedField = track === 'free' ? 'claimed_free' : 'claimed_premium';
-  const claimed = new Set(JSON.parse(row[claimedField] || '[]'));
-  if (claimed.has(lvl)) return { ok: false, reason: 'already_claimed' };
-  claimed.add(lvl);
-
-  const reward = bpReward(lvl, track);
-
-  const tx = db.transaction(() => {
-    db.prepare(`UPDATE battle_pass SET ${claimedField} = ? WHERE telegram_id = ?`).run(JSON.stringify([...claimed]), telegramId);
-    if (reward.slive) db.prepare('UPDATE users SET slive_tokens = slive_tokens + ? WHERE telegram_id = ?').run(reward.slive, telegramId);
-    if (reward.tokens) grantDraftTokens(telegramId, reward.tokens);
+  const result = await finalizeDraftBattle({
+    telegramId,
+    attackerGoals: session.attackerGoals,
+    defenderGoals: session.defenderGoals,
   });
-  tx();
+  draftMatchSessions.delete(matchId);
 
-  let card = null;
-  if (reward.pack) {
-    const drawn = getRandomPlayer(reward.pack);
-    card = addPlayerToInventory({ telegramId, playerId: drawn.id });
+  if (result.won) {
+    const opponentLabel = session.opponent.username ? `@${session.opponent.username}` : 'соперника';
+    notifyUser(telegramId, `⚔️ Победа в Драфт-битве против ${opponentLabel}! +${result.reward} 🪙 SLive.`);
   }
 
-  const updatedUser = db.prepare('SELECT slive_tokens, draft_tokens FROM users WHERE telegram_id = ?').get(telegramId);
-  return {
+  res.json({
     ok: true,
-    reward,
-    card,
-    sliveBalance: updatedUser.slive_tokens,
-    draftTokens: updatedUser.draft_tokens,
-  };
-}
+    matchId,
+    events: allEvents,
+    score: { attacker: session.attackerGoals, defender: session.defenderGoals },
+    finished: true,
+    decisionRequired: false,
+    wentToPenalties: result.wentToPenalties,
+    wentToExtraTime: extraEvents.length > 0,
+    won: result.won,
+    reward: result.reward,
+    pointsGained: result.pointsGained,
+    opponent: session.opponent,
+    defenderRating: session.defenderRating,
+    squad: result.squad,
+  });
+});
 
-// Продвигает прогресс сегодняшних заданий указанного типа (см. BP_QUEST_POOL)
-// и сразу начисляет XP за те, что как раз сейчас довыполнились. Вызывается
-// "по пути" из игровых действий (тап, паки, маркет, победы, вход в Драфт) —
-// не должна ронять основной запрос, поэтому все ошибки глушатся внутри.
-export function bumpBattlePassQuestProgress(telegramId, type, amount = 1) {
-  try {
-    const { seasonId } = getBattlePassSeason();
-    let row = ensureBattlePassRow(telegramId, seasonId);
-    row = refreshBattlePassQuestsIfNeeded(row, telegramId);
-    const quests = JSON.parse(row.quests || '[]');
-    let changed = false;
-    let xpGained = 0;
-    for (const q of quests) {
-      if (q.type !== type || q.completed) continue;
-      q.progress = Math.min(q.target, q.progress + amount);
-      changed = true;
-      if (q.progress >= q.target) {
-        q.completed = true;
-        xpGained += q.xp;
-      }
-    }
-    if (changed) {
-      db.prepare('UPDATE battle_pass SET quests = ?, xp = xp + ? WHERE telegram_id = ?')
-        .run(JSON.stringify(quests), xpGained, telegramId);
-    }
-  } catch (err) {
-    console.error('bumpBattlePassQuestProgress failed', err);
+// Лидерборд драфта (по накопительным очкам total_points) — отдельный от
+// лидерборда по балансу $SLive, показывается сверху вкладки "Топ".
+app.post('/api/draft/leaderboard', requireTelegramAuth, async (req, res) => {
+  const leaderboard = await getDraftLeaderboard(10);
+  res.json({ leaderboard });
+});
+
+// ---------- БАТЛ ПАСС ----------
+// 14-дневный сезон, общий на всех игроков. Прогресс дневных заданий
+// (тапы/паки/бои) двигается автоматически из db.js (см. advanceBattlePassTask,
+// вызывается изнутри tap()/addPlayerToInventory()/finalizeDraftBattle()/
+// finalizeSquadBattle()) — тут только чтение состояния и клейм наград.
+app.post('/api/battlepass/state', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  const state = await getBattlePassState(telegramId);
+  res.json(state);
+});
+
+app.post('/api/battlepass/claim', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  const { level, track } = req.body;
+  if (!level || !track) {
+    return res.status(400).json({ error: 'invalid_input' });
   }
-}
+  const result = await claimBattlePassReward({ telegramId, level: Number(level), track });
+  if (!result.ok) {
+    return res.status(409).json({ error: result.reason });
+  }
+  res.json(result);
+});
+
+app.post('/api/battlepass/buy', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  const result = await buyBattlePass({ telegramId, amount: BATTLE_PASS_PRICE_STARS });
+  if (!result.ok) {
+    const extra = result.reason === 'insufficient_funds' ? { required: BATTLE_PASS_PRICE_STARS - result.balance } : {};
+    return res.status(402).json({ error: result.reason, ...extra });
+  }
+  notifyUser(telegramId, `🎫 Батл Пасс активирован! Премиум-награды сезона открыты.`);
+  res.json(result);
+});
+
+// ---------- БИТВЫ СОСТАВАМИ ----------
+// Отдельный от Драфта режим: бьётся ОБЫЧНЫЙ состав "Мой клуб" (вкладка
+// СОСТАВ) — те же карты, что фармят $SLive пассивно. В отличие от Драфта тут
+// нет "жизни серии": проигрыш просто идёт в статистику побед/поражений, а
+// между боями — перезарядка (см. SQUAD_BATTLE_COOLDOWN_MS в db.js), чтобы
+// нельзя было фармить награду бесконечно. Механика самого матча (сегменты,
+// тактика, замена, доп. время) — точно та же, что в Драфте, через общие
+// simulateDraftSegment/maybePlayExtraTime.
+const squadBattleSessions = new Map();
+
+app.post('/api/battles/state', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  const state = await getSquadBattleState({ telegramId });
+  res.json(state);
+});
+
+// Докупка полного бака энергии за Stars — можно жать в любой момент, когда
+// заряды не полные, не обязательно ждать нуля.
+app.post('/api/battles/buy-energy', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  const result = await buySquadBattleEnergy({ telegramId });
+  if (!result.ok) {
+    return res.status(402).json({ error: result.reason, balance: result.balance, required: result.required });
+  }
+  res.json(result);
+});
+
+app.post('/api/battles/start', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  const begin = await beginSquadBattle({ telegramId });
+  if (!begin.ok) {
+    const extra = begin.reason === 'cooldown'
+      ? { retryInMs: begin.retryInMs }
+      : begin.reason === 'insufficient_funds'
+        ? { balance: begin.balance, required: begin.required }
+        : begin.reason === 'no_energy'
+          ? { energyRefillCost: begin.energyRefillCost }
+          : {};
+    return res.status(409).json({ error: begin.reason, ...extra });
+  }
+
+  const [minuteFrom, minuteTo] = DRAFT_SEGMENT_RANGES[0];
+  const segment = simulateDraftSegment({
+    attackerRating: begin.attackerRating,
+    defenderRating: begin.defenderRating,
+    minuteFrom,
+    minuteTo,
+  });
+
+  const matchId = randomUUID();
+  squadBattleSessions.set(matchId, {
+    telegramId,
+    attackerRating: begin.attackerRating,
+    defenderRating: begin.defenderRating,
+    opponent: begin.opponent,
+    segmentsPlayed: 1,
+    permanentBoost: 0,
+    usedSpecials: { substitute: false, motivate: false },
+    attackerGoals: segment.attackerGoals,
+    defenderGoals: segment.defenderGoals,
+    createdAt: Date.now(),
+  });
+
+  res.json({
+    ok: true,
+    matchId,
+    events: segment.events,
+    score: { attacker: segment.attackerGoals, defender: segment.defenderGoals },
+    opponent: begin.opponent,
+    defenderRating: begin.defenderRating,
+    entryCost: begin.entryCost,
+    energy: begin.energy,
+    energyMax: begin.energyMax,
+    finished: false,
+    decisionRequired: true,
+    canSubstitute: true,
+    canMotivate: true,
+    segmentsPlayed: 1,
+  });
+});
+
+app.post('/api/battles/decide', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  const { matchId, action } = req.body;
+
+  const session = squadBattleSessions.get(matchId);
+  if (!session || session.telegramId !== telegramId) {
+    return res.status(409).json({ error: 'no_active_match' });
+  }
+  if (session.segmentsPlayed >= DRAFT_TOTAL_SEGMENTS) {
+    squadBattleSessions.delete(matchId);
+    return res.status(409).json({ error: 'match_already_finished' });
+  }
+
+  const mod = tacticModifiers(action, session.usedSpecials);
+  if (!mod) {
+    return res.status(409).json({ error: `${action}_already_used` });
+  }
+  if (mod.consumesSpecial) {
+    session.usedSpecials[mod.consumesSpecial] = true;
+    if (mod.permanentBoost) session.permanentBoost += mod.permanentBoost;
+  }
+
+  const [minuteFrom, minuteTo] = DRAFT_SEGMENT_RANGES[session.segmentsPlayed];
+  const segment = simulateDraftSegment({
+    attackerRating: session.attackerRating + session.permanentBoost,
+    defenderRating: session.defenderRating,
+    minuteFrom,
+    minuteTo,
+    ratingBoost: mod.ratingBoost,
+    scoreChance: mod.scoreChance,
+  });
+  session.attackerGoals += segment.attackerGoals;
+  session.defenderGoals += segment.defenderGoals;
+  session.segmentsPlayed += 1;
+
+  const finished = session.segmentsPlayed >= DRAFT_TOTAL_SEGMENTS;
+  let allEvents = segment.events;
+
+  if (!finished) {
+    return res.json({
+      ok: true,
+      matchId,
+      events: allEvents,
+      score: { attacker: session.attackerGoals, defender: session.defenderGoals },
+      finished: false,
+      decisionRequired: true,
+      canSubstitute: !session.usedSpecials.substitute,
+      canMotivate: !session.usedSpecials.motivate,
+      segmentsPlayed: session.segmentsPlayed,
+    });
+  }
+
+  const extraEvents = maybePlayExtraTime(session);
+  if (extraEvents.length) allEvents = allEvents.concat(extraEvents);
+
+  const result = await finalizeSquadBattle({
+    telegramId,
+    attackerGoals: session.attackerGoals,
+    defenderGoals: session.defenderGoals,
+  });
+  squadBattleSessions.delete(matchId);
+
+  if (result.won) {
+    const opponentLabel = session.opponent.username ? `@${session.opponent.username}` : 'соперника';
+    notifyUser(telegramId, `🏆 Победа в Битве составами против ${opponentLabel}! +${result.reward} 🪙 SLive.`);
+  }
+
+  res.json({
+    ok: true,
+    matchId,
+    events: allEvents,
+    score: { attacker: session.attackerGoals, defender: session.defenderGoals },
+    finished: true,
+    decisionRequired: false,
+    wentToPenalties: result.wentToPenalties,
+    wentToExtraTime: extraEvents.length > 0,
+    won: result.won,
+    reward: result.reward,
+    wins: result.wins,
+    losses: result.losses,
+    opponent: session.opponent,
+    defenderRating: session.defenderRating,
+  });
+});
+
+// Таблица топа "Битв составами" по победам — показывается на вкладке "Топ"
+// вместе с лидербордом Драфта и рейтингом по балансу $SLive.
+app.post('/api/battles/leaderboard', requireTelegramAuth, async (req, res) => {
+  const leaderboard = await getSquadBattleLeaderboard(10);
+  res.json({ leaderboard });
+});
+
+// Чистим зависшие сессии Битв составами той же логикой TTL, что и Драфт.
+setInterval(() => {
+  const cutoff = Date.now() - DRAFT_SESSION_TTL_MS;
+  for (const [matchId, session] of squadBattleSessions) {
+    if (session.createdAt < cutoff) squadBattleSessions.delete(matchId);
+  }
+}, 60 * 1000).unref();
 
 // ---------- Ставки за $SLive ----------
-// Полностью управляются админом: он создаёт ивент с 2+ вариантами исхода,
-// на каждый вариант вручную задаёт процент (шанс) — как полосы в
-// Binance/Fanton. Игроки ставят $SLive на понравившийся вариант, коэффициент
-// выплаты (100/percent) фиксируется в bets.multiplier в момент ставки.
-// Когда ивент реально заканчивается, админ вручную выбирает исход — деньги
-// проигравших НЕ возвращаются (они уже списаны в момент ставки), победители
-// получают amount * multiplier.
+// Всё содержимое (ивенты, варианты, проценты/коэффициенты) полностью
+// управляется админом — см. /api/admin/bets/* ниже. Игрок только смотрит
+// открытые ивенты и ставит.
+app.post('/api/bets/events', requireTelegramAuth, async (req, res) => {
+  const events = await getVisibleBetEvents();
+  res.json({ events });
+});
 
-function rowToBetEvent(eventRow, optionRows, poolByOption) {
-  const totalPool = optionRows.reduce((sum, o) => sum + (poolByOption.get(o.id)?.total || 0), 0);
-  return {
-    id: eventRow.id,
-    title: eventRow.title,
-    description: eventRow.description,
-    status: eventRow.status,
-    resolvedOptionId: eventRow.resolved_option_id,
-    createdAt: eventRow.created_at,
-    closesAt: eventRow.closes_at,
-    resolvedAt: eventRow.resolved_at,
-    totalPool,
-    options: optionRows.map(o => ({
-      id: o.id,
-      label: o.label,
-      percent: o.percent,
-      multiplier: Math.round((100 / o.percent) * 100) / 100,
-      pool: poolByOption.get(o.id)?.total || 0,
-      betsCount: poolByOption.get(o.id)?.count || 0,
-    })),
-  };
-}
-
-function getBetEventFull(eventId) {
-  const eventRow = db.prepare('SELECT * FROM bet_events WHERE id = ?').get(eventId);
-  if (!eventRow) return null;
-  const optionRows = db
-    .prepare('SELECT * FROM bet_options WHERE event_id = ? ORDER BY sort_order ASC')
-    .all(eventId);
-  const poolRows = db
-    .prepare('SELECT option_id, SUM(amount) AS total, COUNT(*) AS count FROM bets WHERE event_id = ? GROUP BY option_id')
-    .all(eventId);
-  const poolByOption = new Map(poolRows.map(r => [r.option_id, r]));
-  return rowToBetEvent(eventRow, optionRows, poolByOption);
-}
-
-// ---------- Админка: создание/управление ивентами ----------
-
-// options: [{ label, percent }, ...] — минимум 2 варианта, percent у каждого
-// в диапазоне (MIN_OPTION_PERCENT..MAX_OPTION_PERCENT].
-export async function createBetEvent({ title, description, options, closesAt }) {
-  if (!title || !Array.isArray(options) || options.length < 2) {
-    return { ok: false, reason: 'invalid_input' };
+app.post('/api/bets/place', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  const { eventId, optionId, amount } = req.body;
+  if (!eventId || !optionId) {
+    return res.status(400).json({ error: 'invalid_input' });
   }
-  for (const opt of options) {
-    if (!opt.label || typeof opt.percent !== 'number') return { ok: false, reason: 'invalid_option' };
-    if (opt.percent < MIN_OPTION_PERCENT || opt.percent > MAX_OPTION_PERCENT) {
-      return { ok: false, reason: 'invalid_percent' };
-    }
+  const result = await placeBet({ telegramId, eventId, optionId, amount });
+  if (!result.ok) {
+    return res.status(409).json({ error: result.reason, balance: result.balance });
+  }
+  res.json(result);
+});
+
+app.post('/api/bets/mine', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  const bets = await getMyBets(telegramId);
+  res.json({ bets });
+});
+
+// ---------- АДМИН-ПАНЕЛЬ ----------
+app.post('/api/admin/stats', requireTelegramAuth, requireAdmin, async (req, res) => {
+  const stats = await getStats();
+  res.json({ stats });
+});
+
+app.post('/api/admin/users', requireTelegramAuth, requireAdmin, async (req, res) => {
+  const users = await listUsers();
+  res.json({ users });
+});
+
+app.post('/api/admin/adjust-stars', requireTelegramAuth, requireAdmin, async (req, res) => {
+  const { telegramId, amount, reason } = req.body;
+  const numAmount = Number(amount);
+
+  if (!telegramId || !Number.isFinite(numAmount) || numAmount === 0) {
+    return res.status(400).json({ error: 'invalid_input' });
   }
 
-  const eventId = randomUUID();
-  const tx = db.transaction(() => {
-    db.prepare(
-      `INSERT INTO bet_events (id, title, description, status, created_at, closes_at)
-       VALUES (?, ?, ?, 'open', ?, ?)`
-    ).run(eventId, title, description || null, now(), closesAt || null);
+  const result = await adjustStarsAdmin({ telegramId: String(telegramId), amount: numAmount, reason });
+  res.json(result);
+});
 
-    options.forEach((opt, i) => {
-      db.prepare(
-        `INSERT INTO bet_options (id, event_id, label, percent, sort_order) VALUES (?, ?, ?, ?, ?)`
-      ).run(randomUUID(), eventId, opt.label, opt.percent, i);
-    });
+app.post('/api/admin/adjust-slive', requireTelegramAuth, requireAdmin, async (req, res) => {
+  const { telegramId, amount, reason } = req.body;
+  const numAmount = Number(amount);
+
+  if (!telegramId || !Number.isFinite(numAmount) || numAmount === 0) {
+    return res.status(400).json({ error: 'invalid_input' });
+  }
+
+  const result = await adjustSliveAdmin({ telegramId: String(telegramId), amount: numAmount, reason });
+  res.json(result);
+});
+
+// Ссылка на канал/чат для подписки перед тем, как стать рефералом. Хранится
+// в БД (settings), а не в .env — так админ может поменять её без передеплоя.
+app.post('/api/admin/referral-channel', requireTelegramAuth, requireAdmin, async (req, res) => {
+  const { link } = req.body;
+  const result = await setReferralChannelLink(typeof link === 'string' ? link.trim() : '');
+  res.json(result);
+});
+
+app.post('/api/admin/referral-channel/get', requireTelegramAuth, requireAdmin, async (req, res) => {
+  const link = await getReferralChannelLink();
+  res.json({ link: link || '' });
+});
+
+// Список заявок игроков, ожидающих подтверждения (см. /api/referral-request).
+// Заодно подсказываем админу дефолтную ссылку вида t.me/bot?startapp=id —
+// её можно поправить перед подтверждением, если нужна другая ссылка.
+app.post('/api/admin/referral-requests', requireTelegramAuth, requireAdmin, async (req, res) => {
+  const requests = await getPendingReferralRequests();
+  const withSuggestion = requests.map(r => ({
+    ...r,
+    suggestedLink: BOT_USERNAME ? `https://t.me/${BOT_USERNAME}?startapp=${r.telegramId}` : '',
+  }));
+  res.json({ requests: withSuggestion });
+});
+
+// Админ вписывает ссылку и подтверждает заявку — игроку сразу открывается
+// ссылка в интерфейсе, и бот присылает ему уведомление в личку.
+app.post('/api/admin/referral-approve', requireTelegramAuth, requireAdmin, async (req, res) => {
+  const { telegramId, link } = req.body;
+  const trimmedLink = typeof link === 'string' ? link.trim() : '';
+
+  if (!telegramId || !trimmedLink) {
+    return res.status(400).json({ error: 'invalid_input' });
+  }
+
+  const result = await approveReferralRequest({ telegramId: String(telegramId), link: trimmedLink });
+  if (!result.ok) {
+    return res.status(409).json({ error: result.reason });
+  }
+
+  notifyUser(
+    String(telegramId),
+    `✅ Твоя заявка на реферальную ссылку одобрена!\nТвоя ссылка: ${trimmedLink}`
+  );
+
+  res.json({ ok: true });
+});
+
+// Отклонить заявку — статус игрока возвращается в 'none', он сможет подать заявку заново.
+app.post('/api/admin/referral-reject', requireTelegramAuth, requireAdmin, async (req, res) => {
+  const { telegramId } = req.body;
+  if (!telegramId) {
+    return res.status(400).json({ error: 'invalid_input' });
+  }
+  const result = await rejectReferralRequest(String(telegramId));
+  if (!result.ok) {
+    return res.status(409).json({ error: result.reason });
+  }
+  notifyUser(String(telegramId), '❌ Заявка на реферальную ссылку отклонена. Ты можешь подать её ещё раз.');
+  res.json({ ok: true });
+});
+
+// ---------- Админка: ставки за $SLive ----------
+// Ивент = заголовок + 2+ варианта исхода, у каждого варианта — процент
+// (шанс), который вручную задаёт админ (как полосы в Binance/Fanton).
+app.post('/api/admin/bets/create', requireTelegramAuth, requireAdmin, async (req, res) => {
+  const { title, description, options, closesAt } = req.body;
+  const result = await createBetEvent({
+    title: typeof title === 'string' ? title.trim() : '',
+    description: typeof description === 'string' ? description.trim() : '',
+    options: Array.isArray(options)
+      ? options.map(o => ({ label: String(o.label || '').trim(), percent: Number(o.percent) }))
+      : [],
+    closesAt: closesAt ? Number(closesAt) : null,
   });
-  tx();
+  if (!result.ok) {
+    return res.status(400).json({ error: result.reason });
+  }
+  res.json(result);
+});
 
-  return { ok: true, event: getBetEventFull(eventId) };
-}
+app.post('/api/admin/bets/list', requireTelegramAuth, requireAdmin, async (req, res) => {
+  const events = await getAdminBetEvents();
+  res.json({ events });
+});
 
-// Живое изменение кэфа админом: правит percent конкретного варианта у
-// ОТКРЫТОГО ивента. Это безопасно для уже сделанных ставок — их multiplier
-// зафиксирован в момент ставки (см. placeBet) и не пересчитывается задним
-// числом. Новый percent действует только для ставок, сделанных ПОСЛЕ правки.
-// Нельзя менять кэф у закрытого/подтверждённого ивента — там ставки уже не
-// принимаются либо итог уже подведён.
-export async function updateBetOptionPercent({ eventId, optionId, percent }) {
-  const numPercent = Number(percent);
-  if (!Number.isFinite(numPercent) || numPercent < MIN_OPTION_PERCENT || numPercent > MAX_OPTION_PERCENT) {
-    return { ok: false, reason: 'invalid_percent' };
+// Живое изменение кэфа: правит процент/шанс конкретного варианта в открытом
+// ивенте. Уже сделанные ставки не трогает — их коэффициент зафиксирован
+// в момент ставки (см. db.js:placeBet), новый процент влияет только на
+// ставки, сделанные после правки.
+app.post('/api/admin/bets/update-odds', requireTelegramAuth, requireAdmin, async (req, res) => {
+  const { eventId, optionId, percent } = req.body;
+  if (!eventId || !optionId || percent === undefined) {
+    return res.status(400).json({ error: 'invalid_input' });
+  }
+  const result = await updateBetOptionPercent({ eventId, optionId, percent });
+  if (!result.ok) return res.status(409).json({ error: result.reason });
+  res.json(result);
+});
+
+// Останавливает приём новых ставок без подведения итога.
+app.post('/api/admin/bets/close', requireTelegramAuth, requireAdmin, async (req, res) => {
+  const { eventId } = req.body;
+  if (!eventId) return res.status(400).json({ error: 'invalid_input' });
+  const result = await closeBetEvent(eventId);
+  if (!result.ok) return res.status(409).json({ error: result.reason });
+  res.json(result);
+});
+
+// Возобновляет приём ставок у ранее остановленного ('closed') ивента.
+app.post('/api/admin/bets/open', requireTelegramAuth, requireAdmin, async (req, res) => {
+  const { eventId } = req.body;
+  if (!eventId) return res.status(400).json({ error: 'invalid_input' });
+  const result = await openBetEvent(eventId);
+  if (!result.ok) return res.status(409).json({ error: result.reason });
+  res.json(result);
+});
+
+// Полностью удаляет ивент (нельзя для уже подтверждённых). Если по ивенту
+// были незавершённые ставки — деньги игрокам возвращаются автоматически.
+app.post('/api/admin/bets/delete', requireTelegramAuth, requireAdmin, async (req, res) => {
+  const { eventId } = req.body;
+  if (!eventId) return res.status(400).json({ error: 'invalid_input' });
+  const result = await deleteBetEvent(eventId);
+  if (!result.ok) return res.status(409).json({ error: result.reason });
+
+  for (const refund of result.refunds) {
+    notifyUser(
+      refund.telegramId,
+      `↩️ Ивент "${result.title}" отменён админом. Твоя ставка ${refund.amount} 🪙 SLive возвращена на баланс.`
+    );
   }
 
-  const event = db.prepare('SELECT * FROM bet_events WHERE id = ?').get(eventId);
-  if (!event) return { ok: false, reason: 'no_event' };
-  if (event.status !== 'open') return { ok: false, reason: 'event_not_open' };
+  res.json({ ok: true });
+});
 
-  const option = db.prepare('SELECT * FROM bet_options WHERE id = ? AND event_id = ?').get(optionId, eventId);
-  if (!option) return { ok: false, reason: 'invalid_option' };
+// Подтверждение исхода — выплачивает победителям и шлёт им уведомление ботом.
+app.post('/api/admin/bets/resolve', requireTelegramAuth, requireAdmin, async (req, res) => {
+  const { eventId, winningOptionId } = req.body;
+  if (!eventId || !winningOptionId) return res.status(400).json({ error: 'invalid_input' });
 
-  db.prepare('UPDATE bet_options SET percent = ? WHERE id = ?').run(numPercent, optionId);
-  return { ok: true, event: getBetEventFull(eventId) };
-}
+  const result = await resolveBetEvent({ eventId, winningOptionId });
+  if (!result.ok) return res.status(409).json({ error: result.reason });
 
-// Останавливает приём новых ставок, не подводя итог — используется, если
-// админу нужно "заморозить" ивент перед тем, как объявить исход.
-export async function closeBetEvent(eventId) {
-  const event = db.prepare('SELECT status FROM bet_events WHERE id = ?').get(eventId);
-  if (!event) return { ok: false, reason: 'no_event' };
-  if (event.status === 'resolved') return { ok: false, reason: 'already_resolved' };
-  db.prepare("UPDATE bet_events SET status = 'closed' WHERE id = ?").run(eventId);
-  return { ok: true, event: getBetEventFull(eventId) };
-}
+  for (const winner of result.winners) {
+    notifyUser(
+      winner.telegramId,
+      `🎉 Ивент "${result.event.title}" завершён! Твой исход "${result.winningLabel}" сыграл — выигрыш +${winner.payout} 🪙 SLive.`
+    );
+  }
 
-// Возобновляет приём ставок у ивента, который был остановлен через
-// closeBetEvent (status 'closed' -> 'open'). Подтверждённый (resolved)
-// ивент открыть обратно нельзя — по нему уже подведён итог и выплачены деньги.
-export async function openBetEvent(eventId) {
-  const event = db.prepare('SELECT status FROM bet_events WHERE id = ?').get(eventId);
-  if (!event) return { ok: false, reason: 'no_event' };
-  if (event.status === 'resolved') return { ok: false, reason: 'already_resolved' };
-  if (event.status === 'open') return { ok: false, reason: 'already_open' };
-  db.prepare("UPDATE bet_events SET status = 'open' WHERE id = ?").run(eventId);
-  return { ok: true, event: getBetEventFull(eventId) };
-}
+  res.json(result);
+});
 
-// Полностью удаляет ивент вместе с вариантами и ставками. Разрешено только
-// пока ивент НЕ подтверждён (resolved) — после подтверждения деньги уже
-// выплачены победителям, и стирать историю нельзя. Если по ивенту были
-// сделаны ставки (pending, ещё не сыгравшие), их сумму возвращаем игрокам —
-// иначе удаление ивента админом просто украло бы деньги у игроков.
-export async function deleteBetEvent(eventId) {
-  const event = db.prepare('SELECT * FROM bet_events WHERE id = ?').get(eventId);
-  if (!event) return { ok: false, reason: 'no_event' };
-  if (event.status === 'resolved') return { ok: false, reason: 'already_resolved' };
+// ---------- Webhook от Telegram ----------
+app.post('/webhook', async (req, res) => {
+  const secretHeader = req.header('X-Telegram-Bot-Api-Secret-Token');
+  if (secretHeader !== WEBHOOK_SECRET) {
+    return res.status(401).end();
+  }
 
-  const refunds = [];
-  const tx = db.transaction(() => {
-    const pendingBets = db
-      .prepare("SELECT * FROM bets WHERE event_id = ? AND status = 'pending'")
-      .all(eventId);
-    for (const bet of pendingBets) {
-      db.prepare('UPDATE users SET slive_tokens = slive_tokens + ? WHERE telegram_id = ?')
-        .run(bet.amount, bet.telegram_id);
-      refunds.push({ telegramId: bet.telegram_id, amount: bet.amount });
+  const update = req.body;
+
+  try {
+    // Приветственное сообщение по команде /start (в т.ч. с реферальным
+    // параметром вида "/start 12345" — payload нам не нужен, реферальная
+    // привязка обрабатывается через start_param мини-аппы в /api/me).
+    const text = update.message?.text;
+    if (typeof text === 'string' && (text === '/start' || text.startsWith('/start '))) {
+      await sendWelcomeMessage(update.message.chat.id);
     }
-    db.prepare('DELETE FROM bets WHERE event_id = ?').run(eventId);
-    db.prepare('DELETE FROM bet_options WHERE event_id = ?').run(eventId);
-    db.prepare('DELETE FROM bet_events WHERE id = ?').run(eventId);
-  });
-  tx();
 
-  return { ok: true, refunds, title: event.title };
-}
+    if (update.pre_checkout_query) {
+      const pcq = update.pre_checkout_query;
+      let ok = true;
+      let errorMessage;
+      try {
+        const payload = JSON.parse(pcq.invoice_payload);
+        // Сверяем сумму счёта с тем, что мы сами положили в payload при
+        // создании инвойса (см. /api/create-invoice) — работает как для
+        // пресетов, так и для кастомной суммы.
+        ok = Number.isFinite(payload.amount) && payload.amount === pcq.total_amount && pcq.currency === 'XTR';
+        if (!ok) errorMessage = 'Пакет недоступен, попробуйте снова.';
+      } catch {
+        ok = false;
+        errorMessage = 'Пакет недоступен, попробуйте снова.';
+      }
 
-// Подтверждение исхода. Возвращает список победителей (telegramId + payout),
-// чтобы server.js разослал уведомления ботом.
-export async function resolveBetEvent({ eventId, winningOptionId }) {
-  const event = db.prepare('SELECT * FROM bet_events WHERE id = ?').get(eventId);
-  if (!event) return { ok: false, reason: 'no_event' };
-  if (event.status === 'resolved') return { ok: false, reason: 'already_resolved' };
+      // answerPreCheckoutQuery ОБЯЗАН уйти в течение 10 секунд, иначе Telegram
+      // считает платёж проваленным и клиент увидит "Не удалось списать Stars".
+      // Тут нет ни одного await до этого вызова, кроме локального JSON.parse,
+      // так что укладываемся в лимит с большим запасом.
+      await fetch(`${TG_API}/answerPreCheckoutQuery`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pre_checkout_query_id: pcq.id,
+          ok,
+          ...(ok ? {} : { error_message: errorMessage }),
+        }),
+      });
+    }
 
-  const option = db.prepare('SELECT * FROM bet_options WHERE id = ? AND event_id = ?').get(winningOptionId, eventId);
-  if (!option) return { ok: false, reason: 'invalid_option' };
+    if (update.message?.successful_payment) {
+      const payment = update.message.successful_payment;
+      const payload = JSON.parse(payment.invoice_payload);
 
-  const winners = [];
-  const tx = db.transaction(() => {
-    const allBets = db.prepare('SELECT * FROM bets WHERE event_id = ?').all(eventId);
-    for (const bet of allBets) {
-      if (bet.option_id === winningOptionId) {
-        const payout = Math.floor(bet.amount * bet.multiplier);
-        db.prepare("UPDATE bets SET status = 'won', payout = ? WHERE id = ?").run(payout, bet.id);
-        db.prepare('UPDATE users SET slive_tokens = slive_tokens + ? WHERE telegram_id = ?')
-          .run(payout, bet.telegram_id);
-        winners.push({ telegramId: bet.telegram_id, payout, amount: bet.amount });
-      } else {
-        db.prepare("UPDATE bets SET status = 'lost', payout = 0 WHERE id = ?").run(bet.id);
+      if (Number.isFinite(payload.amount)) {
+        await creditStarsFromPayment({
+          telegramId: payload.telegramId,
+          amount: payload.amount,
+          paymentChargeId: payment.telegram_payment_charge_id,
+        });
+        notifyUser(payload.telegramId, `✅ Баланс пополнен на ${payload.amount} ⭐️!`);
       }
     }
-    db.prepare(
-      "UPDATE bet_events SET status = 'resolved', resolved_option_id = ?, resolved_at = ? WHERE id = ?"
-    ).run(winningOptionId, now(), eventId);
-  });
-  tx();
 
-  return { ok: true, event: getBetEventFull(eventId), winningLabel: option.label, winners };
+    res.status(200).end();
+  } catch (err) {
+    console.error('webhook handling failed', err);
+    res.status(200).end();
+  }
+});
+
+// ---------- Резервные копии базы данных ----------
+// Подстраховка на случай, если DB_PATH ещё указывает на эфемерный диск
+// (см. .env.example / инструкцию по Render Disks): бот сам присылает файл
+// базы админу в личку по расписанию. Даже если диск сотрётся при передеплое,
+// у админа всегда будет под рукой свежая копия для восстановления вручную.
+// ГЛАВНЫЙ фикс всё равно — постоянный Disk на Render + DB_PATH на него,
+// это лишь дополнительная сетка безопасности.
+const BACKUP_INTERVAL_MS = 6 * 60 * 60 * 1000; // раз в 6 часов
+
+async function sendDatabaseBackup(caption) {
+  if (!ADMIN_TELEGRAM_ID) return { ok: false, reason: 'admin_not_configured' };
+  try {
+    if (!fs.existsSync(DB_PATH)) {
+      console.error('backup: DB_PATH не существует', DB_PATH);
+      return { ok: false, reason: 'no_db_file' };
+    }
+
+    const buffer = fs.readFileSync(DB_PATH);
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const form = new FormData();
+    form.append('chat_id', String(ADMIN_TELEGRAM_ID));
+    form.append('caption', caption || `Бэкап базы · ${new Date().toLocaleString('ru-RU')}`);
+    form.append('document', new Blob([buffer]), `sportlive-backup-${stamp}.db`);
+
+    const resp = await fetch(`${TG_API}/sendDocument`, { method: 'POST', body: form });
+    const data = await resp.json();
+    if (!data.ok) {
+      console.error('backup: sendDocument failed', data);
+      return { ok: false, reason: 'telegram_error' };
+    }
+    return { ok: true };
+  } catch (err) {
+    console.error('backup: failed', err);
+    return { ok: false, reason: 'exception' };
+  }
 }
 
-// Список ВСЕХ ивентов (любого статуса) для админ-панели, свежие сверху.
-export async function getAdminBetEvents() {
-  const rows = db.prepare('SELECT id FROM bet_events ORDER BY created_at DESC').all();
-  return rows.map(r => getBetEventFull(r.id));
-}
-
-// ---------- Игрок: просмотр ивентов и ставки ----------
-
-// Открытые (можно ставить) + недавно завершённые (последние 10, чтобы видеть
-// исход) — закрытые-без-резолва тоже показываем как "приём ставок окончен".
-export async function getVisibleBetEvents() {
-  const openIds = db.prepare("SELECT id FROM bet_events WHERE status IN ('open','closed') ORDER BY created_at DESC").all();
-  const resolvedIds = db
-    .prepare("SELECT id FROM bet_events WHERE status = 'resolved' ORDER BY resolved_at DESC LIMIT 10")
-    .all();
-  return [...openIds, ...resolvedIds].map(r => getBetEventFull(r.id));
-}
-
-export async function placeBet({ telegramId, eventId, optionId, amount }) {
-  const numAmount = Math.floor(Number(amount));
-  if (!Number.isFinite(numAmount) || numAmount < MIN_BET_AMOUNT || numAmount > MAX_BET_AMOUNT) {
-    return { ok: false, reason: 'invalid_amount' };
+// Ручной бэкап по кнопке из админ-панели — например, прямо перед рискованной
+// операцией (правка кэфов, массовая выплата и т.п.).
+// Рассылка сообщения ВСЕМ игрокам в личку бота (объявления, анонсы новых
+// паков/ивентов и т.п.). Отвечаем сразу с числом адресатов и рассылаем в
+// фоне — при большой базе игроков синхронная отправка легко упёрлась бы в
+// таймаут этого HTTP-запроса. Батчи по BATCH_SIZE с паузой между ними —
+// Bot API рассчитан примерно на 30 сообщений/сек в разные чаты, берём запас.
+// Когда рассылка закончится, админ получит сводку личным сообщением от бота.
+app.post('/api/admin/broadcast', requireTelegramAuth, requireAdmin, async (req, res) => {
+  const { text } = req.body;
+  if (typeof text !== 'string' || !text.trim()) {
+    return res.status(400).json({ error: 'empty_text' });
+  }
+  if (text.length > 4000) {
+    return res.status(400).json({ error: 'text_too_long' });
   }
 
-  // Фиксируем то, что накапало от пассивного фарма, ПЕРЕД тем как списывать
-  // ставку — иначе можно было бы поставить на несуществующий ещё баланс.
-  applyOfflineFarm(telegramId);
+  const userIds = await getAllUserIds();
+  const adminId = req.telegramUser.id;
+  res.json({ ok: true, queued: userIds.length });
 
-  const tx = db.transaction(() => {
-    const event = db.prepare('SELECT * FROM bet_events WHERE id = ?').get(eventId);
-    if (!event) return { ok: false, reason: 'no_event' };
-    if (event.status !== 'open') return { ok: false, reason: 'betting_closed' };
+  const BATCH_SIZE = 20;
+  const BATCH_DELAY_MS = 1100;
+  (async () => {
+    let sent = 0;
+    let failed = 0;
+    for (let i = 0; i < userIds.length; i += BATCH_SIZE) {
+      const batch = userIds.slice(i, i + BATCH_SIZE);
+      const results = await Promise.all(batch.map(id => notifyUser(id, text)));
+      for (const ok of results) {
+        if (ok) sent++; else failed++;
+      }
+      if (i + BATCH_SIZE < userIds.length) {
+        await new Promise(r => setTimeout(r, BATCH_DELAY_MS));
+      }
+    }
+    notifyUser(
+      adminId,
+      `📣 Рассылка завершена.\nВсего адресатов: ${userIds.length}\nДоставлено: ${sent}\nНе доставлено: ${failed}`
+    );
+  })();
+});
 
-    const option = db.prepare('SELECT * FROM bet_options WHERE id = ? AND event_id = ?').get(optionId, eventId);
-    if (!option) return { ok: false, reason: 'invalid_option' };
+app.post('/api/admin/backup-now', requireTelegramAuth, requireAdmin, async (req, res) => {
+  const result = await sendDatabaseBackup('Бэкап по запросу из админ-панели');
+  if (!result.ok) return res.status(500).json(result);
+  res.json(result);
+});
 
-    const user = db.prepare('SELECT slive_tokens FROM users WHERE telegram_id = ?').get(telegramId);
-    if (!user) return { ok: false, reason: 'no_user' };
-    if (user.slive_tokens < numAmount) return { ok: false, reason: 'insufficient_funds', balance: user.slive_tokens };
+setTimeout(() => sendDatabaseBackup('Бэкап при старте сервера'), 30 * 1000);
+setInterval(() => sendDatabaseBackup(), BACKUP_INTERVAL_MS);
 
-    const multiplier = Math.round((100 / option.percent) * 100) / 100;
-    const betId = randomUUID();
-    db.prepare(
-      `INSERT INTO bets (id, event_id, option_id, telegram_id, amount, multiplier, status, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)`
-    ).run(betId, eventId, optionId, telegramId, numAmount, multiplier, now());
-    db.prepare('UPDATE users SET slive_tokens = slive_tokens - ? WHERE telegram_id = ?').run(numAmount, telegramId);
-
-    const updatedUser = db.prepare('SELECT slive_tokens FROM users WHERE telegram_id = ?').get(telegramId);
-    return { ok: true, balance: updatedUser.slive_tokens, betId, multiplier };
-  });
-
-  const result = tx();
-  if (!result.ok) return result;
-  return { ...result, event: getBetEventFull(eventId) };
+// ---------- Ежедневная награда лидеру Драфт-рейтинга ----------
+// Проверяем не по таймеру от момента старта процесса, а по фактической смене
+// календарных суток (UTC, см. payoutDraftTopIfNeeded/draft_meta в db.js) —
+// так рестарт сервера (Render) не приведёт ни к задвоению, ни к пропуску выплаты.
+async function checkDraftTopPayout() {
+  try {
+    const result = await payoutDraftTopIfNeeded();
+    if (result) {
+      notifyUser(result.telegramId, `🏆 Ты — лидер Драфт-рейтинга дня! Начислено +${result.reward} 🪙 SLive.`);
+    }
+  } catch (err) {
+    console.error('draft top payout check failed', err);
+  }
 }
+checkDraftTopPayout();
+setInterval(checkDraftTopPayout, 10 * 60 * 1000);
 
-// История ставок игрока (последние 30), с названием ивента/варианта — для
-// вкладки "Мои ставки".
-export async function getMyBets(telegramId) {
-  const rows = db
-    .prepare(
-      `SELECT b.id, b.amount, b.multiplier, b.status, b.payout, b.created_at AS createdAt,
-              e.title AS eventTitle, e.status AS eventStatus,
-              o.label AS optionLabel
-       FROM bets b
-       JOIN bet_events e ON e.id = b.event_id
-       JOIN bet_options o ON o.id = b.option_id
-       WHERE b.telegram_id = ?
-       ORDER BY b.created_at DESC
-       LIMIT 30`
-    )
-    .all(telegramId);
-  return rows;
-}
-
-export default db;
+app.listen(PORT, () => {
+  console.log(`Sport Live FC backend listening on :${PORT}`);
+});
