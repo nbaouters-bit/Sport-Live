@@ -57,6 +57,15 @@ import {
   DB_PATH,
 } from './db.js';
 import { getRandomPlayer, PLAYERS_BY_ID, MARKET_PRICE, SELL_RATE } from './players-data.js';
+import {
+  getBattlePassState,
+  addBpXp,
+  buyBpPremium,
+  claimBpReward,
+  addDraftTokens,
+  consumeDraftToken,
+  BP_PRICE_STARS,
+} from './battlepass.js';
 
 const { BOT_TOKEN, WEBHOOK_SECRET, ADMIN_TELEGRAM_ID, BOT_USERNAME, MINI_APP_URL, PORT = 3000 } = process.env;
 
@@ -254,6 +263,7 @@ app.post('/api/tap', requireTelegramAuth, async (req, res) => {
   if (!result.ok) {
     return res.status(409).json({ error: result.reason, energy: result.energy, balance: result.balance });
   }
+  try { addBpXp(telegramId, 'login'); } catch (err) { console.error('bp login task failed', err); }
   res.json({ ok: true, gained: result.gained, energy: result.energy, balance: result.balance });
 });
 
@@ -402,6 +412,7 @@ app.post('/api/buy-pack', requireTelegramAuth, async (req, res) => {
 
   const drawn = getRandomPlayer(packType);
   const card = addPlayerToInventory({ telegramId, playerId: drawn.id });
+  try { addBpXp(telegramId, 'pack'); } catch (err) { console.error('bp pack task failed', err); }
 
   notifyUser(telegramId, `🎉 Вам выпал <b>${card.name}</b> (${card.rating} OVR, ${card.type})!`);
 
@@ -486,6 +497,73 @@ app.post('/api/leaderboard', requireTelegramAuth, async (req, res) => {
   res.json({ leaderboard });
 });
 
+// ---------- БАТЛ ПАСС ----------
+// 14-дневный сезон, прогресс — реальный XP за 4 дневных задания (см.
+// BP_TASKS в battlepass.js), а не просто "день прошёл — держи награду".
+// Бесплатная линейка доступна всем, премиум открывается разовой покупкой за
+// BP_PRICE_STARS (200⭐️). Хранится независимо от основной БД — см. battlepass.js.
+app.post('/api/battlepass/state', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  res.json({ ok: true, ...getBattlePassState(telegramId) });
+});
+
+app.post('/api/battlepass/buy', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+
+  const spendResult = await spendStars({ telegramId, amount: BP_PRICE_STARS });
+  if (!spendResult.ok) {
+    const extra = spendResult.reason === 'insufficient_funds'
+      ? { required: BP_PRICE_STARS - spendResult.balance }
+      : {};
+    return res.status(402).json({ error: spendResult.reason, balance: spendResult.balance, ...extra });
+  }
+
+  const result = buyBpPremium(telegramId);
+  if (!result.ok) {
+    // Уже был премиум — возвращаем звёзды, чтобы не списать зря.
+    await adjustStarsAdmin({ telegramId, amount: BP_PRICE_STARS, reason: 'battlepass_refund_already_premium' });
+    return res.status(409).json({ error: result.reason });
+  }
+
+  notifyUser(telegramId, `🎫 Батл Пасс активирован! 14 дней заданий, впереди — золотой пак и жетоны Драфта.`);
+  res.json({ ok: true, balance: spendResult.balance, ...getBattlePassState(telegramId) });
+});
+
+// Забрать награду уровня. track: 'free' | 'premium'.
+app.post('/api/battlepass/claim', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  const { level, track } = req.body;
+
+  const claimed = claimBpReward(telegramId, level, track);
+  if (!claimed.ok) {
+    return res.status(409).json({ error: claimed.reason });
+  }
+
+  const reward = claimed.reward;
+  let granted = { type: reward.type };
+
+  if (reward.type === 'slive') {
+    const adj = await adjustSliveAdmin({ telegramId, amount: reward.amount, reason: `battlepass_level_${level}_${track}` });
+    granted.amount = reward.amount;
+    granted.balance = adj.balance;
+  } else if (reward.type === 'token') {
+    const tokens = addDraftTokens(telegramId, reward.amount);
+    granted.amount = reward.amount;
+    granted.draftTokens = tokens;
+  } else if (reward.type === 'pack') {
+    const drawn = getRandomPlayer(reward.pack);
+    const card = addPlayerToInventory({ telegramId, playerId: drawn.id });
+    granted.card = card;
+    if (reward.bonusTokens) {
+      granted.draftTokens = addDraftTokens(telegramId, reward.bonusTokens);
+      granted.bonusTokens = reward.bonusTokens;
+    }
+    notifyUser(telegramId, `🎁 Батл Пасс, уровень ${level}: пак принёс тебе <b>${card.name}</b> (${card.rating} OVR)!`);
+  }
+
+  res.json({ ok: true, level: Number(level), track, granted, ...getBattlePassState(telegramId) });
+});
+
 // ---------- ДРАФТ ----------
 // Текущее состояние драфт-состава игрока + доступна ли ещё сегодня
 // бесплатная (за $SLive) попытка входа.
@@ -502,7 +580,7 @@ app.post('/api/draft/start', requireTelegramAuth, async (req, res) => {
   const telegramId = String(req.telegramUser.id);
   const { currency = 'stars' } = req.body;
 
-  if (currency !== 'slive' && currency !== 'stars') {
+  if (currency !== 'slive' && currency !== 'stars' && currency !== 'token') {
     return res.status(400).json({ error: 'invalid_currency' });
   }
 
@@ -513,10 +591,21 @@ app.post('/api/draft/start', requireTelegramAuth, async (req, res) => {
     }
   }
 
-  const price = currency === 'slive' ? DRAFT_ENTRY_SLIVE : DRAFT_ENTRY_STARS;
-  const spendResult = currency === 'slive'
-    ? await spendSlive({ telegramId, amount: price })
-    : await spendStars({ telegramId, amount: price });
+  // Жетон Драфта — награда из Батл Пасса, даёт бесплатный вход сверх дневного
+  // лимита на $SLive (см. battlepass.js). Списывается вместо звёзд/SLive.
+  let tokenBalance;
+  if (currency === 'token') {
+    const tokenResult = consumeDraftToken(telegramId);
+    if (!tokenResult.ok) {
+      return res.status(402).json({ error: 'no_draft_tokens' });
+    }
+    tokenBalance = tokenResult.draftTokens;
+  }
+
+  const price = currency === 'slive' ? DRAFT_ENTRY_SLIVE : currency === 'stars' ? DRAFT_ENTRY_STARS : 0;
+  let spendResult = { ok: true, balance: undefined };
+  if (currency === 'slive') spendResult = await spendSlive({ telegramId, amount: price });
+  if (currency === 'stars') spendResult = await spendStars({ telegramId, amount: price });
 
   if (!spendResult.ok) {
     const extra = currency === 'stars' && spendResult.reason === 'insufficient_funds'
@@ -526,11 +615,26 @@ app.post('/api/draft/start', requireTelegramAuth, async (req, res) => {
   }
 
   const drawnPlayers = DRAFT_PACK_SEQUENCE.map(tier => getRandomPlayer(tier));
-  const result = await startDraft({ telegramId, playerIds: drawnPlayers.map(p => p.id), currency });
+  // ВНИМАНИЕ: startDraft() в db.js, судя по всему, ожидает currency 'slive'|'stars'
+  // (это единственные значения, что были в коде раньше) — раз своего db.js у нас
+  // нет, чтобы не гадать с неизвестным enum'ом, вход по жетону записываем в
+  // startDraft как 'stars' (жетон и есть по сути бесплатный "звёздный" вход без
+  // дневного лимита). Если в вашей db.js startDraft жёстко проверяет currency —
+  // это единственное место, которое может потребовать правки после ревью db.js.
+  const result = await startDraft({
+    telegramId,
+    playerIds: drawnPlayers.map(p => p.id),
+    currency: currency === 'token' ? 'stars' : currency,
+  });
 
   notifyUser(telegramId, `🎯 Драфт собран! Рейтинг состава: ${result.squad.rating} OVR. Одно поражение — и серия закончится, бейся с умом!`);
 
-  res.json({ ok: true, balance: spendResult.balance, currency, ...result });
+  res.json({
+    ok: true,
+    balance: currency === 'token' ? tokenBalance : spendResult.balance,
+    currency,
+    ...result,
+  });
 });
 
 // ---------- ДРАФТ: интерактивный матч ----------
@@ -640,6 +744,8 @@ app.post('/api/draft/battle/start', requireTelegramAuth, async (req, res) => {
     createdAt: Date.now(),
   });
 
+  try { addBpXp(telegramId, 'playDraft'); } catch (err) { console.error('bp playDraft task failed', err); }
+
   res.json({
     ok: true,
     matchId,
@@ -746,6 +852,7 @@ app.post('/api/draft/battle/decide', requireTelegramAuth, async (req, res) => {
   if (result.won) {
     const opponentLabel = session.opponent.username ? `@${session.opponent.username}` : 'соперника';
     notifyUser(telegramId, `⚔️ Победа в Драфт-битве против ${opponentLabel}! +${result.reward} 🪙 SLive.`);
+    try { addBpXp(telegramId, 'winBattle'); } catch (err) { console.error('bp winBattle task failed', err); }
   }
 
   res.json({
@@ -904,6 +1011,7 @@ app.post('/api/battles/decide', requireTelegramAuth, async (req, res) => {
   if (result.won) {
     const opponentLabel = session.opponent.username ? `@${session.opponent.username}` : 'соперника';
     notifyUser(telegramId, `🏆 Победа в Битве составами против ${opponentLabel}! +${result.reward} 🪙 SLive.`);
+    try { addBpXp(telegramId, 'winBattle'); } catch (err) { console.error('bp winBattle task failed', err); }
   }
 
   res.json({
