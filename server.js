@@ -44,6 +44,7 @@ import {
   payoutDraftTopIfNeeded,
   getBattlePassState,
   claimBattlePassReward,
+  claimBattlePassBonusGoldPack,
   buyBattlePass,
   BATTLE_PASS_PRICE_STARS,
   getDraftTokenBalance,
@@ -815,6 +816,16 @@ app.post('/api/battlepass/claim', requireTelegramAuth, async (req, res) => {
   if (!result.ok) {
     return res.status(409).json({ error: result.reason });
   }
+  res.json(result);
+});
+
+app.post('/api/battlepass/claim-bonus-pack', requireTelegramAuth, async (req, res) => {
+  const telegramId = String(req.telegramUser.id);
+  const result = await claimBattlePassBonusGoldPack({ telegramId });
+  if (!result.ok) {
+    return res.status(409).json({ error: result.reason });
+  }
+  notifyUser(telegramId, `🎁 Бонусный золотой пак принёс <b>${result.card.name}</b> (${result.card.rating} OVR)!`);
   res.json(result);
 });
 
