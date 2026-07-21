@@ -110,7 +110,7 @@ const GAME_PACKS = {
   bronze: { price: 50, currency: 'stars' },
   silver: { price: 100, currency: 'stars' },
   gold: { price: 400, currency: 'stars' },
-  legend: { price: 2000, currency: 'stars' },
+  legend: { price: 1000, currency: 'stars' },
 };
 
 // Паки за внутриигровую валюту $SLive — те же паки, но с ценой в SLive.
