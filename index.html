@@ -1807,12 +1807,24 @@
     }
 
     async function buyBattlePass() {
+      if (!tg?.initData) {
+        return alertMsg('Покупка Батл Пасса работает только внутри Telegram.');
+      }
       try {
         const result = await apiPost('/api/battlepass/buy');
+        await syncBalanceFromServer();
         renderBattlePass(result);
         alertMsg('Батл Пасс активирован! Премиум-награды открыты.');
       } catch (err) {
-        alertMsg('Не удалось купить Батл Пасс: ' + (err.data?.error || err.message));
+        if (err.message === 'insufficient_funds') {
+          // Не хватает Stars — сразу открываем магазин Telegram Stars на недостающую сумму,
+          // так же как при покупке VIP и паков.
+          purchaseStars('custom', err.data?.required || 200);
+        } else if (err.message === 'already_premium') {
+          alertMsg('У тебя уже активирован премиум Батл Пасса.');
+        } else {
+          alertMsg('Не удалось купить Батл Пасс: ' + (err.data?.error || err.message));
+        }
       }
     }
 
