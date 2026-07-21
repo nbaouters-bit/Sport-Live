@@ -1762,8 +1762,42 @@
             <div class="text-[10px] font-black w-7 text-center ${lvl.unlocked ? 'text-white' : 'text-neutral-600'}">${lvl.level}</div>
             ${premCell}
           </div>
+          ${lvl.level === 14 ? bonusGoldPackHtml(state) : ''}
         `;
       }).join('');
+    }
+
+    // Разовый бонус: сразу под 14 уровнем, только у тех, кто уже забрал
+    // премиум-награду (набор золотых паков) этого уровня — ещё один
+    // отдельный бесплатный золотой пак сверху, забирается один раз.
+    function bonusGoldPackHtml(state) {
+      const b = state.bonusGoldPack;
+      if (!b || !b.available) return '';
+      if (b.claimed) {
+        return `<div class="text-[9px] text-emerald-400 font-black text-center py-1.5">🏆 Бонусный золотой пак получен</div>`;
+      }
+      return `
+        <div class="flex justify-center py-1">
+          <button onclick="claimBonusGoldPack()" class="text-[9px] bg-amber-400 text-black font-black px-3 py-1.5 rounded-lg">
+            🎁 Забрать бонусный золотой пак
+          </button>
+        </div>
+      `;
+    }
+
+    async function claimBonusGoldPack() {
+      try {
+        const result = await apiPost('/api/battlepass/claim-bonus-pack');
+        await syncBalanceFromServer();
+        updateHeader();
+        saveData();
+        renderBattlePass(result);
+        if (result.card) {
+          alertMsg(`🎁 Бонусный золотой пак принёс ${result.card.name} (${result.card.rating} OVR)!`);
+        }
+      } catch (err) {
+        alertMsg('Не удалось забрать бонусный пак: ' + (err.data?.error || err.message));
+      }
     }
 
     function bpCellHtml(lvl, track, reward, state) {
@@ -1794,6 +1828,13 @@
     async function claimBattlePassReward(level, track) {
       try {
         const result = await apiPost('/api/battlepass/claim', { level, track });
+        // Сервер уже начислил $SLive/токены/карту в БД, но локальные переменные
+        // (sliveTokens/draftTokens/myClub) и хедер до этого не трогались — из-за
+        // этого награда визуально "не доходила" до баланса, пока не сделаешь
+        // reload страницы. Подтягиваем актуальный баланс с сервера и обновляем UI.
+        await syncBalanceFromServer();
+        updateHeader();
+        saveData();
         renderBattlePass(result);
         if (result.granted?.type === 'pack' && result.granted.card) {
           alertMsg(`Уровень ${level}: пак принёс ${result.granted.card.name} (${result.granted.card.rating} OVR)!`);
