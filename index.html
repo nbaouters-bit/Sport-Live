@@ -173,6 +173,10 @@
           </div>
         </div>
         <div class="flex items-center gap-1.5">
+          <button onclick="openBattlePassModal()" class="bg-violet-500/10 text-violet-300 border border-violet-500/30 text-[10px] font-black px-2 py-1.5 rounded-lg flex items-center gap-1 relative">
+            🎫 БП
+            <span id="bp-nav-dot" class="hidden absolute -top-1 -right-1 w-2 h-2 rounded-full bg-rose-500"></span>
+          </button>
           <button onclick="openStarsModal()" class="bg-amber-500/10 text-amber-400 border border-amber-500/30 text-[10px] font-black px-2 py-1.5 rounded-lg flex items-center gap-1">
             ⭐️ Пополнить
           </button>
@@ -934,6 +938,57 @@
       </div>
     </div>
 
+    <!-- БАТЛ ПАСС: 14-дневный сезон. Верх — статус/покупка/задания дня,
+         низ — прокручиваемая лестница из 14 уровней (бесплатная колонка
+         слева, премиум справа), как в Fortnite. Данные — только с сервера
+         (/api/battlepass/state), клиент ничего не считает сам. -->
+    <div id="battlepass-modal" class="hidden absolute inset-0 bg-black/95 z-50 flex flex-col">
+      <div class="flex items-center justify-between p-4 border-b border-neutral-800 shrink-0">
+        <div>
+          <h3 class="font-black text-lg flex items-center gap-1.5">🎫 Батл Пасс</h3>
+          <div id="bp-day-label" class="text-[10px] text-neutral-400 font-bold">День — из 14</div>
+        </div>
+        <button onclick="document.getElementById('battlepass-modal').classList.add('hidden')" class="text-neutral-500 text-xs font-bold px-2">✕</button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto p-4">
+        <!-- Прогресс уровня -->
+        <div class="bg-neutral-900 border border-neutral-800 rounded-2xl p-3 mb-3">
+          <div class="flex justify-between items-center mb-1.5">
+            <div class="text-xs font-black">Уровень <span id="bp-level">0</span>/14</div>
+            <div id="bp-xp-label" class="text-[10px] text-neutral-500 font-bold">0/150 XP</div>
+          </div>
+          <div class="w-full h-2 bg-neutral-800 rounded-full overflow-hidden">
+            <div id="bp-xp-bar" class="h-full bg-violet-500 rounded-full transition-all" style="width:0%"></div>
+          </div>
+        </div>
+
+        <!-- Покупка премиума -->
+        <div id="bp-buy-block" class="hidden bg-gradient-to-br from-violet-600/20 to-fuchsia-600/10 border border-violet-500/40 rounded-2xl p-3 mb-3">
+          <div class="text-xs font-black mb-1">Открой премиум-линейку наград</div>
+          <div class="text-[10px] text-neutral-400 mb-2">Жетоны Драфта, больше $SLive и гарантированный золотой пак на 14 уровне.</div>
+          <button onclick="buyBattlePass()" class="w-full bg-violet-500 text-black font-black py-2.5 rounded-xl text-sm">Купить за 200 ⭐️</button>
+        </div>
+        <div id="bp-premium-badge" class="hidden bg-violet-500/10 border border-violet-500/30 text-violet-300 text-[10px] font-black rounded-xl p-2 mb-3 text-center">
+          🎫 Премиум активен · жетонов Драфта: <span id="bp-tokens">0</span>
+        </div>
+
+        <!-- Задания дня -->
+        <div class="mb-3">
+          <div class="text-[10px] text-neutral-500 font-black uppercase mb-1.5">Задания на сегодня</div>
+          <div id="bp-tasks" class="flex flex-col gap-1.5"></div>
+        </div>
+
+        <!-- Лестница наград -->
+        <div class="flex justify-between text-[9px] text-neutral-500 font-black uppercase mb-1.5 px-1">
+          <span>Бесплатно</span>
+          <span>Уровень</span>
+          <span>Премиум 🎫</span>
+        </div>
+        <div id="bp-levels" class="flex flex-col gap-1.5"></div>
+      </div>
+    </div>
+
   </div>
 
   <script>
@@ -1637,6 +1692,119 @@
         return alertMsg('Доступно только внутри Telegram.');
       }
       document.getElementById('withdraw-modal').classList.remove('hidden');
+    }
+
+    // ---------- БАТЛ ПАСС ----------
+    // Иконки наград — только для отображения, тип/суммы всегда приходят с сервера.
+    const BP_REWARD_ICON = { slive: '🪙', token: '🎟️', pack: '🎁' };
+
+    function bpRewardLabel(reward) {
+      if (!reward || !reward.type) return '—';
+      if (reward.type === 'slive') return `${reward.amount} 🪙`;
+      if (reward.type === 'token') return `${reward.amount} 🎟️`;
+      if (reward.type === 'pack') return `Пак: ${reward.pack === 'gold' ? 'Золото' : reward.pack === 'silver' ? 'Серебро' : 'Бронза'}`;
+      return '—';
+    }
+
+    async function openBattlePassModal() {
+      if (!tg?.initData) {
+        return alertMsg('Батл Пасс доступен только внутри Telegram.');
+      }
+      document.getElementById('battlepass-modal').classList.remove('hidden');
+      await refreshBattlePass();
+    }
+
+    async function refreshBattlePass() {
+      let state;
+      try {
+        state = await apiPost('/api/battlepass/state');
+      } catch (err) {
+        return alertMsg('Не удалось загрузить Батл Пасс: ' + (err.data?.error || err.message));
+      }
+      renderBattlePass(state);
+    }
+
+    function renderBattlePass(state) {
+      document.getElementById('bp-day-label').textContent = `День ${state.day} из ${state.seasonDays}`;
+      document.getElementById('bp-level').textContent = state.level;
+      document.getElementById('bp-xp-label').textContent = `${state.xpIntoLevel}/${state.xpForNextLevel || state.xpIntoLevel} XP`;
+      const pct = state.xpForNextLevel ? Math.min(100, Math.round((state.xpIntoLevel / state.xpForNextLevel) * 100)) : 100;
+      document.getElementById('bp-xp-bar').style.width = pct + '%';
+
+      document.getElementById('bp-buy-block').classList.toggle('hidden', state.premium);
+      document.getElementById('bp-premium-badge').classList.toggle('hidden', !state.premium);
+      document.getElementById('bp-tokens').textContent = state.draftTokens;
+
+      const tasksEl = document.getElementById('bp-tasks');
+      tasksEl.innerHTML = state.tasks.map(t => `
+        <div class="flex items-center justify-between bg-neutral-900 border ${t.done ? 'border-emerald-500/40' : 'border-neutral-800'} rounded-xl px-3 py-2">
+          <div class="flex items-center gap-2">
+            <span>${t.emoji}</span>
+            <span class="text-[11px] font-bold ${t.done ? 'text-emerald-400 line-through' : 'text-neutral-200'}">${t.label}</span>
+          </div>
+          <span class="text-[10px] font-black ${t.done ? 'text-emerald-400' : 'text-violet-400'}">${t.done ? '✓ ' + t.xp : '+' + t.xp} XP</span>
+        </div>
+      `).join('');
+
+      const levelsEl = document.getElementById('bp-levels');
+      levelsEl.innerHTML = state.levels.map(lvl => {
+        const freeCell = bpCellHtml(lvl, 'free', lvl.free, state);
+        const premCell = bpCellHtml(lvl, 'premium', lvl.premium, state);
+        return `
+          <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5 bg-neutral-900/60 border border-neutral-800 rounded-xl px-2 py-1.5">
+            ${freeCell}
+            <div class="text-[10px] font-black w-7 text-center ${lvl.unlocked ? 'text-white' : 'text-neutral-600'}">${lvl.level}</div>
+            ${premCell}
+          </div>
+        `;
+      }).join('');
+    }
+
+    function bpCellHtml(lvl, track, reward, state) {
+      const locked = !lvl.unlocked;
+      const needsPremium = track === 'premium' && !state.premium;
+      const claimable = lvl.unlocked && !reward.claimed && !needsPremium;
+      const label = bpRewardLabel(reward);
+
+      let btn;
+      if (reward.claimed) {
+        btn = `<span class="text-[9px] text-emerald-400 font-black">✓ Забрано</span>`;
+      } else if (needsPremium) {
+        btn = `<span class="text-[9px] text-neutral-600 font-black">🔒 БП</span>`;
+      } else if (locked) {
+        btn = `<span class="text-[9px] text-neutral-600 font-black">🔒</span>`;
+      } else {
+        btn = `<button onclick="claimBattlePassReward(${lvl.level}, '${track}')" class="text-[9px] bg-violet-500 text-black font-black px-2 py-1 rounded-lg">Забрать</button>`;
+      }
+
+      return `
+        <div class="flex ${track === 'premium' ? 'flex-row-reverse' : ''} items-center gap-1.5 ${track === 'premium' ? 'justify-start' : 'justify-end'}">
+          <div class="text-[10px] font-bold ${locked || needsPremium ? 'text-neutral-600' : 'text-neutral-200'}">${label}</div>
+          ${btn}
+        </div>
+      `;
+    }
+
+    async function claimBattlePassReward(level, track) {
+      try {
+        const result = await apiPost('/api/battlepass/claim', { level, track });
+        renderBattlePass(result);
+        if (result.granted?.type === 'pack' && result.granted.card) {
+          alertMsg(`Уровень ${level}: пак принёс ${result.granted.card.name} (${result.granted.card.rating} OVR)!`);
+        }
+      } catch (err) {
+        alertMsg('Не удалось забрать награду: ' + (err.data?.error || err.message));
+      }
+    }
+
+    async function buyBattlePass() {
+      try {
+        const result = await apiPost('/api/battlepass/buy');
+        renderBattlePass(result);
+        alertMsg('Батл Пасс активирован! Премиум-награды открыты.');
+      } catch (err) {
+        alertMsg('Не удалось купить Батл Пасс: ' + (err.data?.error || err.message));
+      }
     }
 
     // ---------- Обмен ⭐️ Stars -> 🪙 $SLive ----------
