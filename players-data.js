@@ -13,6 +13,26 @@
 // пропорции между редкостями сохранены), чтобы набрать на легенду занимало
 // не меньше месяца активного фарма — см. подробности в README/PR.
 export const PLAYER_POOL = {
+  // Самая дешёвая редкость — ниже bronze. Изначально введена для
+  // онбординга: ВСЕ игроки (и новые, и уже играющие) при входе получают
+  // один бесплатный стартовый набор из ВСЕХ 11 карт этого пула разом (см.
+  // claimStarterPackIfNeeded в db.js) — поэтому здесь ровно 11 карт, по
+  // одной на каждую позицию будущего состава из 11 футболистов. Income
+  // нарочно ниже bronze, чтобы бесплатный набор не обесценивал экономику
+  // платных паков.
+  common: [
+    { id: 'c1', name: 'Trafford', rating: 68, pos: 'GK', nation: 'ENG', type: 'common', income: 5 },
+    { id: 'c2', name: 'Colwill', rating: 67, pos: 'DEF', nation: 'ENG', type: 'common', income: 5 },
+    { id: 'c3', name: 'Estupinan', rating: 69, pos: 'DEF', nation: 'ESP', type: 'common', income: 5 },
+    { id: 'c4', name: 'Yarmoliuk', rating: 65, pos: 'MID', nation: 'UKR', type: 'common', income: 5 },
+    { id: 'c5', name: 'Veerman', rating: 66, pos: 'MID', nation: 'NED', type: 'common', income: 5 },
+    { id: 'c6', name: 'Doue', rating: 66, pos: 'MID', nation: 'FRA', type: 'common', income: 5 },
+    { id: 'c7', name: 'Alarcon', rating: 64, pos: 'MID', nation: 'ARG', type: 'common', income: 5 },
+    { id: 'c8', name: 'Kayky', rating: 63, pos: 'FWD', nation: 'BRA', type: 'common', income: 5 },
+    { id: 'c9', name: 'Bynoe-Gittens', rating: 68, pos: 'FWD', nation: 'ENG', type: 'common', income: 5 },
+    { id: 'c10', name: 'Nmecha', rating: 65, pos: 'FWD', nation: 'GER', type: 'common', income: 5 },
+    { id: 'c11', name: 'Lukebakio', rating: 68, pos: 'FWD', nation: 'BEL', type: 'common', income: 6 },
+  ],
   bronze: [
     { id: 'b1', name: 'Zinchenko', rating: 79, pos: 'DEF', nation: 'UKR', type: 'bronze', income: 10 },
     { id: 'b2', name: 'Mudryk', rating: 77, pos: 'FWD', nation: 'UKR', type: 'bronze', income: 10 },
@@ -55,6 +75,18 @@ export const PLAYER_POOL = {
     { id: 'l5', name: 'Pele', rating: 99, pos: 'FWD', nation: 'BRA', type: 'legend', income: 650 },
     { id: 'l6', name: 'C. Ronaldo', rating: 96, pos: 'FWD', nation: 'POR', type: 'legend', income: 520 },
   ],
+  // Редкость ВЫШЕ legend — топ дорогого сегмента паков (см. GAME_PACKS в
+  // server.js). Добавлена вместе с common, чтобы расширить и дешёвый, и
+  // дорогой края линейки паков (см. вкладку "Паки" — теперь есть фильтр
+  // "Дешёвые"/"Дорогие").
+  mythic: [
+    { id: 'm1', name: 'J. Cruyff', rating: 97, pos: 'MID', nation: 'NED', type: 'mythic', income: 800 },
+    { id: 'm2', name: 'F. Beckenbauer', rating: 96, pos: 'DEF', nation: 'GER', type: 'mythic', income: 780 },
+    { id: 'm3', name: 'A. Di Stefano', rating: 98, pos: 'FWD', nation: 'ESP', type: 'mythic', income: 850 },
+    { id: 'm4', name: 'Eusebio', rating: 97, pos: 'FWD', nation: 'POR', type: 'mythic', income: 830 },
+    { id: 'm5', name: 'M. Platini', rating: 96, pos: 'MID', nation: 'FRA', type: 'mythic', income: 800 },
+    { id: 'm6', name: 'Romario', rating: 97, pos: 'FWD', nation: 'BRA', type: 'mythic', income: 840 },
+  ],
 };
 
 // Плоский индекс id -> карточка, удобно для инвентаря/состава.
@@ -69,10 +101,12 @@ export const PLAYERS_BY_ID = Object.values(PLAYER_POOL)
 // (в отличие от пака, где выдаётся случайная карта этой редкости). Выше цены
 // самого пака этой редкости — потому что тут нет элемента случайности.
 export const MARKET_PRICE = {
-  bronze: { stars: 75, slive: 2100 },
-  silver: { stars: 180, slive: 10500 },
-  gold: { stars: 750, slive: 45000 },
-  legend: { stars: 3600, slive: 210000 },
+  common: { stars: 10, slive: 300 },
+  bronze: { stars: 25, slive: 700 },
+  silver: { stars: 60, slive: 3500 },
+  gold: { stars: 250, slive: 15000 },
+  legend: { stars: 1200, slive: 70000 },
+  mythic: { stars: 2500, slive: 300000 },
 };
 
 // Доля от гарантированной цены Маркета (в SLive), которую игрок получает при
