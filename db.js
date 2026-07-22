@@ -4,7 +4,7 @@
 // вызванные из server.js после проверки initData.
 import Database from 'better-sqlite3';
 import { randomUUID } from 'crypto';
-import { PLAYERS_BY_ID, getSellPrice, getRandomPlayer } from './players-data.js';
+import { PLAYERS_BY_ID, getSellPrice, getRandomPlayer, PLAYER_POOL } from './players-data.js';
 
 export const DB_PATH = process.env.DB_PATH || 'sportlive.db';
 const db = new Database(DB_PATH);
@@ -215,6 +215,13 @@ tryAlter("ALTER TABLE users ADD COLUMN referral_status TEXT NOT NULL DEFAULT 'no
 // approveReferralRequest) — не обязательно t.me/bot?startapp=id.
 tryAlter('ALTER TABLE users ADD COLUMN referral_link TEXT');
 tryAlter('ALTER TABLE users ADD COLUMN referral_requested_at INTEGER');
+// Флаг разовой выдачи бесплатного стартового набора из 11 карт редкости
+// common (см. claimStarterPackIfNeeded ниже). DEFAULT 0 означает, что у ВСЕХ
+// уже существующих на момент миграции игроков флаг тоже 0 — то есть при
+// следующем же заходе (следующий /api/me) набор автоматически довыдастся и
+// им, не только новым регистрациям. Идемпотентно: как только выдали — сразу
+// ставим 1 в той же транзакции, повторно выдать нельзя.
+tryAlter('ALTER TABLE users ADD COLUMN starter_pack_claimed INTEGER NOT NULL DEFAULT 0');
 
 // Энергия режима "Битвы составами" — ОТДЕЛЬНЫЙ пул от общей тап-энергии
 // (users.energy): всего SQUAD_BATTLE_ENERGY_MAX зарядов в сутки, каждый бой
@@ -367,6 +374,30 @@ function applyOfflineFarm(telegramId) {
   return { farmRate, earned };
 }
 
+// Бесплатный стартовый набор при входе: выдаёт ВСЕ 11 карт редкости common
+// разом — по одной на каждую позицию будущего состава из 11 футболистов.
+// Работает одинаково и для новых регистраций (вызывается из ensureUser ->
+// getUser), и для уже играющих (вызывается на каждый /api/me, но реально
+// срабатывает только один раз благодаря starter_pack_claimed — см. миграцию
+// выше). Возвращает МАССИВ выданных карт (для реveal-анимации на клиенте)
+// либо null, если набор уже был выдан раньше.
+function claimStarterPackIfNeeded(telegramId) {
+  const user = db.prepare('SELECT starter_pack_claimed FROM users WHERE telegram_id = ?').get(telegramId);
+  if (!user || user.starter_pack_claimed) return null;
+
+  const tx = db.transaction(() => {
+    const granted = PLAYER_POOL.common.map(meta =>
+      // source: 'starter' — намеренно НЕ 'pack', чтобы бесплатная выдача не
+      // засчитывалась в дневное задание Батл Пасса "открой пак".
+      addPlayerToInventory({ telegramId, playerId: meta.id, source: 'starter' })
+    );
+    db.prepare('UPDATE users SET starter_pack_claimed = 1 WHERE telegram_id = ?').run(telegramId);
+    return granted;
+  });
+
+  return tx();
+}
+
 // ---------- public API ----------
 
 // referrerId — telegram_id пригласившего (из start_param мини-аппы). Награда
@@ -400,6 +431,10 @@ export async function ensureUser(telegramId, username = null, referrerId = null)
 export async function getUser(telegramId) {
   applyOfflineFarm(telegramId);
   refreshEnergyIfNeeded(telegramId);
+  // Должно случиться ДО чтения инвентаря ниже — так свежевыданные карты
+  // стартового набора сразу попадают в myClub этого же ответа (клиенту не
+  // нужно перезапрашивать /api/me второй раз, чтобы увидеть их в Клубе).
+  const starterPackCards = claimStarterPackIfNeeded(telegramId);
   const row = db.prepare('SELECT * FROM users WHERE telegram_id = ?').get(telegramId);
   if (!row) return null;
 
@@ -421,6 +456,9 @@ export async function getUser(telegramId) {
     myClub,
     farmRate,
     squadPower,
+    // null, если набор выдавали раньше; массив из 11 карт — если выдали
+    // ИМЕННО сейчас (клиент показывает реveal-анимацию только в этом случае).
+    starterPackCards,
   };
 }
 
@@ -825,6 +863,14 @@ export async function getBattlePassState(telegramId) {
     draftTokens: row.draft_tokens,
     tasks,
     levels,
+    // Разовый бонус за полное прохождение премиум-ветки: после клейма
+    // премиум-награды 14 уровня (набор золотых паков) игроку открывается
+    // ЕЩЁ ОДИН, отдельный бесплатный золотой пак — доступен один раз,
+    // не привязан к валюте/Маркету, забирается прямо в окне Батл Пасса.
+    bonusGoldPack: {
+      available: Boolean(claimed['14_premium']),
+      claimed: Boolean(claimed['14_bonus_gold']),
+    },
   };
 }
 
@@ -872,6 +918,32 @@ export async function claimBattlePassReward({ telegramId, level, track }) {
 
   const state = await getBattlePassState(telegramId);
   return { ok: true, ...state, granted };
+}
+
+// Разовый бонусный золотой пак: доступен только тому, кто уже забрал
+// премиум-награду 14 уровня (набор из 3 золотых паков) — это ДОПОЛНИТЕЛЬНЫЙ,
+// отдельный пак сверху, а не повторная выдача того же клейма. Флаг
+// '14_bonus_gold' живёт в том же claimed_levels, что и обычные клеймы уровней,
+// чтобы не заводить отдельную таблицу/колонку под одноразовый бонус.
+export async function claimBattlePassBonusGoldPack({ telegramId }) {
+  ensureBattlePassUser(telegramId);
+  const row = db.prepare('SELECT * FROM battlepass_users WHERE telegram_id = ?').get(telegramId);
+  const claimed = JSON.parse(row.claimed_levels || '{}');
+
+  if (!claimed['14_premium']) return { ok: false, reason: 'level14_premium_not_claimed' };
+  if (claimed['14_bonus_gold']) return { ok: false, reason: 'already_claimed' };
+
+  let card;
+  const tx = db.transaction(() => {
+    claimed['14_bonus_gold'] = true;
+    db.prepare('UPDATE battlepass_users SET claimed_levels = ? WHERE telegram_id = ?').run(JSON.stringify(claimed), telegramId);
+    const drawn = getRandomPlayer('gold');
+    card = addPlayerToInventory({ telegramId, playerId: drawn.id, source: 'battlepass' });
+  });
+  tx();
+
+  const state = await getBattlePassState(telegramId);
+  return { ok: true, ...state, card };
 }
 
 export async function buyBattlePass({ telegramId, amount = BATTLE_PASS_PRICE_STARS }) {
