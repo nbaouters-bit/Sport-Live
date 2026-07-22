@@ -825,14 +825,6 @@ export async function getBattlePassState(telegramId) {
     draftTokens: row.draft_tokens,
     tasks,
     levels,
-    // Разовый бонус за полное прохождение премиум-ветки: после клейма
-    // премиум-награды 14 уровня (набор золотых паков) игроку открывается
-    // ЕЩЁ ОДИН, отдельный бесплатный золотой пак — доступен один раз,
-    // не привязан к валюте/Маркету, забирается прямо в окне Батл Пасса.
-    bonusGoldPack: {
-      available: Boolean(claimed['14_premium']),
-      claimed: Boolean(claimed['14_bonus_gold']),
-    },
   };
 }
 
@@ -880,32 +872,6 @@ export async function claimBattlePassReward({ telegramId, level, track }) {
 
   const state = await getBattlePassState(telegramId);
   return { ok: true, ...state, granted };
-}
-
-// Разовый бонусный золотой пак: доступен только тому, кто уже забрал
-// премиум-награду 14 уровня (набор из 3 золотых паков) — это ДОПОЛНИТЕЛЬНЫЙ,
-// отдельный пак сверху, а не повторная выдача того же клейма. Флаг
-// '14_bonus_gold' живёт в том же claimed_levels, что и обычные клеймы уровней,
-// чтобы не заводить отдельную таблицу/колонку под одноразовый бонус.
-export async function claimBattlePassBonusGoldPack({ telegramId }) {
-  ensureBattlePassUser(telegramId);
-  const row = db.prepare('SELECT * FROM battlepass_users WHERE telegram_id = ?').get(telegramId);
-  const claimed = JSON.parse(row.claimed_levels || '{}');
-
-  if (!claimed['14_premium']) return { ok: false, reason: 'level14_premium_not_claimed' };
-  if (claimed['14_bonus_gold']) return { ok: false, reason: 'already_claimed' };
-
-  let card;
-  const tx = db.transaction(() => {
-    claimed['14_bonus_gold'] = true;
-    db.prepare('UPDATE battlepass_users SET claimed_levels = ? WHERE telegram_id = ?').run(JSON.stringify(claimed), telegramId);
-    const drawn = getRandomPlayer('gold');
-    card = addPlayerToInventory({ telegramId, playerId: drawn.id, source: 'battlepass' });
-  });
-  tx();
-
-  const state = await getBattlePassState(telegramId);
-  return { ok: true, ...state, card };
 }
 
 export async function buyBattlePass({ telegramId, amount = BATTLE_PASS_PRICE_STARS }) {
