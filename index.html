@@ -6,25 +6,8 @@
   <title>Sport Live FC - TWA Game</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/SkeletonUtils.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=Bebas+Neue&family=Oswald:wght@500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
   <style>
-    :root {
-      /* --- ИГРОВАЯ ПАЛИТРА: "ночной стадион под прожекторами" ---
-         Заменяет плоский SaaS-фиолетовый на энергичный неоново-лаймовый
-         акцент (свет прожекторов на поле), фиолетовый остаётся только
-         для легендарных карт/редкости — так рарити и общий UI больше
-         не спорят за один и тот же цвет. */
-      --pitch-accent: #c6ff2e;
-      --pitch-accent-soft: #d9ff70;
-      --pitch-accent-dim: rgba(198,255,46,0.14);
-      --pitch-black: #050805;
-      --pitch-green-deep: #041a08;
-      --gold: #fbbf24;
-      --legend-purple: #a855f7;
-    }
     html {
       touch-action: manipulation;
     }
@@ -37,43 +20,6 @@
       touch-action: manipulation;
       overscroll-behavior: none;
     }
-    /* Заголовки стадионным шрифтом — самый быстрый способ визуально
-       превратить "приложение" в "игру": во всём файле заголовки уже
-       последовательно помечены комбинацией классов font-black+uppercase
-       (+ часто italic), так что один селектор перекрашивает шрифт сразу
-       на всех вкладках без правки каждой строки разметки. */
-    .font-black.uppercase, h1.font-black, h2.font-black, h3.font-black {
-      font-family: 'Bebas Neue', 'Inter', sans-serif;
-      letter-spacing: 0.02em;
-      font-style: normal !important;
-    }
-    .font-black.uppercase.italic { transform: skewX(-4deg); display: inline-block; }
-    /* Прожекторы стадиона: статичное атмосферное свечение по углам рамки
-       телефона, видно сквозь полупрозрачные header/nav (backdrop-blur). */
-    .app-shell { position: relative; }
-    .app-shell::before {
-      content: '';
-      position: absolute; inset: 0; z-index: 0; pointer-events: none;
-      background:
-        radial-gradient(60% 40% at 8% -6%, rgba(198,255,46,0.16), transparent 60%),
-        radial-gradient(55% 35% at 100% 0%, rgba(168,85,247,0.14), transparent 60%),
-        repeating-linear-gradient(115deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 2px, transparent 2px, transparent 26px);
-    }
-    .app-shell > * { position: relative; z-index: 1; }
-    /* Единая перекраска фиолетового UI-акцента (кнопки/балансы/выделения)
-       в неоново-лаймовый — влияет на все вкладки разом. Легендарная
-       (card-legend) фиолетовая рамка карт не тронута — другой класс. */
-    .bg-violet-500, .bg-violet-400 { background-color: var(--pitch-accent) !important; }
-    .bg-violet-500\/10 { background-color: rgba(198,255,46,0.10) !important; }
-    .bg-violet-500\/15 { background-color: rgba(198,255,46,0.15) !important; }
-    .bg-violet-500\/20 { background-color: rgba(198,255,46,0.20) !important; }
-    .bg-violet-500\/40 { background-color: rgba(198,255,46,0.40) !important; }
-    .bg-violet-900\/30 { background-color: rgba(30,50,10,0.30) !important; }
-    .text-violet-300, .text-violet-400, .text-violet-500, .text-violet-400\/70 { color: var(--pitch-accent) !important; }
-    .border-violet-500, .border-violet-500\/20, .border-violet-500\/25, .border-violet-500\/30, .border-violet-500\/40 { border-color: rgba(198,255,46,0.45) !important; }
-    .from-violet-600\/20, .from-violet-900\/40 { --tw-gradient-from: rgba(198,255,46,0.16) var(--tw-gradient-from-position) !important; }
-    /* Текст/кнопки на лайм-фоне были рассчитаны на чёрный текст (text-black
-       поверх bg-violet-500) — лайм тоже светлый, чёрный текст остаётся читаемым. */
     /* Тапалка кликается очень часто и очень быстро — именно на ней браузер
        чаще всего распознаёт "двойной тап" как жест зума. touch-action:
        manipulation отключает жесты зума/двойного тапа для этого элемента,
@@ -135,44 +81,23 @@
       transition: color 0.25s ease, background-color 0.25s ease, transform 0.25s cubic-bezier(.34,1.56,.64,1);
       color: #6b7280;
     }
-    .nav-btn .nav-icon {
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 28px; height: 28px; border-radius: 50%;
-      background: linear-gradient(160deg, rgba(255,255,255,0.05), rgba(0,0,0,0.35));
-      border: 1px solid rgba(255,255,255,0.07);
-      box-shadow: inset 0 1px 1px rgba(255,255,255,0.08), inset 0 -2px 4px rgba(0,0,0,0.4);
-      margin-bottom: 1px;
-      transition: transform 0.25s cubic-bezier(.34,1.56,.64,1), background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
-    }
-    .nav-btn.nav-active { background: transparent; color: var(--pitch-accent); transform: translateY(-3px); text-shadow: 0 0 10px rgba(198,255,46,0.55); }
-    .nav-btn.nav-active .nav-icon {
-      transform: scale(1.2);
-      background: linear-gradient(160deg, var(--pitch-accent), #7fd60e);
-      border-color: rgba(255,255,255,0.4);
-      box-shadow: 0 0 16px rgba(198,255,46,0.65), inset 0 1px 2px rgba(255,255,255,0.5);
-      filter: none;
-    }
+    .nav-btn .nav-icon { display: inline-block; transition: transform 0.25s cubic-bezier(.34,1.56,.64,1); }
+    .nav-btn.nav-active { background: linear-gradient(180deg, rgba(167,139,250,0.22), rgba(167,139,250,0.06)); color: #c4b5fd; transform: translateY(-4px); box-shadow: 0 4px 14px rgba(167,139,250,0.18); }
+    .nav-btn.nav-active .nav-icon { transform: scale(1.22); }
     .nav-btn.nav-active::after {
       content: '';
       position: absolute;
       top: -1px; left: 50%;
-      width: 18px; height: 3px;
+      width: 16px; height: 3px;
       transform: translateX(-50%);
-      background: var(--pitch-accent);
+      background: #a78bfa;
       border-radius: 0 0 4px 4px;
-      box-shadow: 0 0 10px rgba(198,255,46,0.9);
+      box-shadow: 0 0 8px rgba(167,139,250,0.8);
     }
     .nav-btn:active { transform: scale(0.92); }
     .nav-bar-shell {
-      background: linear-gradient(180deg, #131313, #0a0d09);
+      background: linear-gradient(180deg, #131313, #0d0d0d);
       box-shadow: 0 -10px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.03);
-      border-top: 1px solid rgba(198,255,46,0.12) !important;
-      position: relative;
-    }
-    .nav-bar-shell::before {
-      content: '';
-      position: absolute; top: -1px; left: 0; right: 0; height: 1px;
-      background: linear-gradient(90deg, transparent, rgba(198,255,46,0.5), transparent);
     }
     @keyframes scorePulseYou {
       0% { transform: scale(1); }
@@ -226,162 +151,25 @@
     .bet-option-row:active { transform: scale(0.98); }
     .bet-event-card { transition: box-shadow 0.2s ease; }
     .bet-event-card.is-open { box-shadow: 0 0 0 1px rgba(167,139,250,0.15), 0 8px 20px -8px rgba(167,139,250,0.25); }
-    .card-legend { box-shadow: 0 0 20px rgba(168, 85, 247, 0.5); border-color: #c084fc; position: relative; overflow: hidden; }
-    .card-gold { box-shadow: 0 0 15px rgba(250, 204, 21, 0.4); border-color: #fde047; position: relative; overflow: hidden; }
+    .card-legend { box-shadow: 0 0 20px rgba(168, 85, 247, 0.5); border-color: #c084fc; }
+    .card-gold { box-shadow: 0 0 15px rgba(250, 204, 21, 0.4); border-color: #fde047; }
     .card-silver { border-color: #cbd5e1; }
     .card-bronze { border-color: #d97706; }
-    .card-legend::after, .card-gold::after {
-      content: '';
-      position: absolute; top: 0; left: -60%; width: 40%; height: 100%;
-      background: linear-gradient(115deg, transparent, rgba(255,255,255,0.55), transparent);
-      animation: cardShine 3.2s ease-in-out infinite;
-      pointer-events: none;
-    }
-    @keyframes cardShine { 0% { left: -60%; } 35%,100% { left: 130%; } }
-
-    /* === ИГРОВАЯ БРОНЯ (новый формат вместо плоских "аппных" карточек) ===
-       Раньше почти каждый блок был bg-neutral-900 + border-neutral-800 —
-       визуально ничем не отличалось от обычного веб-приложения. Теперь
-       любая такая панель и panel-card получают объёмную, "литую" рамку
-       с внутренним бликом и тенью — как элемент игрового интерфейса,
-       а не карточка в списке. Один селектор — эффект на всех 9 вкладках. */
-    .panel-card, .bg-neutral-900.border.border-neutral-800, .bg-neutral-900.border-neutral-800 {
-      background: linear-gradient(180deg, #1b2016, #0e110b) !important;
-      border-top-color: rgba(198,255,46,0.16) !important;
-      border-right-color: rgba(198,255,46,0.16) !important;
-      border-bottom-color: rgba(198,255,46,0.16) !important;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), inset 0 -10px 16px -12px rgba(0,0,0,0.6), 0 6px 14px -6px rgba(0,0,0,0.5);
-      position: relative;
-    }
-    .bg-neutral-900.border.border-neutral-800, .bg-neutral-900.border-neutral-800 { border-left-color: rgba(198,255,46,0.16) !important; }
-    .panel-card::before, .bg-neutral-900.border.border-neutral-800::before {
-      content: '';
-      position: absolute; top: 0; left: 10px; right: 10px; height: 1px;
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent);
-      pointer-events: none;
-    }
-    /* Объёмные кнопки: у всех CTA в приложении (паки, маркет, ставки,
-       битвы, онбординг) теперь литой, "нажимаемый" вид игрового движка
-       вместо плоской веб-кнопки. Навигацию и мелкие сегменты исключаем —
-       у них свой стиль. */
-    button:not(.nav-btn):not(.seg-btn):not(.ob-dot) {
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), inset 0 -3px 0 rgba(0,0,0,0.22), 0 4px 10px -2px rgba(0,0,0,0.45);
-      border-bottom: 2px solid rgba(0,0,0,0.2);
-      transition: transform 0.08s ease, box-shadow 0.08s ease;
-    }
-    button:not(.nav-btn):not(.seg-btn):not(.ob-dot):active {
-      transform: translateY(2px);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), inset 0 -1px 0 rgba(0,0,0,0.2), 0 1px 3px rgba(0,0,0,0.4);
-      border-bottom-width: 1px;
-    }
     ::-webkit-scrollbar { width: 0px; background: transparent; }
   </style>
 </head>
 <body class="flex justify-center items-center min-h-screen p-0 sm:p-4">
 
-  <div class="app-shell w-full max-w-md h-screen sm:h-[840px] bg-[#0a0a0a] flex flex-col relative overflow-hidden sm:rounded-[40px] sm:border-[8px] border-[#181818] shadow-2xl">
-
-    <!-- ОНБОРДИНГ: показывается один раз при первом запуске (флаг onboardingDone
-         в localStorage). 4 шага: приветствие -> имя клуба -> быстрый тур по
-         вкладкам -> стартовый капитал. Полностью клиентский, ничего не шлёт
-         на сервер — см. initOnboarding()/renderOnboardingStep() в конце скрипта. -->
-    <div id="onboarding-modal" class="hidden absolute inset-0 z-[70] flex flex-col bg-[#050505]">
-      <div class="absolute inset-0 opacity-40" style="background: radial-gradient(circle at 50% 0%, rgba(167,139,250,0.35), transparent 60%);"></div>
-
-      <div class="relative z-10 flex-1 flex flex-col p-6 overflow-y-auto no-scrollbar">
-        <!-- Прогресс -->
-        <div class="flex justify-center gap-1.5 mb-8 mt-2 shrink-0">
-          <div class="ob-dot w-6 h-1.5 rounded-full bg-violet-500 transition-all"></div>
-          <div class="ob-dot w-6 h-1.5 rounded-full bg-neutral-800 transition-all"></div>
-          <div class="ob-dot w-6 h-1.5 rounded-full bg-neutral-800 transition-all"></div>
-          <div class="ob-dot w-6 h-1.5 rounded-full bg-neutral-800 transition-all"></div>
-        </div>
-
-        <!-- Шаг 0: Приветствие -->
-        <div id="ob-step-0" class="ob-step flex-1 flex flex-col items-center justify-center text-center gap-4 relative">
-          <div class="absolute inset-0 -z-10 pointer-events-none" style="background: radial-gradient(45% 30% at 50% 35%, rgba(198,255,46,0.35), transparent 70%); animation: floodPulse 2.6s ease-in-out infinite;"></div>
-          <div class="relative w-24 h-24 rounded-[28px] flex items-center justify-center text-5xl shadow-2xl" style="background: linear-gradient(155deg, var(--pitch-accent), #7fd60e); animation: popIn 0.55s cubic-bezier(.34,1.56,.64,1); box-shadow: 0 0 40px rgba(198,255,46,0.5), 0 12px 28px rgba(0,0,0,0.5);">⚽</div>
+  <div class="w-full max-w-md h-screen sm:h-[840px] bg-[#0a0a0a] flex flex-col relative overflow-hidden sm:rounded-[40px] sm:border-[8px] border-[#181818] shadow-2xl">
+    
+    <!-- HEADER -->
+    <div class="bg-[#111]/90 backdrop-blur-md border-b border-neutral-800 p-4 flex flex-col gap-3 z-30 shrink-0">
+      <div class="flex justify-between items-center">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-full bg-violet-500 flex items-center justify-center text-xs font-black text-black">SL</div>
           <div>
-            <h1 class="text-3xl font-black uppercase italic tracking-tight mb-1" style="letter-spacing: 0.03em;">Sport Live FC</h1>
-            <p class="text-xs text-neutral-400 leading-relaxed max-w-[260px] mx-auto">Собирай карточки реальных футболистов, строй состав мечты и веди свой клуб от дивизиона новичков до вершины лиги.</p>
-          </div>
-        </div>
-        <style>@keyframes floodPulse { 0%,100% { opacity: 0.6; transform: scale(1); } 50% { opacity: 1; transform: scale(1.12); } }</style>
-
-        <!-- Шаг 1: Имя клуба -->
-        <div id="ob-step-1" class="ob-step hidden flex-1 flex flex-col items-center justify-center text-center gap-4">
-          <div class="text-4xl">🛡️</div>
-          <div class="w-full">
-            <h2 class="text-lg font-black uppercase italic tracking-tight mb-1">Как назовём твой клуб?</h2>
-            <p class="text-[11px] text-neutral-500 mb-4">Это имя увидят соперники в Лиге и Ставках</p>
-            <input id="ob-club-name-input" type="text" maxlength="18" placeholder="Например: FC Champions"
-              class="w-full bg-neutral-900 border border-neutral-700 focus:border-violet-500 rounded-xl px-4 py-3 text-center text-sm font-black text-white placeholder-neutral-600 outline-none" />
-          </div>
-        </div>
-
-        <!-- Шаг 2: Быстрый тур -->
-        <div id="ob-step-2" class="ob-step hidden flex-1 flex flex-col justify-center gap-3">
-          <h2 class="text-lg font-black uppercase italic tracking-tight text-center mb-1">Как всё устроено</h2>
-          <div class="panel-card accent-emerald p-3 flex items-center gap-3">
-            <span class="text-2xl">🛡️</span>
-            <div>
-              <div class="text-xs font-black">Состав</div>
-              <div class="text-[10px] text-neutral-500">Расставь карточки игроков в формации 4-3-3 — сила состава решает всё</div>
-            </div>
-          </div>
-          <div class="panel-card accent-amber p-3 flex items-center gap-3">
-            <span class="text-2xl">⚡</span>
-            <div>
-              <div class="text-xs font-black">Паки</div>
-              <div class="text-[10px] text-neutral-500">Открывай паки и лови шанс вытянуть легенду мирового футбола</div>
-            </div>
-          </div>
-          <div class="panel-card accent-sky p-3 flex items-center gap-3">
-            <span class="text-2xl">🏟️</span>
-            <div>
-              <div class="text-xs font-black">Лига</div>
-              <div class="text-[10px] text-neutral-500">Выбирай тактику и смотри матч в 3D — от результата зависит награда</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Шаг 3: Стартовый капитал -->
-        <div id="ob-step-3" class="ob-step hidden flex-1 flex flex-col items-center justify-center text-center gap-4 relative overflow-hidden">
-          <div id="ob-confetti-layer" class="absolute inset-0 pointer-events-none"></div>
-          <div class="relative text-5xl" style="animation: popIn 0.5s ease-out;">🎁</div>
-          <div class="relative">
-            <h2 class="text-lg font-black uppercase italic tracking-tight mb-1">Стартовый капитал готов</h2>
-            <p class="text-[11px] text-neutral-500 mb-3">Открой первый пак или собери состав — выбор за тобой</p>
-            <div class="bg-neutral-900 border border-violet-500/30 rounded-2xl px-6 py-3 inline-flex items-center gap-2">
-              <span class="text-2xl">🪙</span>
-              <span class="text-2xl font-black text-violet-400">1 000</span>
-              <span class="text-[10px] text-neutral-500 font-bold">$SLive</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Кнопка -->
-        <div class="shrink-0 pt-6">
-          <button id="ob-next-btn" onclick="onboardingNext()" class="w-full bg-violet-500 text-black font-black py-3.5 rounded-2xl text-sm uppercase tracking-tight">Далее</button>
-          <button id="ob-skip-btn" onclick="onboardingFinish()" class="w-full text-neutral-600 text-[10px] font-bold py-3">Пропустить</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- HEADER: баннер клуба (щит-герб + монеты-медальоны вместо плоских
-         инфо-плашек) — задаёт тон "это игра" с первого кадра. -->
-    <div class="relative p-4 pt-3 flex flex-col gap-3 z-30 shrink-0 overflow-hidden" style="background: linear-gradient(165deg, #12160d, #0a0c07 60%); border-bottom: 1px solid rgba(198,255,46,0.14); box-shadow: 0 2px 0 rgba(198,255,46,0.05), 0 8px 20px -10px rgba(0,0,0,0.6);">
-      <div class="absolute inset-0 opacity-70 pointer-events-none" style="background: repeating-linear-gradient(90deg, rgba(255,255,255,0.015) 0 10px, transparent 10px 20px);"></div>
-      <div class="relative flex justify-between items-center">
-        <div class="flex items-center gap-2.5">
-          <!-- Герб клуба: щит вместо кружка/квадрата -->
-          <div class="w-11 h-11 flex items-center justify-center text-[13px] font-black text-black shrink-0 relative"
-               style="background: linear-gradient(155deg, var(--pitch-accent), #6fbe0d); clip-path: polygon(50% 0%, 100% 18%, 100% 62%, 50% 100%, 0% 62%, 0% 18%); box-shadow: 0 0 16px rgba(198,255,46,0.5), inset 0 2px 3px rgba(255,255,255,0.5), inset 0 -4px 6px rgba(0,0,0,0.25);">
-            SL
-          </div>
-          <div>
-            <div id="manager-name-label" class="text-sm font-black uppercase leading-none">Менеджер</div>
-            <div id="status-badge" class="text-[9px] font-black uppercase text-neutral-500 mt-1 tracking-wide">Тариф: Игрок</div>
+            <div class="text-xs font-bold">Менеджер</div>
+            <div id="status-badge" class="text-[9px] font-black uppercase text-neutral-400">Тариф: Игрок</div>
           </div>
         </div>
         <div class="flex items-center gap-1.5">
@@ -398,22 +186,20 @@
         </div>
       </div>
 
-      <!-- Монеты-медальоны: иконка выступает за левый край плашки, как
-           жетон в игровом HUD, а не просто эмодзи внутри карточки. -->
-      <div class="relative grid grid-cols-2 gap-2.5 pl-3">
-        <div class="relative flex items-center rounded-xl pl-6 pr-2 py-2" style="background: linear-gradient(145deg, #1a1f13, #0e1109); border: 1px solid rgba(198,255,46,0.3); box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -6px 10px -6px rgba(0,0,0,0.6);">
-          <div class="absolute -left-3 w-9 h-9 rounded-full flex items-center justify-center text-base shrink-0" style="background: radial-gradient(circle at 35% 30%, #f3ff9e, var(--pitch-accent) 65%); box-shadow: 0 0 10px rgba(198,255,46,0.6), inset 0 -3px 4px rgba(0,0,0,0.25); border: 2px solid #0a0c07;">🪙</div>
-          <div class="min-w-0">
-            <div class="text-[8px] text-neutral-500 font-bold uppercase leading-none">Баланс $SLive</div>
-            <div id="slive-balance" class="text-base font-black leading-none mt-1 truncate" style="color: var(--pitch-accent); text-shadow: 0 0 12px rgba(198,255,46,0.4);">0</div>
+      <div class="grid grid-cols-2 gap-2">
+        <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-2 flex justify-between items-center">
+          <div>
+            <div class="text-[9px] text-neutral-500 font-bold uppercase">Баланс $SLive</div>
+            <div id="slive-balance" class="text-lg font-black text-violet-400 leading-none mt-1">0</div>
           </div>
+          <span class="text-xl">🪙</span>
         </div>
-        <div class="relative flex items-center rounded-xl pl-6 pr-2 py-2" style="background: linear-gradient(145deg, #201a0d, #110d06); border: 1px solid rgba(251,191,36,0.3); box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -6px 10px -6px rgba(0,0,0,0.6);">
-          <div class="absolute -left-3 w-9 h-9 rounded-full flex items-center justify-center text-base shrink-0" style="background: radial-gradient(circle at 35% 30%, #fff2c2, #fbbf24 65%); box-shadow: 0 0 10px rgba(251,191,36,0.6), inset 0 -3px 4px rgba(0,0,0,0.25); border: 2px solid #0a0c07;">⭐️</div>
-          <div class="min-w-0">
-            <div class="text-[8px] text-neutral-500 font-bold uppercase leading-none">Telegram Stars</div>
-            <div id="stars-balance" class="text-base font-black text-amber-400 leading-none mt-1 truncate" style="text-shadow: 0 0 12px rgba(251,191,36,0.4);">0</div>
+        <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-2 flex justify-between items-center">
+          <div>
+            <div class="text-[9px] text-neutral-500 font-bold uppercase">Telegram Stars</div>
+            <div id="stars-balance" class="text-lg font-black text-amber-400 leading-none mt-1">0</div>
           </div>
+          <span class="text-xl">⭐️</span>
         </div>
       </div>
     </div>
@@ -428,9 +214,9 @@
             <h2 class="text-xl font-black uppercase italic tracking-tight">Твой Состав</h2>
             <div class="text-[10px] text-neutral-400 mt-0.5">Собирай игроков, чтобы фармить пассив!</div>
           </div>
-          <div class="relative flex items-center gap-1.5 rounded-full pl-1 pr-3 py-1" style="background: linear-gradient(145deg, #1a1f13, #0e1109); border: 1px solid rgba(198,255,46,0.3); box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);">
-            <div class="w-6 h-6 rounded-full flex items-center justify-center text-[11px] shrink-0" style="background: radial-gradient(circle at 35% 30%, #f3ff9e, var(--pitch-accent) 65%); box-shadow: inset 0 -2px 3px rgba(0,0,0,0.25);">📈</div>
-            <div id="total-farm-display" class="text-sm font-black leading-none" style="color: var(--pitch-accent); text-shadow: 0 0 10px rgba(198,255,46,0.4);">+0/день</div>
+          <div class="text-right">
+            <div class="text-[9px] text-violet-500 font-bold uppercase">Общий фарм:</div>
+            <div id="total-farm-display" class="text-lg font-black text-violet-400 bg-violet-500/10 px-2 rounded border border-violet-500/20">+0/день</div>
           </div>
         </div>
 
@@ -444,82 +230,44 @@
           </div>
         </div>
 
-        <!-- Чаша стадиона: металлическая рамка + полоса трибун + прожекторы
-             вокруг газона. Раньше поле было просто зелёным прямоугольником
-             в общем layout'е — теперь это отдельная "сцена". -->
-        <div class="relative flex-1 min-h-[440px] rounded-[30px] p-2 pt-4" style="background: linear-gradient(180deg, #2b2b27, #171714 45%, #0c0c0a); box-shadow: inset 0 2px 2px rgba(255,255,255,0.09), inset 0 -8px 14px rgba(0,0,0,0.55), 0 12px 26px -10px rgba(0,0,0,0.6);">
-          <div class="absolute left-4 right-4 top-1.5 h-2.5 rounded-full opacity-60 pointer-events-none" style="background: repeating-linear-gradient(90deg, rgba(255,255,255,0.16) 0 3px, transparent 3px 8px);"></div>
-          <div class="absolute -top-1 left-3 text-base pointer-events-none" style="filter: drop-shadow(0 0 7px rgba(255,255,255,0.55));">💡</div>
-          <div class="absolute -top-1 right-3 text-base pointer-events-none" style="filter: drop-shadow(0 0 7px rgba(255,255,255,0.55));">💡</div>
-
-        <!-- Поле: формация 4-3-3 (11 игроков) -->
-        <div class="relative w-full h-full bg-gradient-to-b from-green-800 to-green-950 rounded-[22px] border-2 border-green-600/30 p-2.5 flex flex-col justify-between shadow-[inset_0_0_50px_rgba(0,0,0,0.5)]" style="box-shadow: inset 0 0 50px rgba(0,0,0,0.5), 0 0 30px rgba(198,255,46,0.1);">
+        <!-- Поле -->
+        <div class="relative w-full flex-1 min-h-[350px] bg-gradient-to-b from-green-800 to-green-950 rounded-3xl border-2 border-green-600/30 p-4 flex flex-col justify-between shadow-[inset_0_0_50px_rgba(0,0,0,0.5)]">
           <div class="absolute inset-0 border border-white/20 m-4 pointer-events-none rounded-xl">
             <div class="absolute top-1/2 left-0 w-full border-t border-white/20"></div>
-            <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 rounded-full border border-white/20"></div>
+            <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 rounded-full border border-white/20"></div>
           </div>
 
-          <!-- НАП (3) -->
-          <div>
-            <div class="text-[8px] text-green-300 font-bold text-center mb-1 drop-shadow-md">НАПАДЕНИЕ</div>
-            <div class="flex justify-around z-10">
-              <div class="relative" id="slot-container-FWD1" onclick="openBench('FWD1')">
-                <div id="slot-FWD1" class="w-[54px] h-[76px] bg-black/40 border-2 border-dashed border-white/20 rounded-lg flex items-center justify-center text-xl text-white/30 cursor-pointer">+</div>
-              </div>
-              <div class="relative" id="slot-container-FWD2" onclick="openBench('FWD2')">
-                <div id="slot-FWD2" class="w-[54px] h-[76px] bg-black/40 border-2 border-dashed border-white/20 rounded-lg flex items-center justify-center text-xl text-white/30 cursor-pointer">+</div>
-              </div>
-              <div class="relative" id="slot-container-FWD3" onclick="openBench('FWD3')">
-                <div id="slot-FWD3" class="w-[54px] h-[76px] bg-black/40 border-2 border-dashed border-white/20 rounded-lg flex items-center justify-center text-xl text-white/30 cursor-pointer">+</div>
-              </div>
+          <!-- НАП -->
+          <div class="flex justify-around z-10 pt-2">
+            <div class="relative" id="slot-container-FWD1" onclick="openBench('FWD1')">
+              <div class="text-[9px] text-green-300 font-bold text-center mb-1 drop-shadow-md">НАП</div>
+              <div id="slot-FWD1" class="w-[70px] h-[100px] bg-black/40 border-2 border-dashed border-white/20 rounded-xl flex items-center justify-center text-2xl text-white/30 cursor-pointer">+</div>
+            </div>
+            <div class="relative" id="slot-container-FWD2" onclick="openBench('FWD2')">
+              <div class="text-[9px] text-green-300 font-bold text-center mb-1 drop-shadow-md">НАП</div>
+              <div id="slot-FWD2" class="w-[70px] h-[100px] bg-black/40 border-2 border-dashed border-white/20 rounded-xl flex items-center justify-center text-2xl text-white/30 cursor-pointer">+</div>
             </div>
           </div>
 
-          <!-- ПОЛ (3) -->
-          <div>
-            <div class="text-[8px] text-green-300 font-bold text-center mb-1 drop-shadow-md">ПОЛУЗАЩИТА</div>
-            <div class="flex justify-around z-10">
-              <div class="relative" id="slot-container-MID1" onclick="openBench('MID1')">
-                <div id="slot-MID1" class="w-[54px] h-[76px] bg-black/40 border-2 border-dashed border-white/20 rounded-lg flex items-center justify-center text-xl text-white/30 cursor-pointer">+</div>
-              </div>
-              <div class="relative" id="slot-container-MID2" onclick="openBench('MID2')">
-                <div id="slot-MID2" class="w-[54px] h-[76px] bg-black/40 border-2 border-dashed border-white/20 rounded-lg flex items-center justify-center text-xl text-white/30 cursor-pointer">+</div>
-              </div>
-              <div class="relative" id="slot-container-MID3" onclick="openBench('MID3')">
-                <div id="slot-MID3" class="w-[54px] h-[76px] bg-black/40 border-2 border-dashed border-white/20 rounded-lg flex items-center justify-center text-xl text-white/30 cursor-pointer">+</div>
-              </div>
+          <!-- ПОЛ -->
+          <div class="flex justify-center z-10">
+            <div class="relative" id="slot-container-MID" onclick="openBench('MID')">
+              <div class="text-[9px] text-green-300 font-bold text-center mb-1 drop-shadow-md">ПОЛ</div>
+              <div id="slot-MID" class="w-[70px] h-[100px] bg-black/40 border-2 border-dashed border-white/20 rounded-xl flex items-center justify-center text-2xl text-white/30 cursor-pointer">+</div>
             </div>
           </div>
 
-          <!-- ЗАЩ (4) -->
-          <div>
-            <div class="text-[8px] text-green-300 font-bold text-center mb-1 drop-shadow-md">ЗАЩИТА</div>
-            <div class="flex justify-around z-10">
-              <div class="relative" id="slot-container-DEF1" onclick="openBench('DEF1')">
-                <div id="slot-DEF1" class="w-[54px] h-[76px] bg-black/40 border-2 border-dashed border-white/20 rounded-lg flex items-center justify-center text-xl text-white/30 cursor-pointer">+</div>
-              </div>
-              <div class="relative" id="slot-container-DEF2" onclick="openBench('DEF2')">
-                <div id="slot-DEF2" class="w-[54px] h-[76px] bg-black/40 border-2 border-dashed border-white/20 rounded-lg flex items-center justify-center text-xl text-white/30 cursor-pointer">+</div>
-              </div>
-              <div class="relative" id="slot-container-DEF3" onclick="openBench('DEF3')">
-                <div id="slot-DEF3" class="w-[54px] h-[76px] bg-black/40 border-2 border-dashed border-white/20 rounded-lg flex items-center justify-center text-xl text-white/30 cursor-pointer">+</div>
-              </div>
-              <div class="relative" id="slot-container-DEF4" onclick="openBench('DEF4')">
-                <div id="slot-DEF4" class="w-[54px] h-[76px] bg-black/40 border-2 border-dashed border-white/20 rounded-lg flex items-center justify-center text-xl text-white/30 cursor-pointer">+</div>
-              </div>
+          <!-- ЗАЩ и ВРТ -->
+          <div class="flex justify-around items-end z-10 pb-2">
+            <div class="relative" id="slot-container-DEF" onclick="openBench('DEF')">
+              <div class="text-[9px] text-green-300 font-bold text-center mb-1 drop-shadow-md">ЗАЩ</div>
+              <div id="slot-DEF" class="w-[70px] h-[100px] bg-black/40 border-2 border-dashed border-white/20 rounded-xl flex items-center justify-center text-2xl text-white/30 cursor-pointer">+</div>
+            </div>
+            <div class="relative" id="slot-container-GK" onclick="openBench('GK')">
+              <div class="text-[9px] text-green-300 font-bold text-center mb-1 drop-shadow-md">ВРТ</div>
+              <div id="slot-GK" class="w-[70px] h-[100px] bg-black/40 border-2 border-dashed border-white/20 rounded-xl flex items-center justify-center text-2xl text-white/30 cursor-pointer">+</div>
             </div>
           </div>
-
-          <!-- ВРТ (1) -->
-          <div>
-            <div class="text-[8px] text-green-300 font-bold text-center mb-1 drop-shadow-md">ВРАТАРЬ</div>
-            <div class="flex justify-center z-10">
-              <div class="relative" id="slot-container-GK" onclick="openBench('GK')">
-                <div id="slot-GK" class="w-[54px] h-[76px] bg-black/40 border-2 border-dashed border-white/20 rounded-lg flex items-center justify-center text-xl text-white/30 cursor-pointer">+</div>
-              </div>
-            </div>
-          </div>
-        </div>
         </div>
       </div>
 
@@ -530,46 +278,22 @@
         <div id="club-list" class="grid grid-cols-3 gap-2"></div>
       </div>
 
-      <!-- ТАБ 2: ЛИГА (менеджер) -->
-      <div id="tab-league" class="tab-content hidden h-full p-4 flex flex-col gap-3 overflow-y-auto">
-        <div>
-          <h2 class="text-xl font-black uppercase italic tracking-tight">Лига</h2>
-          <div class="text-[10px] text-neutral-400 mt-0.5">Играй матчи, поднимайся в таблице, получай призовые.</div>
+      <!-- ТАБ 2: ТАПАЛКА -->
+      <div id="tab-tap" class="tab-content hidden h-full p-4 flex flex-col justify-center">
+        <div class="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 text-center mb-8">
+          <h3 class="font-black text-violet-400">ТРЕНИРОВКА</h3>
+          <p class="text-[10px] text-neutral-400 mt-1">Тапай по мячу — 1 тап = 1 энергия = 1 $SLive.</p>
+          <div class="w-full bg-black h-3 rounded-full mt-4 overflow-hidden border border-neutral-800">
+            <div id="energy-bar" class="bg-gradient-to-r from-blue-500 to-violet-400 h-full w-full"></div>
+          </div>
+          <div class="text-[10px] font-bold mt-1 text-neutral-300">Энергия: <span id="energy-text">1000/1000</span></div>
+          <div class="text-[9px] text-neutral-500 mt-1">Полностью пополняется раз в сутки</div>
         </div>
 
-        <!-- Доход стадиона: пассив по составу, выплата по таймеру -->
-        <div class="bg-neutral-900 border border-neutral-800 rounded-2xl p-3">
-          <div class="flex justify-between items-center mb-2">
-            <div class="text-[10px] font-black text-violet-400 uppercase">🏟️ Доход стадиона</div>
-            <div class="text-[9px] text-neutral-500">+<span id="league-income-rate">0</span> 🪙/день</div>
+        <div class="flex justify-center items-center">
+          <div id="tap-ball" class="relative w-64 h-64 bg-gradient-to-b from-neutral-800 to-black rounded-full border-[6px] border-neutral-800 flex justify-center items-center shadow-[0_0_50px_rgba(16,185,129,0.15)] cursor-pointer active:scale-95 transition-transform duration-75">
+            <span class="text-9xl drop-shadow-2xl">⚽</span>
           </div>
-          <div class="flex justify-between items-center">
-            <div>
-              <div class="text-[9px] text-neutral-500 font-bold uppercase">Накоплено</div>
-              <div id="stadium-pending" class="text-lg font-black text-amber-400">0 🪙</div>
-            </div>
-            <button onclick="collectStadiumIncome()" id="stadium-collect-btn" class="bg-violet-500 text-black font-black text-[11px] px-4 py-2 rounded-xl disabled:opacity-40 disabled:grayscale transition-opacity" disabled>Собрать</button>
-          </div>
-          <div class="text-[9px] text-neutral-500 mt-2">Автовыплата через <span id="stadium-timer" class="font-bold text-neutral-300">--:--</span></div>
-        </div>
-
-        <!-- Ближайший матч -->
-        <div class="bg-gradient-to-br from-violet-900/40 to-neutral-900 border border-violet-500/30 rounded-2xl p-3">
-          <div class="text-[9px] text-violet-300 font-bold uppercase mb-1">Следующий матч · Тур <span id="league-round">1</span></div>
-          <div class="flex justify-between items-center">
-            <div class="text-sm font-black" id="league-opponent-name">—</div>
-            <div class="text-[10px] text-neutral-400 font-bold" id="league-opponent-strength">СИЛА —</div>
-          </div>
-          <button onclick="openLeagueMatch()" id="league-play-btn" class="w-full mt-3 bg-red-500 text-white font-black py-2.5 rounded-xl text-sm active:scale-[0.98] transition-transform">🏆 Играть матч</button>
-        </div>
-
-        <!-- Турнирная таблица -->
-        <div class="bg-neutral-900 border border-neutral-800 rounded-2xl p-3">
-          <div class="text-[10px] font-black text-neutral-300 uppercase mb-2">Турнирная таблица</div>
-          <div class="grid grid-cols-[16px_1fr_24px_30px_34px] gap-1 text-[8px] text-neutral-500 font-bold uppercase mb-1 px-1">
-            <div>#</div><div>Клуб</div><div class="text-center">И</div><div class="text-center">Р/М</div><div class="text-right">Очки</div>
-          </div>
-          <div id="league-table-body" class="flex flex-col gap-1"></div>
         </div>
       </div>
 
@@ -1019,13 +743,12 @@
 
     </div>
 
-    <!-- НИЖНЯЯ НАВИГАЦИЯ: было 9 вкладок в один ряд подряд — по фидбеку
-         "слишком много, игрок не разберётся". Теперь 4 главных раздела
-         (то, чем пользуются каждый день: Состав, Клуб, Лига, Паки) + один
-         пункт "Ещё", который открывает шторку со вторичными разделами
-         (Маркет, Топ, Драфт, Битвы, Ставки, Админ). switchTab() и все
-         id вкладок (tab-*) не менялись — переехала только раскладка
-         кнопок в нижнем баре, так что вся остальная логика работает как раньше. -->
+    <!-- НИЖНЯЯ НАВИГАЦИЯ: раньше был overflow-x-auto с кнопками фиксированной
+         ширины — при 9 вкладках "Битвы" уезжали за край экрана без видимого
+         скролла, и выглядело, будто вкладки нет вообще. Теперь flex-1 —
+         все вкладки ВСЕГДА целиком на экране, просто чуть уже. Активная
+         вкладка анимированно приподнимается и подсвечивается пилюлей
+         (см. .nav-btn / .nav-active в <style> и switchTab()). -->
     <div class="nav-bar-shell border-t border-neutral-800/80 px-1 py-1.5 flex items-stretch gap-0.5 z-30 shrink-0">
       <button onclick="switchTab('squad')" id="nav-squad" class="nav-btn nav-active flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl text-[8px] font-black">
         <span class="nav-icon text-lg">🛡️</span> СОСТАВ
@@ -1033,74 +756,33 @@
       <button onclick="switchTab('club')" id="nav-club" class="nav-btn flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl text-[8px] font-black">
         <span class="nav-icon text-lg">🎒</span> КЛУБ
       </button>
-      <button onclick="switchTab('league')" id="nav-league" class="nav-btn flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl text-[8px] font-black">
-        <span class="nav-icon text-lg">🏟️</span> ЛИГА
+      <button onclick="switchTab('tap')" id="nav-tap" class="nav-btn flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl text-[8px] font-black">
+        <span class="nav-icon text-lg">⚽</span> ТАП
       </button>
       <button onclick="switchTab('packs')" id="nav-packs" class="nav-btn flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl text-[8px] font-black">
         <span class="nav-icon text-lg">⚡</span> ПАКИ
       </button>
-      <button onclick="openMoreSheet()" id="nav-more" class="nav-btn flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl text-[8px] font-black">
-        <span class="nav-icon text-lg">☰</span> ЕЩЁ
-        <span id="more-nav-dot" class="hidden absolute top-0.5 right-[22%] w-2 h-2 rounded-full bg-rose-500"></span>
+      <button onclick="switchTab('market')" id="nav-market" class="nav-btn flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl text-[8px] font-black">
+        <span class="nav-icon text-lg">🥩</span> МАРКЕТ
       </button>
-    </div>
-
-    <!-- ШТОРКА "ЕЩЁ": второстепенные разделы вынесены сюда крупными
-         плитками с пояснением одной строкой — так новичку сразу видно,
-         что есть что, а не только эмодзи и подпись в 8px. -->
-    <div id="more-sheet-modal" class="hidden absolute inset-0 z-[60] flex flex-col justify-end">
-      <div class="absolute inset-0 bg-black/70" onclick="closeMoreSheet()"></div>
-      <div class="relative bg-[#111] rounded-t-[28px] border-t border-x border-neutral-800 p-4 pb-6" style="box-shadow: 0 -12px 30px rgba(0,0,0,0.5);">
-        <div class="w-10 h-1.5 bg-neutral-700 rounded-full mx-auto mb-4"></div>
-        <h3 class="text-lg font-black uppercase italic tracking-tight mb-3">Ещё разделы</h3>
-        <div class="grid grid-cols-2 gap-2.5">
-          <button onclick="openMoreTab('market')" class="panel-card accent-emerald p-3 flex items-center gap-2.5 text-left">
-            <span class="text-2xl shrink-0">🥩</span>
-            <div class="min-w-0">
-              <div class="text-xs font-black">Маркет</div>
-              <div class="text-[9px] text-neutral-500 leading-tight">Купить карту напрямую</div>
-            </div>
-          </button>
-          <button onclick="openMoreTab('leaderboard')" class="panel-card accent-amber p-3 flex items-center gap-2.5 text-left">
-            <span class="text-2xl shrink-0">🏆</span>
-            <div class="min-w-0">
-              <div class="text-xs font-black">Топ</div>
-              <div class="text-[9px] text-neutral-500 leading-tight">Рейтинги игроков</div>
-            </div>
-          </button>
-          <button onclick="openMoreTab('draft')" class="panel-card accent-sky p-3 flex items-center gap-2.5 text-left">
-            <span class="text-2xl shrink-0">🎯</span>
-            <div class="min-w-0">
-              <div class="text-xs font-black">Драфт</div>
-              <div class="text-[9px] text-neutral-500 leading-tight">Разовый состав + PvP</div>
-            </div>
-          </button>
-          <button onclick="openMoreTab('battles')" class="panel-card accent-red p-3 flex items-center gap-2.5 text-left">
-            <span class="text-2xl shrink-0">⚔️</span>
-            <div class="min-w-0">
-              <div class="text-xs font-black">Битвы</div>
-              <div class="text-[9px] text-neutral-500 leading-tight">Бой твоим составом</div>
-            </div>
-          </button>
-          <button onclick="openMoreTab('bets')" class="panel-card accent-fuchsia p-3 flex items-center gap-2.5 text-left">
-            <span class="text-2xl shrink-0">📈</span>
-            <div class="min-w-0">
-              <div class="text-xs font-black">Ставки</div>
-              <div class="text-[9px] text-neutral-500 leading-tight">Ставки на события</div>
-            </div>
-          </button>
-          <!-- Кнопка админки скрыта по умолчанию (class="hidden") и показывается
-               только если сервер подтвердил isAdmin: true в ответе /api/me.
-               Обычные игроки физически не видят и не могут открыть эту вкладку. -->
-          <button onclick="openMoreTab('admin')" id="nav-admin" class="hidden panel-card accent-neutral p-3 items-center gap-2.5 text-left">
-            <span class="text-2xl shrink-0">🛠️</span>
-            <div class="min-w-0">
-              <div class="text-xs font-black">Админ</div>
-              <div class="text-[9px] text-neutral-500 leading-tight">Панель управления</div>
-            </div>
-          </button>
-        </div>
-      </div>
+      <button onclick="switchTab('leaderboard')" id="nav-leaderboard" class="nav-btn flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl text-[8px] font-black">
+        <span class="nav-icon text-lg">🏆</span> ТОП
+      </button>
+      <button onclick="switchTab('draft')" id="nav-draft" class="nav-btn flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl text-[8px] font-black">
+        <span class="nav-icon text-lg">🎯</span> ДРАФТ
+      </button>
+      <button onclick="switchTab('battles')" id="nav-battles" class="nav-btn flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl text-[8px] font-black">
+        <span class="nav-icon text-lg">⚔️</span> БИТВЫ
+      </button>
+      <button onclick="switchTab('bets')" id="nav-bets" class="nav-btn flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl text-[8px] font-black">
+        <span class="nav-icon text-lg">📈</span> СТАВКИ
+      </button>
+      <!-- Кнопка админки скрыта по умолчанию (class="hidden") и показывается
+           только если сервер подтвердил isAdmin: true в ответе /api/me.
+           Обычные игроки физически не видят и не могут открыть эту вкладку. -->
+      <button onclick="switchTab('admin')" id="nav-admin" class="hidden nav-btn flex-1 flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl text-[8px] font-black">
+        <span class="nav-icon text-lg">🛠️</span> АДМИН
+      </button>
     </div>
 
     <!-- МОДАЛКИ И ОВЕРЛЕИ -->
@@ -1167,76 +849,6 @@
         <div class="grid grid-cols-2 gap-1.5">
           <button onclick="chooseDraftTactic('substitute')" id="draft-sub-btn" class="bg-violet-500 text-black font-black py-2.5 rounded-xl text-[10px] leading-tight">🔄 Замена<br><span class="font-normal opacity-80">навсегда, 1 раз за матч</span></button>
           <button onclick="chooseDraftTactic('motivate')" id="draft-motivate-btn" class="bg-fuchsia-500 text-black font-black py-2.5 rounded-xl text-[10px] leading-tight">🗣️ Речь в раздевалке<br><span class="font-normal opacity-80">только сейчас, 1 раз за матч</span></button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Матч Лиги: тактика -> 3D-моменты -> результат. Полностью клиентская
-         симуляция (нет своего бэкенда под лигу) — сила команды считается из
-         состава/химии, результат считается локально, таблица лежит в
-         localStorage. -->
-    <div id="league-match-modal" class="hidden absolute inset-0 bg-black/95 z-50 flex flex-col items-center justify-center p-4">
-      <div class="relative w-full max-w-md bg-neutral-950 border border-neutral-800 rounded-2xl overflow-hidden flex flex-col" style="max-height:92vh;">
-
-        <!-- Шаг 1: выбор тактики -->
-        <div id="league-tactic-step" class="p-4">
-          <h3 class="text-center font-black text-sm mb-1">Выбери тактику на матч</h3>
-          <div class="text-center text-[10px] text-neutral-500 mb-3">vs <span id="league-tactic-opponent" class="text-neutral-300 font-bold"></span></div>
-          <div class="grid grid-cols-2 gap-2">
-            <button onclick="startLeagueMatch('gegenpress')" class="bg-red-700 text-white font-black py-2 rounded-xl text-[10px] leading-tight">🔥🔥 Гегенпрессинг<br><span class="font-normal opacity-80">риск, много моментов</span></button>
-            <button onclick="startLeagueMatch('possession')" class="bg-sky-500 text-black font-black py-2 rounded-xl text-[10px] leading-tight">⚽ Контроль мяча<br><span class="font-normal opacity-80">стабильно, без риска</span></button>
-            <button onclick="startLeagueMatch('counter')" class="bg-orange-600 text-white font-black py-2 rounded-xl text-[10px] leading-tight">🎯 Контратаки<br><span class="font-normal opacity-80">моментов мало, но метко</span></button>
-            <button onclick="startLeagueMatch('defend')" class="bg-blue-600 text-white font-black py-2 rounded-xl text-[10px] leading-tight">🛡️ Сушить игру<br><span class="font-normal opacity-80">надёжно, меньше голов</span></button>
-          </div>
-          <button onclick="closeLeagueMatch()" class="w-full mt-3 text-neutral-500 text-[10px] font-bold py-1">Отмена</button>
-        </div>
-
-        <!-- Шаг 2: прямой эфир с 3D-моментами -->
-        <div id="league-live-step" class="hidden flex flex-col">
-          <div class="flex justify-between items-center px-4 py-2 bg-black/60">
-            <div class="text-[10px] font-bold text-neutral-400" id="league-live-clock">0'</div>
-            <div class="text-xl font-black tabular-nums" id="league-live-score">0 : 0</div>
-            <div class="text-[10px] font-bold text-neutral-400">Тур <span id="league-live-round">1</span></div>
-          </div>
-          <div id="league-3d-container" class="relative w-full" style="height:220px; background:#0d3b1e;"></div>
-          <div id="league-moment-log" class="p-3 text-[11px] text-neutral-300 min-h-[42px] text-center font-bold flex items-center justify-center"></div>
-          <button onclick="skipLeagueMatch()" id="league-skip-btn" class="mx-3 mb-3 bg-neutral-800 text-neutral-400 text-[10px] font-bold py-2 rounded-lg">Пропустить ⏭</button>
-        </div>
-
-        <!-- Оверлей: речь в раздевалке на перерыве. Ставится камерой "поверх"
-             стадиона — как будто трансляция на паузе, пока тренер говорит. -->
-        <div id="halftime-modal" class="hidden absolute inset-0 z-20 bg-neutral-950 flex flex-col justify-center p-5">
-          <div class="text-center mb-1 text-[10px] font-bold text-neutral-500 uppercase tracking-wide">Перерыв · <span id="halftime-score">0 : 0</span></div>
-          <h3 class="text-center font-black text-base mb-1">🚪 Раздевалка</h3>
-          <p class="text-center text-[11px] text-neutral-400 mb-4">Что скажешь команде на второй тайм?</p>
-          <div class="flex flex-col gap-2">
-            <button onclick="chooseHalftimeSpeech('fire')" class="bg-red-700 text-white font-black py-2.5 rounded-xl text-[11px] text-left px-3">🔥 Встряхнуть эмоционально<br><span class="font-normal opacity-80 text-[9px]">сильно больше остроты впереди, риск в обороне</span></button>
-            <button onclick="chooseHalftimeSpeech('calm')" class="bg-sky-600 text-white font-black py-2.5 rounded-xl text-[11px] text-left px-3">🧠 Спокойно разобрать ошибки<br><span class="font-normal opacity-80 text-[9px]">небольшой плюс и к атаке, и к обороне</span></button>
-            <button onclick="chooseHalftimeSpeech('defend')" class="bg-blue-800 text-white font-black py-2.5 rounded-xl text-[11px] text-left px-3">🛡 Жёстко потребовать надёжности<br><span class="font-normal opacity-80 text-[9px]">сильно больше надёжности сзади, меньше остроты впереди</span></button>
-          </div>
-          <button onclick="chooseHalftimeSpeech('skip')" class="mt-3 text-neutral-600 text-[10px] font-bold py-1">Промолчать</button>
-        </div>
-
-        <!-- Оверлей: решение перед ударом на СВОИХ опасных моментах — та
-             самая "точка принятия решений" внутри самого розыгрыша, а не
-             только в выборе тактики до матча. -->
-        <div id="attack-decision-modal" class="hidden absolute inset-0 z-20 bg-neutral-950/97 flex flex-col justify-center p-5">
-          <div class="text-center mb-1 text-[10px] font-bold text-emerald-400 uppercase tracking-wide" id="attack-decision-minute"></div>
-          <h3 class="text-center font-black text-base mb-4">⚡ Момент! Что делаем?</h3>
-          <div class="flex flex-col gap-2">
-            <button onclick="chooseAttackDecision('risky')" class="bg-orange-600 text-white font-black py-2.5 rounded-xl text-[11px] text-left px-3">🔥 Бить с ходу, без подготовки<br><span class="font-normal opacity-80 text-[9px]">ниже шанс гола, зато бонус монет, если влетит</span></button>
-            <button onclick="chooseAttackDecision('safe')" class="bg-sky-500 text-black font-black py-2.5 rounded-xl text-[11px] text-left px-3">🎯 Обработать и пробить наверняка<br><span class="font-normal opacity-80 text-[9px]">выше шанс гола, без бонуса</span></button>
-          </div>
-        </div>
-
-        <!-- Шаг 3: результат -->
-        <div id="league-result-step" class="hidden p-5 text-center">
-          <div class="text-3xl mb-2" id="league-result-emoji">🏆</div>
-          <div class="text-lg font-black mb-1" id="league-result-title">Победа!</div>
-          <div class="text-3xl font-black mb-3 tabular-nums" id="league-result-score">0 : 0</div>
-          <div class="text-[11px] text-neutral-400 mb-1">Призовые: <span id="league-result-reward" class="text-amber-400 font-black">+0 🪙</span></div>
-          <div id="league-result-bonus" class="hidden text-[10px] text-orange-400 font-bold mb-3">🔥 Бонус за рискованные удары: <span id="league-result-bonus-amount">+0</span> 🪙</div>
-          <button onclick="closeLeagueMatch()" class="bg-violet-500 text-black font-black py-2.5 px-8 rounded-xl text-sm">Продолжить</button>
         </div>
       </div>
     </div>
@@ -2390,8 +2002,8 @@
     function updateHeader() {
       document.getElementById('slive-balance').innerText = sliveTokens.toLocaleString();
       document.getElementById('stars-balance').innerText = tgStars.toLocaleString();
-      const clubName = localStorage.getItem('clubName');
-      if (clubName) document.getElementById('manager-name-label').innerText = clubName;
+      document.getElementById('energy-text').innerText = `${energy}/1000`;
+      document.getElementById('energy-bar').style.width = `${(energy / 1000) * 100}%`;
     }
 
     function saveData() {
@@ -2408,9 +2020,10 @@
     }
 
     // ---------- Безымянный футболист на карточке ----------
-    // Пиксель-арт болванка (8-bit стиль) — НЕ основана ни на одном реальном
-    // человеке: волосы/тон кожи выбираются псевдослучайно по id карточки,
-    // форма — по национальности, поза — по позиции (GK/DEF/MID/FWD).
+    // Полностью generic силуэт без лица — НЕ основан ни на одном реальном
+    // человеке. Форма (цвета) берётся по национальности карточки, поза — по
+    // позиции (GK/DEF/MID/FWD), чтобы карточки не были одинаковыми болванками,
+    // но при этом не изображали никого конкретного.
     const NATION_KIT = {
       UKR: { primary: '#fde047', secondary: '#2563eb' },
       ENG: { primary: '#f8fafc', secondary: '#dc2626' },
@@ -2426,62 +2039,57 @@
     };
     const DEFAULT_KIT = { primary: '#64748b', secondary: '#1f2937' };
     // Вратари по традиции играют в контрастной форме, отличной от сборной.
-    const GK_KIT = { primary: '#16a34a', secondary: '#1f2937' };
+    const GK_KIT = { primary: '#22c55e', secondary: '#1f2937' };
+    const SILHOUETTE = '#33261b'; // нейтральный тон "кожи" — намеренно не привязан ни к одной этничности
 
     function getKit(p) {
       return p.pos === 'GK' ? GK_KIT : (NATION_KIT[p.nation] || DEFAULT_KIT);
     }
 
-    // Небольшой набор тонов кожи/волос для визуального разнообразия —
-    // подбирается детерминированно по id, а не привязан к национальности.
-    const SKIN_TONES = ['#f0c9a0', '#e0a978', '#c98a5a', '#8a5a34', '#6b4226'];
-    const HAIR_COLORS = ['#1c1410', '#3b2718', '#7c4a20', '#c97a3d', '#e8c15a', '#2b2b2b'];
-    function hashStr(s) {
-      let h = 0;
-      for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-      return Math.abs(h);
-    }
-    function pickBy(arr, seed) { return arr[hashStr(seed) % arr.length]; }
-
-    // Блочные пиксельные части персонажа по амплуа — руки/ноги смещены,
-    // чтобы карточки разных позиций не были клонами. Лицо остаётся
-    // условным пиксель-артом, без прорисовки конкретных черт.
-    function pixelPose(pos, kit, skin) {
+    // Четыре позы по амплуа — просто чтобы карточки не были клонами друг
+    // друга; ноги/руки — простые фигуры, лицо намеренно не прорисовано.
+    function poseParts(pos, kit) {
       if (pos === 'GK') {
         return `
-          <rect x="28" y="44" width="10" height="16" fill="${kit.primary}"/>
-          <rect x="62" y="44" width="10" height="16" fill="${kit.primary}"/>
-          <rect x="25" y="58" width="9" height="8" fill="#facc15"/>
-          <rect x="66" y="58" width="9" height="8" fill="#facc15"/>
-          <rect x="39" y="80" width="9" height="18" fill="${kit.secondary}"/>
-          <rect x="52" y="80" width="9" height="18" fill="${kit.secondary}"/>`;
+          <path d="M35 60 L35 95 Q50 100 65 95 L65 60 Z" fill="${kit.primary}"/>
+          <rect x="30" y="60" width="8" height="22" rx="3" fill="${kit.primary}"/>
+          <rect x="62" y="60" width="8" height="22" rx="3" fill="${kit.primary}"/>
+          <circle cx="27" cy="84" r="5" fill="#facc15"/>
+          <circle cx="73" cy="84" r="5" fill="#facc15"/>
+          <rect x="39" y="95" width="9" height="26" rx="3" fill="${SILHOUETTE}"/>
+          <rect x="52" y="95" width="9" height="26" rx="3" fill="${SILHOUETTE}"/>
+          <rect x="37" y="116" width="13" height="6" rx="2" fill="${kit.secondary}"/>
+          <rect x="50" y="116" width="13" height="6" rx="2" fill="${kit.secondary}"/>`;
       }
       if (pos === 'DEF') {
         return `
-          <rect x="27" y="44" width="9" height="15" fill="${kit.primary}"/>
-          <rect x="64" y="44" width="9" height="15" fill="${kit.primary}"/>
-          <rect x="26" y="57" width="8" height="7" fill="${skin}"/>
-          <rect x="66" y="57" width="8" height="7" fill="${skin}"/>
-          <rect x="37" y="80" width="9" height="18" fill="${kit.secondary}"/>
-          <rect x="54" y="80" width="9" height="18" fill="${kit.secondary}"/>`;
+          <path d="M33 60 L33 96 Q50 101 67 96 L67 60 Z" fill="${kit.primary}"/>
+          <rect x="26" y="66" width="10" height="20" rx="4" fill="${kit.primary}" transform="rotate(18 31 76)"/>
+          <rect x="64" y="66" width="10" height="20" rx="4" fill="${kit.primary}" transform="rotate(-18 69 76)"/>
+          <rect x="39" y="96" width="9" height="27" rx="3" fill="${SILHOUETTE}"/>
+          <rect x="52" y="96" width="9" height="27" rx="3" fill="${SILHOUETTE}"/>
+          <rect x="37" y="118" width="13" height="6" rx="2" fill="${kit.secondary}"/>
+          <rect x="50" y="118" width="13" height="6" rx="2" fill="${kit.secondary}"/>`;
       }
       if (pos === 'FWD') {
         return `
-          <rect x="26" y="42" width="9" height="14" fill="${kit.primary}"/>
-          <rect x="65" y="40" width="9" height="14" fill="${kit.primary}"/>
-          <rect x="25" y="54" width="8" height="7" fill="${skin}"/>
-          <rect x="66" y="36" width="8" height="7" fill="${skin}"/>
-          <rect x="39" y="80" width="9" height="18" fill="${kit.secondary}"/>
-          <rect x="52" y="80" width="9" height="18" fill="${kit.secondary}"/>`;
+          <path d="M34 58 L34 94 Q50 99 66 94 L66 58 Z" fill="${kit.primary}"/>
+          <rect x="27" y="62" width="9" height="19" rx="4" fill="${kit.primary}" transform="rotate(-25 31 71)"/>
+          <rect x="64" y="62" width="9" height="19" rx="4" fill="${kit.primary}" transform="rotate(25 69 71)"/>
+          <rect x="39" y="94" width="9" height="20" rx="3" fill="${SILHOUETTE}"/>
+          <rect x="53" y="94" width="10" height="14" rx="3" fill="${SILHOUETTE}" transform="rotate(-35 58 101)"/>
+          <rect x="37" y="112" width="13" height="6" rx="2" fill="${kit.secondary}"/>
+          <circle cx="72" cy="118" r="6" fill="#f8fafc" stroke="#1f2937" stroke-width="1.5"/>`;
       }
-      // MID (по умолчанию)
+      // MID (по умолчанию) — бег в среднем темпе.
       return `
-        <rect x="27" y="44" width="9" height="15" fill="${kit.primary}"/>
-        <rect x="64" y="44" width="9" height="15" fill="${kit.primary}"/>
-        <rect x="26" y="57" width="8" height="7" fill="${skin}"/>
-        <rect x="66" y="57" width="8" height="7" fill="${skin}"/>
-        <rect x="38" y="80" width="9" height="18" fill="${kit.secondary}"/>
-        <rect x="53" y="80" width="9" height="18" fill="${kit.secondary}"/>`;
+        <path d="M34 59 L34 95 Q50 100 66 95 L66 59 Z" fill="${kit.primary}"/>
+        <rect x="27" y="63" width="9" height="19" rx="4" fill="${kit.primary}" transform="rotate(-15 31 72)"/>
+        <rect x="64" y="63" width="9" height="19" rx="4" fill="${kit.primary}" transform="rotate(20 69 72)"/>
+        <rect x="38" y="95" width="9" height="22" rx="3" fill="${SILHOUETTE}" transform="rotate(-12 42 106)"/>
+        <rect x="53" y="95" width="9" height="22" rx="3" fill="${SILHOUETTE}" transform="rotate(14 57 106)"/>
+        <rect x="36" y="115" width="13" height="6" rx="2" fill="${kit.secondary}"/>
+        <rect x="51" y="115" width="13" height="6" rx="2" fill="${kit.secondary}"/>`;
     }
 
     const footballerSvgCache = {};
@@ -2490,112 +2098,54 @@
       if (footballerSvgCache[cacheKey]) return footballerSvgCache[cacheKey];
 
       const kit = getKit(p);
-      const skin = pickBy(SKIN_TONES, p.id + 'skin');
-      const hair = pickBy(HAIR_COLORS, p.id + 'hair');
-      const idSafe = cacheKey.replace(/[^a-z0-9]/gi, '');
-      const gradId = 'shine-' + idSafe;
-      const patId = 'stripes-' + idSafe;
-
-      const svg = `<svg viewBox="0 0 100 128" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" class="w-full h-full" shape-rendering="crispEdges">
+      const gradId = 'shine-' + cacheKey.replace(/[^a-z0-9]/gi, '');
+      const svg = `<svg viewBox="0 0 100 128" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" class="w-full h-full">
         <defs>
-          <pattern id="${patId}" width="14" height="14" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
-            <rect width="14" height="14" fill="${kit.primary}" opacity="0.12"/>
-            <rect width="7" height="14" fill="${kit.secondary}" opacity="0.12"/>
-          </pattern>
           <linearGradient id="${gradId}" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stop-color="#ffffff" stop-opacity="0.2"/>
+            <stop offset="0%" stop-color="#ffffff" stop-opacity="0.25"/>
             <stop offset="50%" stop-color="#ffffff" stop-opacity="0"/>
-            <stop offset="100%" stop-color="#000000" stop-opacity="0.15"/>
+            <stop offset="100%" stop-color="#000000" stop-opacity="0.18"/>
           </linearGradient>
         </defs>
-        <rect width="100" height="128" fill="url(#${patId})"/>
-
-        <!-- руки/бутсы позади торса, зависят от позиции -->
-        ${pixelPose(p.pos, kit, skin)}
-
-        <!-- бутсы -->
-        <rect x="37" y="98" width="12" height="7" fill="#1f2937"/>
-        <rect x="51" y="98" width="12" height="7" fill="#1f2937"/>
-
-        <!-- шорты -->
-        <rect x="38" y="68" width="24" height="14" fill="${kit.secondary}"/>
-
-        <!-- футболка -->
-        <rect x="36" y="42" width="28" height="27" fill="${kit.primary}"/>
-        <rect x="36" y="42" width="28" height="4" fill="${kit.secondary}" opacity="0.85"/>
-
-        <!-- шея -->
-        <rect x="46" y="37" width="8" height="6" fill="${skin}"/>
-
-        <!-- голова -->
-        <rect x="42" y="23" width="16" height="15" fill="${skin}"/>
-        <!-- глаза -->
-        <rect x="45" y="29" width="3" height="3" fill="#1f2937"/>
-        <rect x="52" y="29" width="3" height="3" fill="#1f2937"/>
-        <!-- волосы -->
-        <rect x="40" y="16" width="20" height="8" fill="${hair}"/>
-        <rect x="40" y="22" width="4" height="7" fill="${hair}"/>
-        <rect x="56" y="22" width="4" height="7" fill="${hair}"/>
-
+        <circle cx="50" cy="34" r="14" fill="${SILHOUETTE}"/>
+        ${poseParts(p.pos, kit)}
+        <rect x="16" y="52" width="8" height="10" rx="2" fill="${kit.secondary}" opacity="0.85"/>
+        <rect x="76" y="52" width="8" height="10" rx="2" fill="${kit.secondary}" opacity="0.85"/>
         <rect width="100" height="128" fill="url(#${gradId})"/>
       </svg>`;
       footballerSvgCache[cacheKey] = svg;
       return svg;
     }
 
-    // size: true = большая (реролл/открытие пака), false = маленькая (клуб/скамейка),
-    // 'micro' = сверхкомпактная под 11 слотов на поле.
-    function genCardHTML(p, size) {
+    function genCardHTML(p, isLarge) {
       const cls = `card-${p.type}`;
       const bg = p.type === 'legend' ? 'from-purple-800 to-indigo-950' : 
                  p.type === 'gold' ? 'from-yellow-600 to-yellow-900' : 
                  p.type === 'silver' ? 'from-slate-400 to-slate-700' : 'from-orange-700 to-orange-950';
       const avatar = footballerSVG(p);
 
-      if (size === 'micro') {
-        // На поле имя целиком не влезает — показываем фамилию (последнее
-        // слово), этого достаточно, чтобы узнать игрока на компактной карте.
-        const surname = p.name.trim().split(' ').pop();
+      if (isLarge) {
         return `
-          <div class="w-[54px] h-[76px] bg-gradient-to-b ${bg} border rounded-lg p-1 flex flex-col justify-between ${cls} text-white shadow-lg">
-            <div class="flex justify-between items-start leading-none">
-              <span class="font-black text-[10px]">${p.rating}</span>
-              <span class="text-[8px] leading-none">${FLAGS[p.nation]}</span>
+          <div class="relative w-48 h-72 bg-gradient-to-b ${bg} border-4 rounded-2xl p-3 flex flex-col justify-between ${cls} shadow-2xl">
+            <div class="flex justify-between font-black text-white text-3xl">
+              <div class="flex flex-col items-center leading-none"><span class="text-4xl">${p.rating}</span><span class="text-sm mt-1">${p.pos}</span></div>
+              <span>${FLAGS[p.nation]}</span>
             </div>
-            <div class="w-6 h-6 mx-auto bg-white/15 rounded flex items-center justify-center ring-1 ring-white/20">${avatar}</div>
-            <div class="bg-black/70 rounded px-0.5 py-0.5 text-center">
-              <div class="font-black text-[5.5px] uppercase truncate leading-none">${surname}</div>
-            </div>
-          </div>`;
-      }
-
-      if (size === true) {
-        return `
-          <div class="relative w-48 h-72 bg-gradient-to-b ${bg} border-[3px] rounded-[26px] p-3.5 flex flex-col justify-between ${cls} shadow-2xl">
-            <div class="flex justify-between items-start">
-              <div class="flex flex-col leading-none">
-                <span class="font-black text-white text-4xl drop-shadow">${p.rating}</span>
-                <span class="font-bold text-white/80 text-xs mt-1 tracking-wide">${p.pos}</span>
-              </div>
-              <span class="text-2xl leading-none">${FLAGS[p.nation]}</span>
-            </div>
-            <div class="w-28 h-28 mx-auto bg-white/15 rounded-2xl flex items-center justify-center p-2.5 ring-1 ring-white/20">
-              <div class="w-full h-full">${avatar}</div>
-            </div>
-            <div class="bg-black/70 py-2 rounded-xl text-center leading-tight">
-              <div class="font-black text-sm text-white uppercase tracking-wide truncate">${p.name}</div>
+            <div class="w-32 h-32 mx-auto">${avatar}</div>
+            <div class="bg-black/60 p-2 rounded-lg text-center leading-tight">
+              <div class="font-black text-lg uppercase truncate">${p.name}</div>
             </div>
           </div>`;
       } else {
         return `
-          <div class="w-[70px] h-[100px] bg-gradient-to-b ${bg} border-2 rounded-2xl p-1.5 flex flex-col justify-between ${cls} text-white shadow-lg">
+          <div class="w-[70px] h-[100px] bg-gradient-to-b ${bg} border-2 rounded-xl p-1.5 flex flex-col justify-between ${cls} text-white shadow-lg">
             <div class="flex justify-between items-start leading-none">
-              <div class="flex flex-col"><span class="font-black text-sm">${p.rating}</span><span class="text-[6.5px] font-bold text-white/80">${p.pos}</span></div>
-              <span class="text-[11px] leading-none">${FLAGS[p.nation]}</span>
+              <div class="flex flex-col items-center"><span class="font-black text-sm">${p.rating}</span><span class="text-[7px] font-bold">${p.pos}</span></div>
+              <span class="text-xs">${FLAGS[p.nation]}</span>
             </div>
-            <div class="w-9 h-9 mx-auto bg-white/15 rounded-lg flex items-center justify-center p-0.5 ring-1 ring-white/20">${avatar}</div>
-            <div class="bg-black/70 rounded-md px-1 py-0.5 text-center">
-              <div class="font-black text-[6.5px] uppercase truncate">${p.name}</div>
+            <div class="w-11 h-11 mx-auto">${avatar}</div>
+            <div class="bg-black/60 rounded px-1 text-center">
+              <div class="font-bold text-[7px] uppercase truncate">${p.name}</div>
             </div>
           </div>`;
       }
@@ -2613,7 +2163,6 @@
     let isVip = localStorage.getItem('isVip') === 'true';
     let passiveIncome = 0; // теперь это SLive/ДЕНЬ (см. players-data.js), не в секунду
     let farmAccumulator = 0; // дробный остаток для плавного визуального тика раз в секунду
-    let stadiumPending = parseInt(localStorage.getItem('stadiumPending')) || 0; // накопленный, ещё не выплаченный доход стадиона
     
     // Локальный справочник для витрины "Возможный дроп" в табе ПАКИ — не влияет
     // на игровую логику (реальный дроп решает сервер по players-data.js).
@@ -2667,30 +2216,11 @@
     let myClub = JSON.parse(localStorage.getItem('myClub')) || [
       { id: 'b1', name: 'Zinchenko', rating: 79, pos: 'DEF', nation: 'UKR', type: 'bronze', income: 10, instId: '1' }
     ];
-    // Формация 4-3-3 — 11 слотов. Если в localStorage лежит старый состав
-    // из 5 слотов (FWD1, FWD2, MID, DEF, GK — до перехода на полный состав),
-    // переносим игроков на первые слоты соответствующих линий, а остальные
-    // новые слоты остаются пустыми.
-    const EMPTY_SQUAD = { GK: null, DEF1: null, DEF2: null, DEF3: null, DEF4: null, MID1: null, MID2: null, MID3: null, FWD1: null, FWD2: null, FWD3: null };
-    let squad = (() => {
-      const saved = JSON.parse(localStorage.getItem('squad'));
-      if (!saved) return { ...EMPTY_SQUAD };
-      if ('MID1' in saved || 'DEF1' in saved) return { ...EMPTY_SQUAD, ...saved }; // уже новый формат
-      // Старый формат (5 слотов) -> раскладываем по новой формации.
-      return {
-        ...EMPTY_SQUAD,
-        GK: saved.GK || null,
-        DEF1: saved.DEF || null,
-        MID1: saved.MID || null,
-        FWD1: saved.FWD1 || null,
-        FWD2: saved.FWD2 || null,
-      };
-    })();
+    let squad = JSON.parse(localStorage.getItem('squad')) || { FWD1: null, FWD2: null, MID: null, DEF: null, GK: null };
     let tempOpened = null;
     let slotToFill = null;
 
     window.onload = () => {
-      initOnboarding();
       renderSquad();
       updateHeader();
       checkVip();
@@ -2699,23 +2229,23 @@
       syncBalanceFromServer(); // Баланс, энергия, VIP — с сервера, не из localStorage
       loadReferralInfo();
 
-      // Пассивный доход клуба (стадион/спонсоры) — больше НЕ капает на баланс
-      // напрямую каждую секунду. Копится в стадионный пул (stadiumPending) и
-      // выплачивается разом по таймеру (см. initStadiumIncome в блоке Лиги),
-      // как финансы в менеджерских играх, а не как тапалка.
+      // Пассивный фарм от состава — passiveIncome это SLive/СУТКИ, поэтому
+      // визуально тикаем раз в секунду только его долю (income/86400), а
+      // целые накопившиеся монеты добавляем на баланс по мере накопления.
+      // Авторитетный пересчёт (offline-farm) всё равно происходит на
+      // сервере при каждом syncBalanceFromServer() — это только красивая
+      // анимация между синхронизациями, не источник правды.
       setInterval(() => {
         if (passiveIncome > 0) {
           farmAccumulator += passiveIncome / 86400;
           if (farmAccumulator >= 1) {
             const whole = Math.floor(farmAccumulator);
-            stadiumPending += whole;
+            sliveTokens += whole;
             farmAccumulator -= whole;
-            updateStadiumWidget();
           }
         }
+        updateHeader();
       }, 1000);
-      initStadiumIncome();
-      renderLeagueTab();
 
       // Монетки над картами состава — ЧИСТО визуальный эффект ("жизнь" в
       // интерфейсе), намеренно НЕ привязан к моменту, когда реально
@@ -2752,15 +2282,90 @@
       renderDrops(PLAYER_POOL.legend, 'drop-legend', 'from-[#4527a0] to-black', 'border-[#b39ddb]', 'text-[#ede7f6]');
     }
 
-    // Тапалка полностью удалена по ТЗ — валюта теперь идёт только от
-    // пассивного дохода стадиона (renderLeagueTab/collectStadiumIncome)
-    // и призовых за матчи Лиги (resolveLeagueMatch). pendingTaps/flushTaps
-    // оставлены как пустые заглушки, потому что flushTapsOnExit ниже (на
-    // visibilitychange/pagehide) всё ещё на них ссылается.
+    // ТАПАЛКА
+    // Прогресс кликов теперь реально сохраняется: клиент копит клики локально
+    // (pendingTaps) для мгновенного отклика на экране, а затем короткой пачкой
+    // отправляет их на сервер — именно сервер решает, сколько энергии реально
+    // потратилось и сколько $SLive реально начислено (см. /api/tap).
     let pendingTaps = 0;
     let tapSyncTimer = null;
+    // Сколько тапов можно отправить за один запрос — ЗЕРКАЛИТ серверный
+    // MAX_TAP_PER_REQUEST (см. db.js). Раньше клиент копил ВСЕ тапы, накопленные
+    // за время дебаунса (даже если их было 100+, потому что таймер сбрасывался
+    // каждым новым тапом), и слал их одним запросом — сервер молча обрезал всё,
+    // что выше 50, "теряя" остаток. Клиент при этом уже оптимистично показал
+    // игроку полный прогресс, поэтому после ответа сервера энергия/баланс
+    // визуально "откатывались назад" — как будто тапы отменились сами по себе.
+    // Теперь клиент сам режет каждый запрос на такие же по размеру пачки.
     const TAP_BATCH_LIMIT = 50;
-    async function flushTaps() {}
+    // Не даём двум flushTaps() уйти в сеть одновременно — иначе ответы могут
+    // прийти не в том порядке, в котором ушли запросы, и более старый ответ
+    // перезапишет уже обновлённое состояние более новым сверху вниз (тот же
+    // эффект "энергия вернулась").
+    let tapFlushInFlight = false;
+
+    const tapBall = document.getElementById('tap-ball');
+    tapBall.addEventListener('pointerdown', (e) => {
+      if (energy <= 0) return alertMsg('Энергия на сегодня закончилась. Она полностью обновляется раз в сутки!');
+      energy -= 1;
+      sliveTokens += 1;
+      pendingTaps += 1;
+
+      const rect = tapBall.getBoundingClientRect();
+      const span = document.createElement('span');
+      span.className = 'click-indicator';
+      span.style.left = `${e.clientX - rect.left}px`;
+      span.style.top = `${e.clientY - rect.top}px`;
+      span.innerText = '+1';
+      tapBall.appendChild(span);
+      setTimeout(() => span.remove(), 800);
+      
+      updateHeader();
+      scheduleTapSync();
+    });
+
+    function scheduleTapSync() {
+      if (!tg?.initData) return; // вне Telegram сервер недоступен — прогресс тапалки не сохранится
+      // Если накопилось уже достаточно тапов на полную пачку — не ждём паузы
+      // в кликах (при активном тапе таймер ниже постоянно сбрасывается новыми
+      // кликами и мог бы не сработать очень долго), а шлём сразу.
+      if (pendingTaps >= TAP_BATCH_LIMIT) {
+        clearTimeout(tapSyncTimer);
+        flushTaps();
+        return;
+      }
+      clearTimeout(tapSyncTimer);
+      tapSyncTimer = setTimeout(flushTaps, 600);
+    }
+
+    async function flushTaps() {
+      if (pendingTaps <= 0 || tapFlushInFlight) return;
+      tapFlushInFlight = true;
+      // Отправляем не больше TAP_BATCH_LIMIT за раз — остаток остаётся в
+      // pendingTaps и уйдёт следующей пачкой, а не пропадёт молча.
+      const count = Math.min(pendingTaps, TAP_BATCH_LIMIT);
+      pendingTaps -= count;
+      try {
+        const result = await apiPost('/api/tap', { count });
+        // Сервер — источник правды: подтягиваем то, что он реально записал
+        // (на случай если энергии не хватило на все накопленные клики).
+        energy = result.energy;
+        sliveTokens = result.balance;
+        updateHeader();
+      } catch (e) {
+        console.error('Не удалось сохранить прогресс тапалки', e);
+        // Сетевая ошибка НЕ должна стирать уже показанный игроку прогресс —
+        // возвращаем эту пачку обратно в очередь и попробуем отправить снова
+        // чуть позже (см. finally ниже), а не откатываем экран синком с сервера.
+        pendingTaps += count;
+      } finally {
+        tapFlushInFlight = false;
+        if (pendingTaps > 0) {
+          clearTimeout(tapSyncTimer);
+          tapSyncTimer = setTimeout(flushTaps, 800);
+        }
+      }
+    }
 
     // Обычный flushTaps() ждёт fetch-ответ, а при закрытии/сворачивании
     // мини-аппы страница может быть убита до того, как fetch успеет уйти —
@@ -2805,16 +2410,15 @@
       Object.keys(squad).forEach(slot => {
         const p = squad[slot];
         const el = document.getElementById(`slot-${slot}`);
-        if (!el) return; // защита на случай рассинхрона данных/разметки
         if (p) {
-          el.innerHTML = genCardHTML(p, 'micro');
-          el.className = "w-[54px] h-[76px] relative";
+          el.innerHTML = genCardHTML(p, false);
+          el.className = "w-[70px] h-[100px] relative";
           baseIncome += p.income;
           nationsCount[p.nation] = (nationsCount[p.nation] || 0) + 1;
           filledSlots++;
         } else {
           el.innerHTML = '+';
-          el.className = "w-[54px] h-[76px] bg-black/40 border-2 border-dashed border-white/20 rounded-lg flex items-center justify-center text-xl text-white/30 cursor-pointer hover:bg-violet-900/30";
+          el.className = "w-[70px] h-[100px] bg-black/40 border-2 border-dashed border-white/20 rounded-xl flex items-center justify-center text-2xl text-white/30 cursor-pointer hover:bg-violet-900/30";
         }
       });
 
@@ -2855,1140 +2459,6 @@
         }, delay);
       });
     }
-
-    // =====================================================================
-    // ЛИГА — менеджерское ядро (замена тапалке).
-    // Полностью клиентская подсистема (localStorage): под неё нет отдельного
-    // бэкенда, в отличие от Драфта/Битв/Ставок, которые дергают apiPost().
-    // Баланс $SLive, который она начисляет, — это всё тот же локальный
-    // sliveTokens/saveData(), так что итоговый баланс в шапке общий для всех
-    // разделов игры.
-    // =====================================================================
-
-    // --- Доход стадиона (пассив от состава), выплата по таймеру ---
-    const STADIUM_PAYOUT_MS = 60 * 1000; // раз в минуту — "финансовый день" клуба
-    const STADIUM_OFFLINE_CAP_MS = 12 * 60 * 60 * 1000; // не более 12ч офлайн-дохода за раз
-    let stadiumTimerInterval = null;
-
-    function initStadiumIncome() {
-      // Догоняем доход, накопленный, пока вкладка была закрыта/свёрнута.
-      const last = parseInt(localStorage.getItem('stadiumLastPayout')) || Date.now();
-      const elapsed = Math.min(Date.now() - last, STADIUM_OFFLINE_CAP_MS);
-      if (elapsed > 0 && passiveIncome > 0) {
-        stadiumPending += Math.floor(passiveIncome * (elapsed / 86400000));
-      }
-      localStorage.setItem('stadiumLastPayout', Date.now());
-      updateStadiumWidget();
-
-      if (stadiumTimerInterval) clearInterval(stadiumTimerInterval);
-      stadiumTimerInterval = setInterval(stadiumTick, 1000);
-    }
-
-    function stadiumTick() {
-      const last = parseInt(localStorage.getItem('stadiumLastPayout')) || Date.now();
-      const remainMs = STADIUM_PAYOUT_MS - ((Date.now() - last) % STADIUM_PAYOUT_MS);
-      const remainSec = Math.ceil(remainMs / 1000);
-      const timerEl = document.getElementById('stadium-timer');
-      if (timerEl) timerEl.innerText = `${String(Math.floor(remainSec / 60)).padStart(2, '0')}:${String(remainSec % 60).padStart(2, '0')}`;
-
-      if (Date.now() - last >= STADIUM_PAYOUT_MS) {
-        localStorage.setItem('stadiumLastPayout', Date.now());
-        if (stadiumPending > 0) autoPayStadium();
-      }
-    }
-
-    function autoPayStadium() {
-      sliveTokens += stadiumPending;
-      stadiumPending = 0;
-      updateHeader();
-      saveData();
-      updateStadiumWidget();
-      localStorage.setItem('stadiumPending', stadiumPending);
-    }
-
-    // Ручной сбор — игрок может забрать накопленное досрочно, не дожидаясь
-    // автовыплаты (таймер при этом сбрасывается на полный цикл).
-    function collectStadiumIncome() {
-      if (stadiumPending <= 0) return;
-      autoPayStadium();
-      localStorage.setItem('stadiumLastPayout', Date.now());
-    }
-
-    function updateStadiumWidget() {
-      localStorage.setItem('stadiumPending', stadiumPending);
-      const rateEl = document.getElementById('league-income-rate');
-      const pendingEl = document.getElementById('stadium-pending');
-      const btn = document.getElementById('stadium-collect-btn');
-      if (rateEl) rateEl.innerText = passiveIncome.toLocaleString();
-      if (pendingEl) pendingEl.innerText = `${stadiumPending.toLocaleString()} 🪙`;
-      if (btn) btn.disabled = stadiumPending <= 0;
-    }
-
-    // --- Турнирная таблица и соперники ---
-    // Простая "лайт"-лига без полноценного календаря всех клубов друг с
-    // другом: бот-соперники держат фиксированную силу и стартовые очки
-    // (сгенерированы один раз и лежат в localStorage), реально считаются и
-    // обновляются только результаты ИГРОКА. Этого достаточно, чтобы таблица
-    // ощущалась живой (есть кого догонять/от кого отрываться), без имитации
-    // бэкенда целого сезона на клиенте.
-    const LEAGUE_BOTS_SEED = [
-      { id: 'bot1', name: 'Динамо Львов', strength: 74 },
-      { id: 'bot2', name: 'Карпаты', strength: 78 },
-      { id: 'bot3', name: 'Шахтёр U23', strength: 82 },
-      { id: 'bot4', name: 'Металлист', strength: 86 },
-      { id: 'bot5', name: 'Ворскла', strength: 90 },
-      { id: 'bot6', name: 'Заря', strength: 94 },
-      { id: 'bot7', name: 'Полесье', strength: 98 },
-    ];
-
-    function loadLeagueState() {
-      let state = JSON.parse(localStorage.getItem('leagueState'));
-      if (!state) {
-        state = {
-          round: 1,
-          bots: LEAGUE_BOTS_SEED.map(b => ({
-            ...b,
-            played: Math.floor(Math.random() * 4),
-          })).map(b => ({
-            ...b,
-            wins: 0, draws: 0, losses: 0, gf: 0, ga: 0,
-            pts: 0,
-          })),
-          user: { played: 0, wins: 0, draws: 0, losses: 0, gf: 0, ga: 0, pts: 0 },
-        };
-        // Один раз "разыгрываем" ботам стартовую форму между собой, чтобы
-        // таблица не начиналась с одних нулей — чисто косметика.
-        state.bots.forEach(b => {
-          for (let i = 0; i < b.played; i++) {
-            const r = Math.random();
-            if (r < 0.4) { b.wins++; b.pts += 3; b.gf += 2; b.ga += 1; }
-            else if (r < 0.6) { b.draws++; b.pts += 1; b.gf += 1; b.ga += 1; }
-            else { b.losses++; b.gf += 1; b.ga += 2; }
-          }
-        });
-        localStorage.setItem('leagueState', JSON.stringify(state));
-      }
-      return state;
-    }
-
-    function saveLeagueState(state) {
-      localStorage.setItem('leagueState', JSON.stringify(state));
-    }
-
-    function currentOpponent(state) {
-      return state.bots[(state.round - 1) % state.bots.length];
-    }
-
-    // Сила состава игрока: средний рейтинг заполненных слотов + бонус химии
-    // (используем тот же chemMultiplier-подход, что и в renderSquad()).
-    function userTeamStrength() {
-      const players = Object.values(squad).filter(Boolean);
-      if (players.length === 0) return 50;
-      const avgRating = players.reduce((s, p) => s + p.rating, 0) / players.length;
-      const nationsCount = {};
-      players.forEach(p => nationsCount[p.nation] = (nationsCount[p.nation] || 0) + 1);
-      const maxSameNation = Math.max(...Object.values(nationsCount), 0);
-      const chemBonus = maxSameNation > 1 ? maxSameNation * 1.5 : 0;
-      // Неполный состав (меньше 11 карт) штрафуется — нельзя выйти на матч
-      // в полсостава и рассчитывать на силу топ-клуба.
-      const fullnessPenalty = (11 - players.length) * 3;
-      return Math.max(20, Math.round(avgRating + chemBonus - fullnessPenalty));
-    }
-
-    function renderLeagueTab() {
-      const state = loadLeagueState();
-      const opp = currentOpponent(state);
-
-      document.getElementById('league-round').innerText = state.round;
-      document.getElementById('league-opponent-name').innerText = opp.name;
-      document.getElementById('league-opponent-strength').innerText = `СИЛА ${opp.strength}`;
-      updateStadiumWidget();
-
-      const rows = [...state.bots.map(b => ({ ...b, name: b.name, isUser: false })),
-                    { ...state.user, name: 'Твой клуб', isUser: true }]
-        .sort((a, b) => b.pts - a.pts || (b.gf - b.ga) - (a.gf - a.ga));
-
-      document.getElementById('league-table-body').innerHTML = rows.map((r, i) => `
-        <div class="grid grid-cols-[16px_1fr_24px_30px_34px] gap-1 items-center text-[10px] rounded-lg px-1 py-1 ${r.isUser ? 'bg-violet-500/15 border border-violet-500/30 font-black text-violet-300' : 'text-neutral-300'}">
-          <div class="text-neutral-500 font-bold">${i + 1}</div>
-          <div class="truncate">${r.name}</div>
-          <div class="text-center">${r.played}</div>
-          <div class="text-center text-neutral-400">${r.gf - r.ga >= 0 ? '+' : ''}${r.gf - r.ga}</div>
-          <div class="text-right font-black">${r.pts}</div>
-        </div>
-      `).join('');
-    }
-
-    // --- Матч: тактика -> симуляция с 3D-моментами -> решения по ходу игры
-    // (в т.ч. речь в раздевалке на перерыве) -> результат ---
-    const LEAGUE_TACTICS = {
-      gegenpress: { atk: 1.35, def: 0.75, chances: 6 },
-      possession: { atk: 1.05, def: 1.05, chances: 4 },
-      counter:    { atk: 1.15, def: 0.95, chances: 3 },
-      defend:     { atk: 0.7,  def: 1.4,  chances: 3 },
-    };
-
-    // Речь в раздевалке на перерыве: модификаторы действуют только на второй
-    // тайм (moment.minute >= 45) поверх уже выбранной перед матчем тактики.
-    const HALFTIME_SPEECHES = {
-      fire:   { atk: 1.25, def: 0.9,  log: '🔥 Ты встряхнул раздевалку — команда летит вперёд, но сзади дыра.' },
-      calm:   { atk: 1.08, def: 1.1,  log: '🧠 Спокойный разбор ошибок — команда играет собраннее по всем фазам.' },
-      defend: { atk: 0.9,  def: 1.3,  log: '🛡 Жёсткий разнос за оборону — сзади надёжно, но остроты впереди меньше.' },
-      skip:   { atk: 1,    def: 1,    log: 'Ты промолчал в перерыве — команда играет по инерции первого тайма.' },
-    };
-
-    // Решение перед ударом на СВОИХ опасных моментах.
-    const ATTACK_DECISIONS = {
-      risky: { chanceMult: 0.82, bonus: 25, log: (goal) => goal ? '🔥 Ударил с ходу — и это шедевр!' : '🔥 Пробил с ходу — не хватило точности.' },
-      safe:  { chanceMult: 1.18, bonus: 0,  log: (goal) => goal ? '🎯 Хладнокровно докатил в угол — гол!' : '🎯 Пробил наверняка, но вратарь спас.' },
-    };
-
-    let leagueMatchCtx = null; // текущее состояние розыгрыша матча
-
-    function openLeagueMatch() {
-      const state = loadLeagueState();
-      const opp = currentOpponent(state);
-      document.getElementById('league-tactic-opponent').innerText = opp.name;
-      document.getElementById('league-tactic-step').classList.remove('hidden');
-      document.getElementById('league-live-step').classList.add('hidden');
-      document.getElementById('league-result-step').classList.add('hidden');
-      document.getElementById('halftime-modal').classList.add('hidden');
-      document.getElementById('attack-decision-modal').classList.add('hidden');
-      document.getElementById('league-match-modal').classList.remove('hidden');
-    }
-
-    function closeLeagueMatch() {
-      document.getElementById('league-match-modal').classList.add('hidden');
-      teardown3DPitch();
-      leagueMatchCtx = null;
-      renderLeagueTab();
-    }
-
-    function startLeagueMatch(tacticKey) {
-      const state = loadLeagueState();
-      const opp = currentOpponent(state);
-      const tactic = LEAGUE_TACTICS[tacticKey];
-      const myStrength = userTeamStrength() * tactic.atk;
-      const oppStrength = opp.strength * (2 - tactic.def) * 0.9;
-
-      // Генерируем список ключевых моментов матча: у кого чаще будут шансы,
-      // определяется соотношением сил. Сам исход (гол/мимо) теперь считается
-      // НЕ заранее, а прямо по ходу симуляции (playNextMoment) — это и даёт
-      // место для решений по ходу матча (речь в раздевалке, удар с ходу).
-      const totalChances = tactic.chances + Math.floor(Math.random() * 2);
-      const moments = [];
-      for (let i = 0; i < totalChances; i++) {
-        const isUserChance = Math.random() < myStrength / (myStrength + oppStrength);
-        moments.push({
-          minute: Math.floor((90 / totalChances) * i + Math.random() * 6),
-          side: isUserChance ? 'user' : 'opp',
-        });
-      }
-      moments.sort((a, b) => a.minute - b.minute);
-
-      leagueMatchCtx = {
-        state, opp, moments, idx: 0, scoreUser: 0, scoreOpp: 0, tacticKey,
-        myStrength, oppStrength,
-        halfMods: { atk: 1, def: 1 }, halftimeShown: false,
-        bonusReward: 0,
-      };
-
-      document.getElementById('league-tactic-step').classList.add('hidden');
-      document.getElementById('league-live-step').classList.remove('hidden');
-      document.getElementById('league-live-round').innerText = state.round;
-      document.getElementById('league-live-score').innerText = '0 : 0';
-      document.getElementById('league-moment-log').innerText = 'Матч начинается...';
-
-      init3DPitch();
-      playBroadcastIntro(pitch3D, playNextMoment);
-    }
-
-    // Шанс гола на конкретный момент — считается "вживую" (не заранее), с
-    // учётом модификаторов, выставленных речью в раздевалке для второго тайма.
-    function computeScoreChance(m, ctx) {
-      const half2 = m.minute >= 45;
-      const atkMod = half2 ? ctx.halfMods.atk : 1;
-      const defMod = half2 ? ctx.halfMods.def : 1;
-      const attackerStrength = m.side === 'user' ? ctx.myStrength * atkMod : ctx.oppStrength;
-      const defenderStrength = m.side === 'user' ? ctx.oppStrength : ctx.myStrength * defMod;
-      return attackerStrength / (attackerStrength + defenderStrength * 1.15);
-    }
-
-    function playNextMoment() {
-      if (!leagueMatchCtx) return;
-      const ctx = leagueMatchCtx;
-      if (ctx.idx >= ctx.moments.length) return finishLeagueMatch();
-
-      const m = ctx.moments[ctx.idx];
-
-      // Первый момент второго тайма — сначала показываем раздевалку, а сам
-      // момент сыграем уже после выбора речи.
-      if (!ctx.halftimeShown && m.minute >= 45) {
-        ctx.halftimeShown = true;
-        showHalftimeSpeech();
-        return;
-      }
-
-      ctx.idx++;
-      document.getElementById('league-live-clock').innerText = `${m.minute}'`;
-      m.scoreChance = computeScoreChance(m, ctx);
-
-      if (m.side === 'user') {
-        showAttackDecision(m);
-      } else {
-        m.isGoal = Math.random() < m.scoreChance;
-        runMomentAnimation(m);
-      }
-    }
-
-    function showHalftimeSpeech() {
-      const ctx = leagueMatchCtx;
-      document.getElementById('halftime-score').innerText = `${ctx.scoreUser} : ${ctx.scoreOpp}`;
-      document.getElementById('halftime-modal').classList.remove('hidden');
-    }
-
-    function chooseHalftimeSpeech(key) {
-      const ctx = leagueMatchCtx;
-      if (!ctx) return;
-      const speech = HALFTIME_SPEECHES[key];
-      ctx.halfMods = { atk: speech.atk, def: speech.def };
-      document.getElementById('halftime-modal').classList.add('hidden');
-      const logEl = document.getElementById('league-moment-log');
-      logEl.className = 'p-3 text-[11px] text-neutral-300 min-h-[42px] text-center font-bold flex items-center justify-center';
-      logEl.innerText = speech.log;
-      setTimeout(playNextMoment, 900);
-    }
-
-    function showAttackDecision(m) {
-      document.getElementById('attack-decision-minute').innerText = `${m.minute}' · твоя команда выходит один на один с обороной`;
-      document.getElementById('attack-decision-modal').classList.remove('hidden');
-      leagueMatchCtx.pendingMoment = m;
-    }
-
-    function chooseAttackDecision(key) {
-      const ctx = leagueMatchCtx;
-      if (!ctx || !ctx.pendingMoment) return;
-      const m = ctx.pendingMoment;
-      ctx.pendingMoment = null;
-      document.getElementById('attack-decision-modal').classList.add('hidden');
-
-      const decision = ATTACK_DECISIONS[key];
-      m.isGoal = Math.random() < m.scoreChance * decision.chanceMult;
-      m.decisionLog = decision.log(m.isGoal);
-      if (m.isGoal && decision.bonus) {
-        ctx.bonusReward += decision.bonus;
-        m.bonus = decision.bonus;
-      }
-      runMomentAnimation(m);
-    }
-
-    function runMomentAnimation(m) {
-      const ctx = leagueMatchCtx;
-      animate3DMoment(m, () => {
-        if (m.isGoal) {
-          if (m.side === 'user') ctx.scoreUser++; else ctx.scoreOpp++;
-          document.getElementById('league-live-score').innerText = `${ctx.scoreUser} : ${ctx.scoreOpp}`;
-        }
-        const logEl = document.getElementById('league-moment-log');
-        if (m.side === 'user') {
-          logEl.className = 'p-3 text-[11px] min-h-[42px] text-center font-bold flex items-center justify-center text-emerald-400';
-          const base = m.isGoal ? `⚽ ${m.minute}' ГОЛ! Твоя команда забивает!` : `${m.minute}' Момент — не забили.`;
-          logEl.innerText = m.decisionLog ? `${base} ${m.bonus ? `(+${m.bonus} 🪙 бонус риска)` : ''}`.trim() : base;
-        } else {
-          logEl.className = 'p-3 text-[11px] min-h-[42px] text-center font-bold flex items-center justify-center text-red-400';
-          logEl.innerText = m.isGoal ? `⚽ ${m.minute}' Гол соперника...` : `${m.minute}' Соперник бил мимо.`;
-        }
-        setTimeout(playNextMoment, 700);
-      });
-    }
-
-    function skipLeagueMatch() {
-      if (!leagueMatchCtx) return;
-      const ctx = leagueMatchCtx;
-      document.getElementById('halftime-modal').classList.add('hidden');
-      document.getElementById('attack-decision-modal').classList.add('hidden');
-      ctx.pendingMoment = null;
-      while (ctx.idx < ctx.moments.length) {
-        const m = ctx.moments[ctx.idx];
-        ctx.idx++;
-        // При быстром пропуске решения принимаются "по умолчанию": речь в
-        // раздевалке — нейтральная, удар — надёжный (без риска и без бонуса).
-        if (!ctx.halftimeShown && m.minute >= 45) {
-          ctx.halftimeShown = true;
-        }
-        const chance = computeScoreChance(m, ctx);
-        const mult = m.side === 'user' ? ATTACK_DECISIONS.safe.chanceMult : 1;
-        if (Math.random() < chance * mult) {
-          if (m.side === 'user') ctx.scoreUser++; else ctx.scoreOpp++;
-        }
-      }
-      document.getElementById('league-live-score').innerText = `${ctx.scoreUser} : ${ctx.scoreOpp}`;
-      finishLeagueMatch();
-    }
-
-    function finishLeagueMatch() {
-      const ctx = leagueMatchCtx;
-      if (!ctx) return;
-      const { state, opp, scoreUser, scoreOpp } = ctx;
-
-      state.user.played++;
-      state.user.gf += scoreUser;
-      state.user.ga += scoreOpp;
-      const oppRow = state.bots.find(b => b.id === opp.id);
-      oppRow.played++;
-      oppRow.gf += scoreOpp;
-      oppRow.ga += scoreUser;
-
-      let reward, title, emoji;
-      if (scoreUser > scoreOpp) {
-        state.user.wins++; state.user.pts += 3;
-        oppRow.losses++;
-        reward = 200 + opp.strength * 3;
-        title = 'Победа!'; emoji = '🏆';
-      } else if (scoreUser === scoreOpp) {
-        state.user.draws++; state.user.pts += 1;
-        oppRow.draws++; oppRow.pts += 1;
-        reward = 80 + opp.strength;
-        title = 'Ничья'; emoji = '🤝';
-      } else {
-        state.user.losses++;
-        oppRow.wins++; oppRow.pts += 3;
-        reward = 40;
-        title = 'Поражение'; emoji = '💔';
-      }
-      reward += ctx.bonusReward;
-      state.round++;
-      saveLeagueState(state);
-
-      sliveTokens += reward;
-      updateHeader();
-      saveData();
-
-      document.getElementById('league-live-step').classList.add('hidden');
-      document.getElementById('league-result-step').classList.remove('hidden');
-      document.getElementById('league-result-emoji').innerText = emoji;
-      document.getElementById('league-result-title').innerText = title;
-      document.getElementById('league-result-score').innerText = `${scoreUser} : ${scoreOpp}`;
-      document.getElementById('league-result-reward').innerText = `+${reward} 🪙`;
-      const bonusEl = document.getElementById('league-result-bonus');
-      if (ctx.bonusReward > 0) {
-        bonusEl.classList.remove('hidden');
-        document.getElementById('league-result-bonus-amount').innerText = `+${ctx.bonusReward}`;
-      } else {
-        bonusEl.classList.add('hidden');
-      }
-      teardown3DPitch();
-    }
-
-
-    // --- 3D-визуализация ключевых моментов (Three.js) ---
-    // Поле с 22 игроками (по 11 на команду, формация 4-3-3 — та же, что и в
-    // составе игрока) и мяч, который на КАЖДЫЙ ключевой момент реально
-    // проходит через несколько игроков атакующей команды (пас в центр поля,
-    // пас вперёд, удар), а не просто летит по прямой к воротам. Не полноценная
-    // симуляция матча в реальном времени 90 минут — движок рендерит именно
-    // ключевые моменты (голы/удары), между которыми игроки живут лёгкой
-    // "дышащей" idle-анимацией, чтобы поле не выглядело замороженным.
-    //
-    // СТАДИОН И "ТРАНСЛЯЦИЯ": вместо статичной камеры сверху сцена оформлена
-    // как ночной стадион под прожекторами (трибуны с текстурой толпы,
-    // мачты освещения, туман для глубины) — и есть ДВЕ камеры-состояния:
-    //   - широкая "эфирная" камера сбоку поля (дефолт/простой между моментами,
-    //     похожа на основную камеру ТВ-трансляции);
-    //   - на каждый опасный момент режиссура "переключает" план: сначала
-    //     ведём атаку общим планом, а на самом ударе — жёсткий монтажный
-    //     "cut" на низкую камеру у ворот (классический ракурс трансляций).
-    // Все модели — процедурные (Three.js примитивы + канвас-текстуры травы и
-    // трибун), без внешних .glb/.gltf: в WebView Telegram-приложения внешние
-    // 3D-модели с случайных источников — это лишний сетевой запрос, риск
-    // CORS/лицензии и точка отказа виджета, если файл не подгрузится. Так
-    // сцена гарантированно рисуется мгновенно и офлайн-устойчиво.
-    let pitch3D = null;
-
-    // Позиции 11 игроков в формации 4-3-3 относительно центра поля.
-    // side 'user' обороняется у правых ворот (+x) и атакует влево (-x);
-    // side 'opp' — зеркально. Возвращает 11 точек: GK, 4×DEF, 3×MID, 3×FWD.
-    function formationPositions(side) {
-      const own = side === 'user' ? 1 : -1; // знак "своей" половины поля по оси x
-      const zLine4 = [-3.4, -1.2, 1.2, 3.4];
-      const zLine3 = [-2.2, 0, 2.2];
-      const pos = [{ role: 'GK', x: own * 7.0, z: 0 }];
-      zLine4.forEach(z => pos.push({ role: 'DEF', x: own * 4.3, z }));
-      zLine3.forEach(z => pos.push({ role: 'MID', x: own * 1.6, z }));
-      zLine3.forEach(z => pos.push({ role: 'FWD', x: own * -1.6, z }));
-      return pos;
-    }
-
-    // "Фигурка" игрока: голова + торс (майка) + шорты + руки + ноги на
-    // "шарнирах" (pivot-группы в бедре/плече), чтобы бег/удар анимировались
-    // реальным взмахом конечностей, а не только покачиванием корпуса.
-    function createPlayerMesh(kitColor, shortsColor, isGK) {
-      const group = new THREE.Group();
-      const jerseyColor = isGK ? 0xfbbf24 : kitColor;
-      const skin = 0xffe0bd;
-
-      const torso = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.15, 0.19, 0.34, 8),
-        new THREE.MeshStandardMaterial({ color: jerseyColor })
-      );
-      torso.position.y = 0.46;
-      torso.castShadow = true;
-
-      const shorts = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.18, 0.15, 0.16, 8),
-        new THREE.MeshStandardMaterial({ color: shortsColor })
-      );
-      shorts.position.y = 0.26;
-      shorts.castShadow = true;
-
-      const bootMat = new THREE.MeshStandardMaterial({ color: 0x111827 });
-      const legMat = new THREE.MeshStandardMaterial({ color: skin });
-      function makeLeg(side) {
-        const hip = new THREE.Group();
-        hip.position.set(side * 0.07, 0.34, 0);
-        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.05, 0.24, 6), legMat);
-        leg.position.y = -0.12;
-        leg.castShadow = true;
-        const boot = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.045, 0.11), bootMat);
-        boot.position.set(0, -0.24, 0.02);
-        boot.castShadow = true;
-        hip.add(leg, boot);
-        return hip;
-      }
-      const legL = makeLeg(-1);
-      const legR = makeLeg(1);
-
-      const armMat = new THREE.MeshStandardMaterial({ color: jerseyColor });
-      function makeArm(side) {
-        const shoulder = new THREE.Group();
-        shoulder.position.set(side * 0.16, 0.58, 0);
-        const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.035, 0.24, 6), armMat);
-        arm.position.y = -0.12;
-        arm.castShadow = true;
-        const hand = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 6), new THREE.MeshStandardMaterial({ color: skin }));
-        hand.position.y = -0.24;
-        shoulder.add(arm, hand);
-        return shoulder;
-      }
-      const armL = makeArm(-1);
-      const armR = makeArm(1);
-
-      const head = new THREE.Mesh(
-        new THREE.SphereGeometry(0.13, 10, 10),
-        new THREE.MeshStandardMaterial({ color: skin })
-      );
-      head.position.y = 0.72;
-      head.castShadow = true;
-
-      const shadow = new THREE.Mesh(
-        new THREE.CircleGeometry(0.26, 16),
-        new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3 })
-      );
-      shadow.rotation.x = -Math.PI / 2;
-      shadow.position.y = 0.01;
-      group.add(shadow, legL, legR, armL, armR, shorts, torso, head);
-      // Ссылки на "шарниры" — renderLoop крутит их для эффекта бега.
-      group.userData.rig = { legL, legR, armL, armR };
-      return group;
-    }
-
-    // Канвас-текстура газона: полосы "стрижки" + разметка (боковые, центр,
-    // центральный круг, штрафные) нарисована прямо на текстуре — дешевле и
-    // выглядит "телевизионнее", чем набор отдельных 3D-линий.
-    function makePitchTexture() {
-      const c = document.createElement('canvas');
-      c.width = 512; c.height = 320;
-      const ctx = c.getContext('2d');
-      const stripes = 12, sw = c.width / stripes;
-      for (let i = 0; i < stripes; i++) {
-        ctx.fillStyle = i % 2 === 0 ? '#1c7a34' : '#176a2c';
-        ctx.fillRect(i * sw, 0, sw, c.height);
-      }
-      ctx.strokeStyle = 'rgba(255,255,255,0.8)';
-      ctx.lineWidth = 3;
-      ctx.strokeRect(16, 16, c.width - 32, c.height - 32);
-      ctx.beginPath(); ctx.moveTo(c.width / 2, 16); ctx.lineTo(c.width / 2, c.height - 16); ctx.stroke();
-      ctx.beginPath(); ctx.arc(c.width / 2, c.height / 2, 42, 0, Math.PI * 2); ctx.stroke();
-      ctx.fillStyle = 'rgba(255,255,255,0.85)';
-      ctx.beginPath(); ctx.arc(c.width / 2, c.height / 2, 3, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeRect(16, c.height / 2 - 72, 88, 144);
-      ctx.strokeRect(c.width - 104, c.height / 2 - 72, 88, 144);
-      ctx.strokeRect(16, c.height / 2 - 34, 34, 68);
-      ctx.strokeRect(c.width - 50, c.height / 2 - 34, 34, 68);
-      return new THREE.CanvasTexture(c);
-    }
-
-    // Канвас-текстура трибуны: "зерно" из разноцветных точек имитирует толпу
-    // издалека — вблизи нам нужен только силуэт-впечатление, не отдельные лица.
-    function makeCrowdTexture() {
-      const c = document.createElement('canvas');
-      c.width = 256; c.height = 64;
-      const ctx = c.getContext('2d');
-      ctx.fillStyle = '#0c0d10';
-      ctx.fillRect(0, 0, c.width, c.height);
-      const colors = ['#ef4444', '#3b82f6', '#facc15', '#22c55e', '#e5e7eb', '#a855f7', '#f97316'];
-      for (let y = 6; y < c.height; y += 4) {
-        for (let x = 0; x < c.width; x += 4) {
-          if (Math.random() < 0.82) {
-            ctx.fillStyle = colors[(Math.random() * colors.length) | 0];
-            ctx.globalAlpha = 0.55 + Math.random() * 0.45;
-            ctx.fillRect(x + Math.random() * 2, y + Math.random() * 2, 3, 3);
-          }
-        }
-      }
-      ctx.globalAlpha = 1;
-      const tex = new THREE.CanvasTexture(c);
-      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-      return tex;
-    }
-
-    // Одна трибуна: наклонная плоскость с текстурой толпы + тонкий козырёк-крыша.
-    function makeStand(width, height, crowdTex, repeatX) {
-      const group = new THREE.Group();
-      const tex = crowdTex.clone();
-      tex.needsUpdate = true;
-      tex.repeat.set(repeatX, 1);
-      const wall = new THREE.Mesh(
-        new THREE.PlaneGeometry(width, height),
-        new THREE.MeshStandardMaterial({ map: tex, side: THREE.DoubleSide, emissive: 0x222222, emissiveIntensity: 0.15 })
-      );
-      wall.position.y = height / 2;
-      wall.rotation.x = -0.28;
-      const roof = new THREE.Mesh(
-        new THREE.BoxGeometry(width, 0.06, 0.9),
-        new THREE.MeshStandardMaterial({ color: 0x1a1a1a })
-      );
-      roof.position.y = height + 0.1;
-      group.add(wall, roof);
-      return group;
-    }
-
-    // Мачта освещения: столб + световая "голова" + настоящий SpotLight —
-    // это и даёт тот самый эффект "ночной матч под прожекторами".
-    function makeFloodlight(x, z) {
-      const group = new THREE.Group();
-      const pole = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.09, 0.12, 5.6, 8),
-        new THREE.MeshStandardMaterial({ color: 0x2a2a2a })
-      );
-      pole.position.y = 2.8;
-      const head = new THREE.Mesh(
-        new THREE.BoxGeometry(0.9, 0.5, 0.25),
-        new THREE.MeshStandardMaterial({ color: 0x111111, emissive: 0xfff7d6, emissiveIntensity: 0.6 })
-      );
-      head.position.y = 5.7;
-      const spot = new THREE.SpotLight(0xfff3c4, 1.4, 26, Math.PI / 6, 0.5, 1.2);
-      spot.position.set(0, 5.7, 0);
-      spot.target.position.set(-x * 0.4, 0, -z * 0.4);
-      group.add(pole, head, spot, spot.target);
-      group.position.set(x, 0, z);
-      return group;
-    }
-
-    // --- Опциональная замена процедурного поля на настоящую GLTF-модель ---
-    // ВАЖНО: это НЕ обязательный путь — если что-то пойдёт не так (нет сети,
-    // файл не найден, CORS), сцена просто остаётся процедурной (см. envGroup
-    // выше), пользователь ничего не заметит. Сама модель (поле "Calcietto")
-    // сюда не встроена — заполните STADIUM_MODEL_URL своим хостингом, куда
-    // вы выложите scene.gltf + scene.bin + папку textures/ рядом (структуру
-    // папок из исходника нужно сохранить, GLTFLoader тянет .bin и текстуры
-    // относительно пути gltf-файла).
-    const STADIUM_MODEL_URL = ''; // например: 'https://<ваш-cdn>/models/court/scene.gltf'
-
-    // На баннерах вокруг поля в исходной модели — текстуры с логотипами
-    // реальных брендов (Red Bull, Nike, Adidas, "Tentazioni"). Показывать их
-    // в игре как есть нельзя, поэтому у этих материалов подменяется текстура
-    // на плоский нейтральный цвет ниже, в traverse.
-    const STADIUM_SPONSOR_MATERIALS = ['RedbullSPonsor', 'NikeSPonsor', 'SponsorTentazioni', 'AdidasSponsor'];
-
-    let stadiumLoadToken = 0;
-    let stadiumGLTFLoader = null;
-
-    function loadStadiumModel(scene, envGroup) {
-      if (!STADIUM_MODEL_URL) return; // не настроено — остаёмся на процедурном поле
-      if (typeof THREE === 'undefined' || typeof THREE.GLTFLoader === 'undefined') return;
-      if (!stadiumGLTFLoader) stadiumGLTFLoader = new THREE.GLTFLoader();
-
-      const loadToken = stadiumLoadToken; // фиксируем токен на момент запуска запроса
-      stadiumGLTFLoader.load(
-        STADIUM_MODEL_URL,
-        (gltf) => {
-          // Сцену успели закрыть/пересоздать, пока модель качалась — выбрасываем.
-          if (loadToken !== stadiumLoadToken || !envGroup.parent) return;
-
-          const model = gltf.scene;
-
-          // Подмена спонсорских лого на нейтральный цвет вместо реального бренда.
-          model.traverse((node) => {
-            if (!node.isMesh || !node.material) return;
-            const matName = node.material.name || '';
-            if (STADIUM_SPONSOR_MATERIALS.some(n => matName.includes(n))) {
-              node.material = new THREE.MeshStandardMaterial({ color: 0x1c7a34 });
-            }
-          });
-
-          // Модель экспортирована в своих единицах — подгоняем масштаб под
-          // ширину процедурного поля (16), а не хардкодим магические числа.
-          const box = new THREE.Box3().setFromObject(model);
-          const size = box.getSize(new THREE.Vector3());
-          if (size.x > 0) model.scale.setScalar(16 / size.x);
-
-          const box2 = new THREE.Box3().setFromObject(model);
-          const center = box2.getCenter(new THREE.Vector3());
-          model.position.x -= center.x;
-          model.position.z -= center.z;
-          model.position.y -= box2.min.y; // на уровень "земли" y=0
-
-          envGroup.visible = false; // прячем процедурные газон/трибуны/мачты/ворота
-          scene.add(model);
-        },
-        undefined,
-        (err) => {
-          // Сеть недоступна / файл не найден / CORS — молча остаёмся на
-          // уже отрисованной процедурной версии.
-          console.warn('Stadium GLTF not loaded, staying on procedural pitch:', err);
-        }
-      );
-    }
-
-    // --- Опциональный "выход команд" перед матчем (интро в стиле трансляции) ---
-    // Это чисто визуальная надстройка НАД уже готовой и рабочей процедурной
-    // сценой — если модель не настроена/не загрузилась вовремя, матч просто
-    // стартует как раньше, без интро (см. onFail ниже).
-    //
-    // ЧТО НУЖНО ДОСТАТЬ, ЧТОБЫ ЭТО ЗАРАБОТАЛО — ОДНА generic-модель:
-    //  - Риггованный (со скелетом) человек в .glb/.gltf с анимациями минимум
-    //    "Idle" и "Walk". Готовые бесплатные варианты: Mixamo (mixamo.com —
-    //    бесплатно, экспорт в FBX → конвертировать в glTF любым конвертером/
-    //    Blender-аддоном) или CC0-паки generic-персонажей (Meshy, Sketchfab
-    //    с фильтром "royalty free"/CC0 — ищите "generic rigged character
-    //    walk animation glb").
-    //  - БЕЗ лица конкретного человека и БЕЗ логотипов брендов на форме —
-    //    те же причины, что и с полем/игроками выше.
-    //  - Майка/торс модели — одним однотонным материалом, чтобы его можно
-    //    было перекрасить в цвет кита кодом (см. tintJersey).
-    // Один файл клонируется 22 раза (SkeletonUtils.clone — обычный .clone()
-    // ломает скелет риггованной модели) и красится в цвет своей команды.
-    const PLAYER_MODEL_URL = ''; // например: 'https://<ваш-cdn>/models/player/scene.gltf'
-    const PLAYER_ANIM_NAMES = { idle: 'Idle', walk: 'Walk' }; // поправьте под имена клипов в вашей модели
-    const JERSEY_MESH_HINTS = ['jersey', 'shirt', 'torso', 'body'];
-
-    let playerGLTFCache = null;
-    let playerGLTFLoader = null;
-
-    function loadPlayerModelOnce(onReady, onFail) {
-      if (!PLAYER_MODEL_URL || typeof THREE === 'undefined' || typeof THREE.GLTFLoader === 'undefined' || typeof THREE.SkeletonUtils === 'undefined') return onFail();
-      if (playerGLTFCache) return onReady(playerGLTFCache);
-      if (!playerGLTFLoader) playerGLTFLoader = new THREE.GLTFLoader();
-      let done = false;
-      const timeout = setTimeout(() => { if (!done) { done = true; onFail(); } }, 4000); // не ждём вечно — сеть медленная/файла нет
-      playerGLTFLoader.load(
-        PLAYER_MODEL_URL,
-        (gltf) => { if (done) return; done = true; clearTimeout(timeout); playerGLTFCache = gltf; onReady(gltf); },
-        undefined,
-        () => { if (done) return; done = true; clearTimeout(timeout); onFail(); }
-      );
-    }
-
-    // Перекрашивает майку/торс клона в цвет команды — по имени материала/меша,
-    // ищет частичное совпадение с JERSEY_MESH_HINTS (регистр не важен).
-    function tintJersey(root, color) {
-      root.traverse((node) => {
-        if (!node.isMesh || !node.material) return;
-        const n = ((node.material.name || '') + ' ' + (node.name || '')).toLowerCase();
-        if (JERSEY_MESH_HINTS.some(h => n.includes(h))) {
-          node.material = node.material.clone();
-          node.material.color = new THREE.Color(color);
-        }
-      });
-    }
-
-    function spawnWalkoutClone(gltf, kitColor, startX, startZ) {
-      const clone = THREE.SkeletonUtils.clone(gltf.scene);
-      // Масштаб подобран "на глаз" под текущий размер процедурного поля —
-      // почти наверняка придётся поправить под реальные пропорции вашей
-      // модели (посмотрите на глаз в браузере и подстройте множитель).
-      clone.scale.setScalar(0.42);
-      clone.position.set(startX, 0, startZ);
-      tintJersey(clone, kitColor);
-      const mixer = new THREE.AnimationMixer(clone);
-      const walkClip = gltf.animations.find(a => a.name === PLAYER_ANIM_NAMES.walk) || gltf.animations[0];
-      if (walkClip) mixer.clipAction(walkClip).play();
-      return { obj: clone, mixer };
-    }
-
-    // Разыгрывает выход обеих команд из "тоннеля" (за боковыми линиями) к их
-    // местам в формации, потом передаёт эстафету уже стоящим там процедурным
-    // фигуркам и вызывает onDone (обычно playNextMoment — матч стартует как
-    // обычно). Если модель не настроена/не загрузилась — onDone вызывается
-    // сразу, процедурные игроки остаются видны всё это время (fallback).
-    function playBroadcastIntro(pitchState, onDone) {
-      const proceduralPlayers = [...pitchState.userPlayers, ...pitchState.oppPlayers];
-      loadPlayerModelOnce(
-        (gltf) => {
-          if (!gltf.animations || !gltf.animations.length) return onDone(); // без анимаций интро не имеет смысла
-
-          proceduralPlayers.forEach(p => { p.visible = false; }); // прячем, пока не "дойдут" клоны на их места
-
-          const userPos = formationPositions('user');
-          const oppPos = formationPositions('opp');
-          const clones = [
-            ...userPos.map(p => ({ ...spawnWalkoutClone(gltf, 0x34d399, -9.5, p.z * 0.4), target: p })),
-            ...oppPos.map(p => ({ ...spawnWalkoutClone(gltf, 0xf87171, 9.5, p.z * 0.4), target: p })),
-          ];
-          clones.forEach(c => pitchState.scene.add(c.obj));
-
-          const duration = 3200;
-          const start = performance.now();
-          function step(now) {
-            const e = Math.min(1, (now - start) / duration);
-            clones.forEach(c => {
-              c.mixer.update(0.016);
-              c.obj.position.x += (c.target.x - c.obj.position.x) * 0.03;
-              c.obj.position.z += (c.target.z - c.obj.position.z) * 0.03;
-            });
-            if (e < 1) {
-              requestAnimationFrame(step);
-            } else {
-              clones.forEach(c => pitchState.scene.remove(c.obj));
-              proceduralPlayers.forEach(p => { p.visible = true; });
-              onDone();
-            }
-          }
-          requestAnimationFrame(step);
-        },
-        onDone // onFail — сразу как onDone, без интро
-      );
-    }
-
-    function init3DPitch() {
-      const container = document.getElementById('league-3d-container');
-      container.innerHTML = '';
-      if (typeof THREE === 'undefined') return; // сеть недоступна — 3D просто не покажется, лог всё равно работает
-
-      const width = container.clientWidth, height = container.clientHeight;
-      const scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x03060a);
-      scene.fog = new THREE.Fog(0x03060a, 14, 34);
-
-      // Единственная реальная камера сцены: по умолчанию — широкий "эфирный"
-      // план сбоку поля (наклонная возвышенность, как основная камера ТВ),
-      // на опасных моментах она сама переезжает/переключается — см. animate3DMoment.
-      const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 100);
-      const WIDE_POS = new THREE.Vector3(0, 5.6, 8.6);
-      const WIDE_LOOK = new THREE.Vector3(0, 0.2, 0);
-      camera.position.copy(WIDE_POS);
-      camera.lookAt(WIDE_LOOK);
-
-      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-      renderer.setSize(width, height);
-      container.appendChild(renderer.domElement);
-
-      // Процедурное окружение (поле/трибуны/мачты/ворота) собрано в одну
-      // группу envGroup — так его можно одним flag'ом спрятать, если следом
-      // подгрузится настоящая GLTF-модель стадиона с CDN (см.
-      // loadStadiumModel ниже). Игроки и мяч в эту группу НЕ входят — они
-      // остаются процедурными в любом случае (см. комментарий выше про
-      // причины не тащить внешний .glb для самих футболистов).
-      const envGroup = new THREE.Group();
-      scene.add(envGroup);
-
-      // Поле с текстурой газона+разметки
-      const pitchTex = makePitchTexture();
-      const pitch = new THREE.Mesh(
-        new THREE.PlaneGeometry(16, 10),
-        new THREE.MeshStandardMaterial({ map: pitchTex })
-      );
-      pitch.rotation.x = -Math.PI / 2;
-      envGroup.add(pitch);
-
-      // Трибуны по 4 сторонам + мачты освещения по углам — "стадион", а не
-      // голое поле с линиями.
-      const crowdTex = makeCrowdTexture();
-      const standBack = makeStand(17, 2.2, crowdTex, 10);
-      standBack.position.set(0, 0, 6.3); standBack.rotation.y = Math.PI;
-      const standFront = makeStand(17, 2.2, crowdTex, 10);
-      standFront.position.set(0, 0, -6.3);
-      const standLeft = makeStand(11, 2.0, crowdTex, 7);
-      standLeft.position.set(-8.6, 0, 0); standLeft.rotation.y = Math.PI / 2;
-      const standRight = makeStand(11, 2.0, crowdTex, 7);
-      standRight.position.set(8.6, 0, 0); standRight.rotation.y = -Math.PI / 2;
-      envGroup.add(standBack, standFront, standLeft, standRight);
-      envGroup.add(makeFloodlight(-8.6, -6.4), makeFloodlight(8.6, -6.4), makeFloodlight(-8.6, 6.4), makeFloodlight(8.6, 6.4));
-
-      // Ворота слева (соперник) и справа (наши) — просто рамки
-      function makeGoal(x) {
-        const geo = new THREE.EdgesGeometry(new THREE.BoxGeometry(0.4, 1.4, 2.4));
-        const goal = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0xffffff }));
-        goal.position.set(x, 0.7, 0);
-        envGroup.add(goal);
-        return goal;
-      }
-      const goalLeft = makeGoal(-7.6);
-      const goalRight = makeGoal(7.6);
-
-      // Игроки: наши — изумрудные (тот же акцент, что и "гол за нас" в логе),
-      // соперник — красные (тот же акцент, что и "гол соперника"); вратари
-      // выделены жёлтым в любой команде. Шорты — контрастный второй цвет кита.
-      function buildTeam(side, kitColor, shortsColor) {
-        const positions = formationPositions(side);
-        return positions.map(p => {
-          const mesh = createPlayerMesh(kitColor, shortsColor, p.role === 'GK');
-          mesh.position.set(p.x, 0, p.z);
-          // Важно: не перезаписывать userData целиком — createPlayerMesh уже
-          // положил туда userData.rig (ссылки на ноги/руки для анимации бега).
-          Object.assign(mesh.userData, { base: { x: p.x, z: p.z }, role: p.role, phase: Math.random() * Math.PI * 2 });
-          scene.add(mesh);
-          return mesh;
-        });
-      }
-      const userPlayers = buildTeam('user', 0x34d399, 0x0b3b2c);
-      const oppPlayers = buildTeam('opp', 0xf87171, 0x3b0d0d);
-
-      // Мяч — канвас-текстура с классическими "пятиугольниками" вместо
-      // плоского белого шара.
-      function makeBallTexture() {
-        const c = document.createElement('canvas');
-        c.width = 256; c.height = 128;
-        const ctx = c.getContext('2d');
-        ctx.fillStyle = '#f5f5f5';
-        ctx.fillRect(0, 0, c.width, c.height);
-        ctx.fillStyle = '#111827';
-        const r = 16;
-        for (let gy = 0; gy < 2; gy++) {
-          for (let gx = 0; gx < 5; gx++) {
-            const cx = gx * 52 + (gy % 2 === 0 ? 26 : 0);
-            const cy = gy * 90 + 24;
-            ctx.beginPath();
-            for (let i = 0; i < 5; i++) {
-              const a = (Math.PI * 2 / 5) * i - Math.PI / 2;
-              const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r * 0.9;
-              i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-            }
-            ctx.closePath();
-            ctx.fill();
-          }
-        }
-        return new THREE.CanvasTexture(c);
-      }
-      const ball = new THREE.Mesh(
-        new THREE.SphereGeometry(0.2, 16, 16),
-        new THREE.MeshStandardMaterial({ map: makeBallTexture(), roughness: 0.5 })
-      );
-      ball.position.set(0, 0.2, 0);
-      ball.castShadow = true;
-      scene.add(ball);
-
-      // Тени — под мачтами-прожекторами это даёт узнаваемую картинку
-      // "ночного матча", а не плоские силуэты.
-      renderer.shadowMap.enabled = true;
-      pitch.receiveShadow = true;
-      scene.add(new THREE.AmbientLight(0xffffff, 0.55));
-      const dir = new THREE.DirectionalLight(0xbfd4ff, 0.35);
-      dir.position.set(3, 6, 4);
-      dir.castShadow = true;
-      dir.shadow.mapSize.set(1024, 1024);
-      scene.add(dir);
-
-      let rafId = null;
-      function renderLoop(now) {
-        // Лёгкая "дышащая" idle-анимация: каждый игрок слегка покачивается и
-        // смещается вокруг своей базовой позиции, чтобы поле выглядело живым
-        // между ключевыми моментами (никак не влияет на исход, чисто визуал).
-        const t = (now || 0) / 1000;
-        [...userPlayers, ...oppPlayers].forEach(p => {
-          const ph = p.userData.phase;
-          p.position.x = p.userData.base.x + Math.sin(t * 1.3 + ph) * 0.18;
-          p.position.z = p.userData.base.z + Math.cos(t * 1.1 + ph) * 0.22;
-          p.position.y = Math.abs(Math.sin(t * 3 + ph)) * 0.04;
-          // Взмах ног/рук в противофазе — читается как лёгкий бег трусцой,
-          // а не просто "плавающая" фигурка.
-          const rig = p.userData.rig;
-          if (rig) {
-            const swing = Math.sin(t * 6 + ph) * 0.5;
-            rig.legL.rotation.x = swing;
-            rig.legR.rotation.x = -swing;
-            rig.armL.rotation.x = -swing * 0.7;
-            rig.armR.rotation.x = swing * 0.7;
-          }
-        });
-        renderer.render(scene, camera);
-        rafId = requestAnimationFrame(renderLoop);
-      }
-      renderLoop(0);
-
-      pitch3D = {
-        scene, camera, renderer, ball, goalLeft, goalRight, userPlayers, oppPlayers, container, rafId,
-        WIDE_POS, WIDE_LOOK, broadcastToken: 0
-      };
-
-      // Прогрессивное улучшение: сцена уже полностью готова и рисуется
-      // процедурным окружением (см. envGroup выше) — это гарантированный
-      // результат независимо от сети. Если настоящая GLTF-модель стадиона
-      // с CDN подгрузится успешно, envGroup прячется и на её место
-      // становится модель; если сеть недоступна/файл не найден/долго грузится
-      // — просто ничего не меняется, юзер видит процедурную версию как раньше.
-      loadStadiumModel(scene, envGroup);
-    }
-
-    function teardown3DPitch() {
-      stadiumLoadToken++; // если GLTF ещё грузится — его результат больше никому не нужен
-      if (!pitch3D) return;
-      cancelAnimationFrame(pitch3D.rafId);
-      pitch3D.renderer.dispose();
-      if (pitch3D.container) pitch3D.container.innerHTML = '';
-      pitch3D = null;
-    }
-
-    // Плавно переезжает камеру трансляции из текущего положения в заданное —
-    // используется и для "наезда" на опасный момент, и для возврата к общему
-    // плану после него. token нужен, чтобы более новый вызов (следующий
-    // момент случился раньше, чем доехал предыдущий easing) не боролся со
-    // старым за контроль камеры.
-    function flyCamera(fromPos, fromLook, toPos, toLook, duration, token) {
-      if (!pitch3D) return;
-      const cam = pitch3D.camera;
-      const start = performance.now();
-      function step(now) {
-        if (!pitch3D || pitch3D.broadcastToken !== token) return;
-        const t = Math.min(1, (now - start) / duration);
-        const e = 1 - Math.pow(1 - t, 3);
-        cam.position.lerpVectors(fromPos, toPos, e);
-        const look = new THREE.Vector3().lerpVectors(fromLook, toLook, e);
-        cam.lookAt(look);
-        if (t < 1) requestAnimationFrame(step);
-      }
-      requestAnimationFrame(step);
-    }
-
-    // Короткая яркая вспышка на трибуне ("камеры болельщиков") — чисто
-    // декоративный акцент трансляции на гол, гасится сама.
-    function flashCrowd() {
-      if (!pitch3D) return;
-      const flash = new THREE.PointLight(0xffffff, 4, 12);
-      flash.position.set((Math.random() - 0.5) * 6, 3, 6);
-      pitch3D.scene.add(flash);
-      const start = performance.now();
-      function fade(now) {
-        const t = Math.min(1, (now - start) / 400);
-        flash.intensity = 4 * (1 - t);
-        if (t < 1) requestAnimationFrame(fade); else pitch3D.scene.remove(flash);
-      }
-      requestAnimationFrame(fade);
-    }
-
-    // Анимирует один ключевой момент как настоящий розыгрыш, а не бросок мяча
-    // по прямой: мяч идёт коротким пасом к центральному хавбеку атакующей
-    // команды, затем пасом вперёд к одному из форвардов (случайный фланг), и
-    // только потом — удар по воротам. Параллельно "режиссура" ведёт камеру:
-    // общий эфирный план во время передач, а на самом ударе — монтажный cut
-    // на низкую камеру у ворот, прямо как в настоящей трансляции. Если гол —
-    // мяч залетает за створ, сетка вспыхивает и трибуна "фотографирует";
-    // если нет — мяч гасится вратарём/штангой чуть не долетев. callback
-    // вызывается по завершении всей анимации (~1.5с), после чего камера сама
-    // плавно возвращается на общий план.
-    function animate3DMoment(moment, callback) {
-      if (!pitch3D) { callback(); return; }
-      const { ball, goalLeft, goalRight, userPlayers, oppPlayers, WIDE_POS, WIDE_LOOK } = pitch3D;
-      const token = ++pitch3D.broadcastToken;
-      const attackers = moment.side === 'user' ? userPlayers : oppPlayers;
-      const defenders = moment.side === 'user' ? oppPlayers : userPlayers;
-      const targetGoal = moment.side === 'user' ? goalLeft : goalRight; // атакуем ворота соперника слева, если момент "user"
-      const goalSign = Math.sign(targetGoal.position.x) || 1;
-
-      // MID2 (индекс 6) — центральный хавбек, всегда z=0; форварды — индексы 8-10.
-      const midPasser = attackers[6];
-      const forward = attackers[8 + Math.floor(Math.random() * 3)];
-      const zJitter = (Math.random() - 0.5) * 1.4;
-
-      const p0 = { x: 0, y: 0.2, z: 0 };
-      const p1 = { x: midPasser.userData.base.x, y: 0.2, z: midPasser.userData.base.z };
-      const p2 = { x: forward.userData.base.x, y: 0.2, z: forward.userData.base.z + zJitter * 0.3 };
-      const shotEnd = moment.isGoal ? targetGoal.position.x : targetGoal.position.x * 0.65;
-      const p3 = { x: shotEnd, y: 0.2, z: zJitter };
-
-      // Ближайший защитник слегка выдвигается навстречу атаке — чисто
-      // косметическая реакция, чтобы momento не выглядело статично.
-      const nearestDefender = defenders.reduce((best, d) => {
-        const dz = Math.abs(d.userData.base.z - p2.z);
-        return (!best || dz < best.dz) ? { mesh: d, dz } : best;
-      }, null)?.mesh;
-      const defBase = nearestDefender ? { ...nearestDefender.userData.base } : null;
-      if (nearestDefender) nearestDefender.userData.base.x += moment.side === 'user' ? -0.6 : 0.6;
-
-      // Камера у ворот на удар: низко, сбоку от створа, глядя вдоль линии
-      // ворот — классический ракурс "гол-камеры" в футбольной трансляции.
-      const goalCamPos = new THREE.Vector3(targetGoal.position.x - goalSign * 2.1, 1.15, 3.1);
-      const goalCamLook = new THREE.Vector3(targetGoal.position.x, 0.5, 0);
-
-      ball.position.set(p0.x, p0.y, p0.z);
-      pitch3D.camera.position.copy(WIDE_POS);
-      pitch3D.camera.lookAt(WIDE_LOOK);
-
-      const legs = [
-        { from: p0, to: p1, duration: 300, arc: 0.45 },   // короткий пас в центр — общий план
-        { from: p1, to: p2, duration: 320, arc: 0.55, bump: midPasser },  // пас вперёд форварду — общий план, камера панорамирует
-        { from: p2, to: p3, duration: 480, arc: 0.95, bump: forward, cut: true },   // удар по воротам — жёсткий cut на гол-камеру
-      ];
-
-      let legIndex = 0;
-      function runLeg() {
-        const leg = legs[legIndex];
-        const startTime = performance.now();
-        if (leg.cut) {
-          // Монтажный "переезд" в трансляцию: быстрый переход на низкую
-          // камеру у ворот прямо перед ударом.
-          flyCamera(pitch3D.camera.position.clone(), WIDE_LOOK.clone(), goalCamPos, goalCamLook, 180, token);
-        }
-        function step(now) {
-          const t = Math.min(1, (now - startTime) / leg.duration);
-          const ease = 1 - Math.pow(1 - t, 2);
-          ball.position.x = leg.from.x + (leg.to.x - leg.from.x) * ease;
-          ball.position.z = leg.from.z + (leg.to.z - leg.from.z) * ease;
-          ball.position.y = 0.2 + Math.sin(t * Math.PI) * leg.arc;
-          if (!leg.cut && pitch3D.broadcastToken === token) {
-            // Общий план слегка панорамирует вслед за розыгрышем, как
-            // основная камера трансляции ведёт атаку.
-            const panX = ball.position.x * 0.35;
-            pitch3D.camera.position.set(panX, WIDE_POS.y, WIDE_POS.z);
-            pitch3D.camera.lookAt(ball.position.x * 0.6, 0.2, ball.position.z * 0.5);
-          }
-          if (t < 1) {
-            requestAnimationFrame(step);
-          } else {
-            // Короткий "пульс" игрока, принявшего пас — визуально читается как приём мяча.
-            if (leg.bump) {
-              leg.bump.scale.set(1.35, 1.35, 1.35);
-              setTimeout(() => leg.bump.scale.set(1, 1, 1), 160);
-            }
-            legIndex++;
-            if (legIndex < legs.length) {
-              runLeg();
-            } else {
-              if (moment.isGoal) {
-                targetGoal.material.color.set(0xfacc15);
-                setTimeout(() => targetGoal.material.color.set(0xffffff), 500);
-                flashCrowd();
-                setTimeout(flashCrowd, 140);
-                setTimeout(flashCrowd, 300);
-              }
-              if (nearestDefender && defBase) nearestDefender.userData.base = defBase;
-              // Держим гол-камеру ещё чуть-чуть (реакция), потом возвращаемся
-              // на общий эфирный план — как режиссёр трансляции после повтора.
-              setTimeout(() => {
-                if (pitch3D && pitch3D.broadcastToken === token) {
-                  flyCamera(pitch3D.camera.position.clone(), goalCamLook.clone(), WIDE_POS.clone(), WIDE_LOOK.clone(), 600, token);
-                }
-              }, moment.isGoal ? 550 : 250);
-              callback();
-            }
-          }
-        }
-        requestAnimationFrame(step);
-      }
-      runLeg();
-    }
-
 
     // ИНВЕНТАРЬ
     function openBench(targetSlot) {
@@ -4106,50 +2576,28 @@
       // всё равно получит 403 от сервера, так что подделать тут нечего.
       if (tabId === 'admin' && !isAdmin) return;
 
+      // Перед уходом со вкладки тапалки — досылаем накопленные, но ещё не
+      // отправленные клики, чтобы прогресс точно не потерялся.
+      if (tabId !== 'tap') flushTaps();
+
       document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
       document.getElementById(`tab-${tabId}`).classList.remove('hidden');
 
-      // Только 4 главных пункта живут в нижнем баре — их подсвечиваем как
-      // раньше. Всё остальное (market/leaderboard/draft/battles/bets/admin)
-      // открывается через шторку "Ещё": для них вместо своей кнопки
-      // подсвечивается сама кнопка "Ещё" (см. nav-more ниже).
-      const primaryTabs = ['squad', 'club', 'league', 'packs'];
-      const secondaryTabs = ['market', 'leaderboard', 'draft', 'battles', 'bets', 'admin'];
-
-      primaryTabs.forEach(t => {
+      ['squad', 'club', 'tap', 'packs', 'market', 'leaderboard', 'draft', 'battles', 'bets', 'admin'].forEach(t => {
         const el = document.getElementById(`nav-${t}`);
         if (!el) return;
+        const isHiddenAdmin = t === 'admin' && !isAdmin;
         const active = t === tabId;
-        el.className = `nav-btn flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl text-[8px] font-black${active ? ' nav-active' : ''}`;
+        el.className = `${isHiddenAdmin ? 'hidden ' : 'flex-1 flex '}nav-btn${active ? ' nav-active' : ''} flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl text-[8px] font-black`;
       });
-      const moreBtn = document.getElementById('nav-more');
-      if (moreBtn) {
-        const moreActive = secondaryTabs.includes(tabId);
-        moreBtn.className = `nav-btn flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl text-[8px] font-black${moreActive ? ' nav-active' : ''}`;
-      }
 
       if (tabId === 'admin') loadAdminPanel();
       if (tabId === 'leaderboard') { loadLeaderboard(); loadDraftLeaderboard(); loadBattleLeaderboard(); }
       if (tabId === 'market') loadReferralInfo();
       if (tabId === 'club') renderClubInventory();
-      if (tabId === 'league') renderLeagueTab();
       if (tabId === 'draft') loadDraftState();
       if (tabId === 'battles') loadBattlesState();
       if (tabId === 'bets') loadBetEvents();
-    }
-
-    // Шторка "Ещё": просто показывает/прячет модалку и делегирует переход
-    // в switchTab(), которая понятия не имеет, что вызвана из шторки —
-    // вся остальная логика вкладок работает без изменений.
-    function openMoreSheet() {
-      document.getElementById('more-sheet-modal').classList.remove('hidden');
-    }
-    function closeMoreSheet() {
-      document.getElementById('more-sheet-modal').classList.add('hidden');
-    }
-    function openMoreTab(tabId) {
-      switchTab(tabId);
-      closeMoreSheet();
     }
 
     // МАРКЕТ ИГРОКОВ (покупка конкретной карточки, без рандома)
@@ -4929,80 +3377,6 @@
         } else {
           alertMsg('Не удалось продать карту. Попробуй ещё раз.');
         }
-      }
-    }
-
-    // --- ОНБОРДИНГ (первый запуск) ---
-    // 4 шага, полностью локально: приветствие -> имя клуба -> тур по вкладкам
-    // -> стартовый капитал. Показывается один раз, флаг лежит в localStorage.
-    const ONBOARDING_STEPS = 4;
-    let onboardingStep = 0;
-
-    function initOnboarding() {
-      if (localStorage.getItem('onboardingDone') === 'true') return;
-      onboardingStep = 0;
-      renderOnboardingStep();
-      document.getElementById('onboarding-modal').classList.remove('hidden');
-    }
-
-    function renderOnboardingStep() {
-      document.querySelectorAll('.ob-step').forEach((el, i) => {
-        el.classList.toggle('hidden', i !== onboardingStep);
-      });
-      document.querySelectorAll('.ob-dot').forEach((el, i) => {
-        el.className = `ob-dot w-6 h-1.5 rounded-full transition-all ${i === onboardingStep ? 'bg-violet-500' : i < onboardingStep ? 'bg-violet-500/40' : 'bg-neutral-800'}`;
-      });
-      const nextBtn = document.getElementById('ob-next-btn');
-      const skipBtn = document.getElementById('ob-skip-btn');
-      const isLast = onboardingStep === ONBOARDING_STEPS - 1;
-      nextBtn.innerText = isLast ? 'Погнали! ⚽' : 'Далее';
-      skipBtn.classList.toggle('hidden', isLast);
-
-      if (onboardingStep === 1) {
-        setTimeout(() => document.getElementById('ob-club-name-input')?.focus(), 200);
-      }
-      if (onboardingStep === 3) {
-        spawnOnboardingConfetti();
-      }
-    }
-
-    function onboardingNext() {
-      // Шаг с именем клуба — сохраняем (пустое поле = имя по умолчанию не трогаем).
-      if (onboardingStep === 1) {
-        const val = document.getElementById('ob-club-name-input').value.trim();
-        if (val) {
-          localStorage.setItem('clubName', val);
-          document.getElementById('manager-name-label').innerText = val;
-        }
-      }
-      if (onboardingStep >= ONBOARDING_STEPS - 1) {
-        onboardingFinish();
-        return;
-      }
-      onboardingStep++;
-      renderOnboardingStep();
-    }
-
-    function onboardingFinish() {
-      localStorage.setItem('onboardingDone', 'true');
-      document.getElementById('onboarding-modal').classList.add('hidden');
-    }
-
-    function spawnOnboardingConfetti() {
-      const layer = document.getElementById('ob-confetti-layer');
-      if (!layer || layer.dataset.spawned) return;
-      layer.dataset.spawned = '1';
-      const colors = ['#a78bfa', '#34d399', '#fbbf24', '#f472b6', '#38bdf8'];
-      for (let i = 0; i < 26; i++) {
-        const piece = document.createElement('div');
-        const color = colors[i % colors.length];
-        piece.className = 'confetti-piece';
-        piece.style.left = `${Math.random() * 100}%`;
-        piece.style.background = color;
-        piece.style.animationDuration = `${1.4 + Math.random() * 1.2}s`;
-        piece.style.animationDelay = `${Math.random() * 0.4}s`;
-        piece.style.borderRadius = Math.random() > 0.5 ? '50%' : '2px';
-        layer.appendChild(piece);
       }
     }
   </script>
