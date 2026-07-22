@@ -226,11 +226,13 @@
     .bet-option-row:active { transform: scale(0.98); }
     .bet-event-card { transition: box-shadow 0.2s ease; }
     .bet-event-card.is-open { box-shadow: 0 0 0 1px rgba(167,139,250,0.15), 0 8px 20px -8px rgba(167,139,250,0.25); }
+    .card-mythic { box-shadow: 0 0 26px rgba(56, 189, 248, 0.55); border-color: #7dd3fc; position: relative; overflow: hidden; }
     .card-legend { box-shadow: 0 0 20px rgba(168, 85, 247, 0.5); border-color: #c084fc; position: relative; overflow: hidden; }
     .card-gold { box-shadow: 0 0 15px rgba(250, 204, 21, 0.4); border-color: #fde047; position: relative; overflow: hidden; }
     .card-silver { border-color: #cbd5e1; }
     .card-bronze { border-color: #d97706; }
-    .card-legend::after, .card-gold::after {
+    .card-common { border-color: #6b7280; }
+    .card-mythic::after, .card-legend::after, .card-gold::after {
       content: '';
       position: absolute; top: 0; left: -60%; width: 40%; height: 100%;
       background: linear-gradient(115deg, transparent, rgba(255,255,255,0.55), transparent);
@@ -295,6 +297,7 @@
           <div class="ob-dot w-6 h-1.5 rounded-full bg-neutral-800 transition-all"></div>
           <div class="ob-dot w-6 h-1.5 rounded-full bg-neutral-800 transition-all"></div>
           <div class="ob-dot w-6 h-1.5 rounded-full bg-neutral-800 transition-all"></div>
+          <div class="ob-dot w-6 h-1.5 rounded-full bg-neutral-800 transition-all"></div>
         </div>
 
         <!-- Шаг 0: Приветствие -->
@@ -315,6 +318,7 @@
             <h2 class="text-lg font-black uppercase italic tracking-tight mb-1">Как назовём твой клуб?</h2>
             <p class="text-[11px] text-neutral-500 mb-4">Это имя увидят соперники в Лиге и Ставках</p>
             <input id="ob-club-name-input" type="text" maxlength="18" placeholder="Например: FC Champions"
+              onkeydown="if(event.key==='Enter'){event.preventDefault(); onboardingNext();}"
               class="w-full bg-neutral-900 border border-neutral-700 focus:border-violet-500 rounded-xl px-4 py-3 text-center text-sm font-black text-white placeholder-neutral-600 outline-none" />
           </div>
         </div>
@@ -354,18 +358,47 @@
             <p class="text-[11px] text-neutral-500 mb-3">Открой первый пак или собери состав — выбор за тобой</p>
             <div class="bg-neutral-900 border border-violet-500/30 rounded-2xl px-6 py-3 inline-flex items-center gap-2">
               <span class="text-2xl">🪙</span>
-              <span class="text-2xl font-black text-violet-400">1 000</span>
+              <span id="ob-start-balance" class="text-2xl font-black text-violet-400">1 000</span>
               <span class="text-[10px] text-neutral-500 font-bold">$SLive</span>
             </div>
+          </div>
+        </div>
+
+        <!-- Шаг 4: Стартовый набор из 11 карт (common), выдаётся сервером
+             всем — и новым, и уже играющим (см. claimStarterPackIfNeeded в
+             db.js). Пока /api/me не ответил, показываем плейсхолдер —
+             renderOnboardingStarterGrid() перерисует грид, как только карты
+             придут (см. syncBalanceFromServer/handleStarterPackCards). -->
+        <div id="ob-step-4" class="ob-step hidden flex-1 flex flex-col justify-center gap-3">
+          <div class="text-4xl text-center mb-1">⚽</div>
+          <h2 class="text-lg font-black uppercase italic tracking-tight text-center mb-1">Твой стартовый состав</h2>
+          <p class="text-[11px] text-neutral-500 text-center mb-2">11 бесплатных карт уже в твоём Клубе — расставь их во вкладке "Состав"</p>
+          <div id="ob-starter-cards" class="grid grid-cols-4 gap-2 max-h-[38vh] overflow-y-auto no-scrollbar px-1">
+            <div class="col-span-4 text-[10px] text-neutral-500 text-center py-4">Собираем твой стартовый состав…</div>
           </div>
         </div>
 
         <!-- Кнопка -->
         <div class="shrink-0 pt-6">
           <button id="ob-next-btn" onclick="onboardingNext()" class="w-full bg-violet-500 text-black font-black py-3.5 rounded-2xl text-sm uppercase tracking-tight">Далее</button>
-          <button id="ob-skip-btn" onclick="onboardingFinish()" class="w-full text-neutral-600 text-[10px] font-bold py-3">Пропустить</button>
+          <div class="flex items-center justify-between">
+            <button id="ob-back-btn" onclick="onboardingBack()" class="hidden text-neutral-600 text-[10px] font-bold py-3 px-2">← Назад</button>
+            <button id="ob-skip-btn" onclick="onboardingFinish()" class="flex-1 text-neutral-600 text-[10px] font-bold py-3">Пропустить</button>
+          </div>
         </div>
       </div>
+    </div>
+
+    <!-- СТАРТОВЫЙ НАБОР ДЛЯ УЖЕ ИГРАЮЩИХ: те, кто прошёл 4-шаговый онбординг
+         раньше (localStorage.onboardingDone === 'true'), не увидят шаг 4 из
+         визарда выше — им набор из 11 карт показывается этим отдельным
+         попапом поверх всего (см. handleStarterPackCards/showStarterPackReveal). -->
+    <div id="starter-pack-modal" class="hidden absolute inset-0 z-[71] flex flex-col bg-black/95 p-6 items-center justify-center">
+      <div class="text-4xl mb-2" style="animation: popIn 0.5s ease-out;">🎁</div>
+      <h2 class="text-lg font-black uppercase italic text-center mb-1">Новый стартовый набор!</h2>
+      <p class="text-[11px] text-neutral-500 text-center mb-4 max-w-[280px]">Мы добавили новую дешёвую редкость Common — держи бесплатный набор из 11 игроков, они уже у тебя в Клубе.</p>
+      <div id="starter-pack-grid" class="grid grid-cols-3 gap-2 max-h-[48vh] overflow-y-auto no-scrollbar mb-4"></div>
+      <button onclick="closeStarterPackModal()" class="w-full max-w-xs bg-violet-500 text-black font-black py-3 rounded-2xl text-sm uppercase tracking-tight">Забрать в Клуб ⚽</button>
     </div>
 
     <!-- HEADER: баннер клуба (щит-герб + монеты-медальоны вместо плоских
@@ -385,6 +418,7 @@
           </div>
         </div>
         <div class="flex items-center gap-1.5">
+          <button id="sfx-toggle-btn" onclick="toggleSfx()" class="bg-neutral-800 text-neutral-300 border border-neutral-700 text-[12px] font-black w-7 h-7 rounded-lg flex items-center justify-center shrink-0">🔊</button>
           <button onclick="openBattlePassModal()" class="bg-violet-500/10 text-violet-300 border border-violet-500/30 text-[10px] font-black px-2 py-1.5 rounded-lg flex items-center gap-1 relative">
             🎫 БП
             <span id="bp-nav-dot" class="hidden absolute -top-1 -right-1 w-2 h-2 rounded-full bg-rose-500"></span>
@@ -533,8 +567,8 @@
       <!-- ТАБ 2: ЛИГА (менеджер) -->
       <div id="tab-league" class="tab-content hidden h-full p-4 flex flex-col gap-3 overflow-y-auto">
         <div>
-          <h2 class="text-xl font-black uppercase italic tracking-tight">Лига</h2>
-          <div class="text-[10px] text-neutral-400 mt-0.5">Играй матчи, поднимайся в таблице, получай призовые.</div>
+          <h2 class="text-xl font-black uppercase italic tracking-tight">Лига · <span id="league-division-name" class="text-violet-400">Регион-Лига</span></h2>
+          <div class="text-[10px] text-neutral-400 mt-0.5">Играй матчи, поднимайся в таблице, выйди в топ дивизиона — и получи повышение в лигу рангом выше.</div>
         </div>
 
         <!-- Доход стадиона: пассив по составу, выплата по таймеру -->
@@ -577,9 +611,38 @@
       <div id="tab-packs" class="tab-content hidden p-4">
         <h2 class="text-xl font-black uppercase italic tracking-tight mb-2">Магазин Паков</h2>
 
+        <!-- Фильтр по цене: показывает/скрывает паки через data-price-group на
+             карточке каждого пака ниже. "Все" — сброс фильтра. -->
+        <div class="flex gap-1.5 mb-4" id="packs-price-filters">
+          <button onclick="filterPacksByPrice('all')" data-price-filter="all" class="packs-filter-btn bg-violet-500 text-black text-[10px] font-black px-3 py-1.5 rounded-lg">Все</button>
+          <button onclick="filterPacksByPrice('cheap')" data-price-filter="cheap" class="packs-filter-btn bg-neutral-800 text-[10px] font-black px-3 py-1.5 rounded-lg border border-neutral-700">💸 Дешёвые</button>
+          <button onclick="filterPacksByPrice('expensive')" data-price-filter="expensive" class="packs-filter-btn bg-neutral-800 text-[10px] font-black px-3 py-1.5 rounded-lg border border-neutral-700">💎 Дорогие</button>
+        </div>
+
         <div class="space-y-4">
+          <!-- Common -->
+          <div data-price-group="cheap" class="pack-card bg-gradient-to-r from-[#2e2e2e] to-[#141414] border border-[#6b7280] rounded-2xl p-4 flex flex-col gap-3">
+            <div class="flex justify-between items-center">
+              <div>
+                <h3 class="font-black text-[#d4d4d8] text-sm">СТАРТОВЫЙ ПАК ⚪️</h3>
+                <p class="text-[10px] text-neutral-400 mt-0.5">Самый дешёвый вход: ~5-6 $SLive/день</p>
+              </div>
+              <div class="flex flex-col gap-1.5">
+                <button onclick="buyPack('common', 500, 'SLive')" class="bg-neutral-800 text-violet-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 500</button>
+                <button onclick="buyPack('common', 20, 'Stars')" class="bg-amber-500 text-black text-[11px] font-black px-3 py-1.5 rounded-xl hover:bg-amber-400 text-center">⭐️ 20</button>
+              </div>
+            </div>
+            <div class="bg-black/50 rounded-xl p-2 border border-[#6b7280]/50">
+              <div class="text-[8px] text-[#a1a1aa] font-bold uppercase mb-1.5 flex justify-between">
+                <span>Возможный дроп:</span>
+                <span class="text-violet-500">+5-6/день</span>
+              </div>
+              <div class="flex flex-wrap gap-1.5" id="drop-common"></div>
+            </div>
+          </div>
+
           <!-- Bronze -->
-          <div class="bg-gradient-to-r from-[#3e2723] to-[#1a1a1a] border border-[#5d4037] rounded-2xl p-4 flex flex-col gap-3">
+          <div data-price-group="cheap" class="pack-card bg-gradient-to-r from-[#3e2723] to-[#1a1a1a] border border-[#5d4037] rounded-2xl p-4 flex flex-col gap-3">
             <div class="flex justify-between items-center">
               <div>
                 <h3 class="font-black text-[#d7ccc8] text-sm">БРОНЗОВЫЙ ПАК 🥉</h3>
@@ -601,7 +664,7 @@
           </div>
 
           <!-- Silver -->
-          <div class="bg-gradient-to-r from-[#37474f] to-[#1a1a1a] border border-[#78909c] rounded-2xl p-4 flex flex-col gap-3">
+          <div data-price-group="cheap" class="pack-card bg-gradient-to-r from-[#37474f] to-[#1a1a1a] border border-[#78909c] rounded-2xl p-4 flex flex-col gap-3">
             <div class="flex justify-between items-center">
               <div>
                 <h3 class="font-black text-[#cfd8dc] text-sm">СЕРЕБРЯНЫЙ ПАК 🥈</h3>
@@ -622,7 +685,7 @@
           </div>
 
           <!-- Gold -->
-          <div class="bg-gradient-to-r from-[#514309] to-[#1a1a1a] border border-[#fbc02d] rounded-2xl p-4 flex flex-col gap-3 shadow-[0_0_15px_rgba(251,192,45,0.1)]">
+          <div data-price-group="expensive" class="pack-card bg-gradient-to-r from-[#514309] to-[#1a1a1a] border border-[#fbc02d] rounded-2xl p-4 flex flex-col gap-3 shadow-[0_0_15px_rgba(251,192,45,0.1)]">
             <div class="flex justify-between items-center">
               <div>
                 <h3 class="font-black text-[#fff59d] text-sm">ЗОЛОТОЙ ПАК 🥇</h3>
@@ -643,7 +706,7 @@
           </div>
 
           <!-- Legend -->
-          <div class="bg-gradient-to-r from-[#311b92] to-[#1a1a1a] border border-[#b39ddb] rounded-2xl p-4 flex flex-col gap-3 shadow-[0_0_20px_rgba(103,58,183,0.3)]">
+          <div data-price-group="expensive" class="pack-card bg-gradient-to-r from-[#311b92] to-[#1a1a1a] border border-[#b39ddb] rounded-2xl p-4 flex flex-col gap-3 shadow-[0_0_20px_rgba(103,58,183,0.3)]">
             <div class="flex justify-between items-center">
               <div>
                 <h3 class="font-black text-[#ede7f6] text-sm">ИКОНЫ ФУТБОЛА 🔮</h3>
@@ -662,6 +725,27 @@
               <div class="flex flex-wrap gap-1.5" id="drop-legend"></div>
             </div>
           </div>
+
+          <!-- Mythic -->
+          <div data-price-group="expensive" class="pack-card bg-gradient-to-r from-[#0c4a6e] to-[#1a1a1a] border border-[#7dd3fc] rounded-2xl p-4 flex flex-col gap-3 shadow-[0_0_22px_rgba(56,189,248,0.3)]">
+            <div class="flex justify-between items-center">
+              <div>
+                <h3 class="font-black text-[#e0f2fe] text-sm">МИФИЧЕСКИЙ ПАК 💠</h3>
+                <p class="text-[10px] text-neutral-400 mt-0.5">Максимальный доход: ~780-850 $SLive/день</p>
+              </div>
+              <div class="flex flex-col gap-1.5">
+                <button onclick="buyPack('mythic', 600000, 'SLive')" class="bg-neutral-800 text-violet-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 600K</button>
+                <button onclick="buyPack('mythic', 3000, 'Stars')" class="bg-amber-500 text-black text-[11px] font-black px-3 py-1.5 rounded-xl hover:bg-amber-400 text-center">⭐️ 3000</button>
+              </div>
+            </div>
+            <div class="bg-black/50 rounded-xl p-2 border border-[#7dd3fc]/30">
+              <div class="text-[8px] text-[#e0f2fe] font-bold uppercase mb-1.5 flex justify-between">
+                <span>Возможный дроп:</span>
+                <span class="text-violet-500">+780-850/день</span>
+              </div>
+              <div class="flex flex-wrap gap-1.5" id="drop-mythic"></div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -672,11 +756,13 @@
           Покупай конкретных игроков напрямую — без рандома пака, зато цена выше.
         </p>
 
-        <div class="flex gap-1.5 mb-3" id="market-filters">
-          <button onclick="renderMarketCards('bronze')" data-tier="bronze" class="market-filter-btn bg-neutral-800 text-[10px] font-black px-3 py-1.5 rounded-lg border border-neutral-700">🥉 Бронза</button>
-          <button onclick="renderMarketCards('silver')" data-tier="silver" class="market-filter-btn bg-neutral-800 text-[10px] font-black px-3 py-1.5 rounded-lg border border-neutral-700">🥈 Серебро</button>
-          <button onclick="renderMarketCards('gold')" data-tier="gold" class="market-filter-btn bg-neutral-800 text-[10px] font-black px-3 py-1.5 rounded-lg border border-neutral-700">🥇 Золото</button>
-          <button onclick="renderMarketCards('legend')" data-tier="legend" class="market-filter-btn bg-neutral-800 text-[10px] font-black px-3 py-1.5 rounded-lg border border-neutral-700">🔮 Легенды</button>
+        <div class="flex gap-1.5 mb-3 overflow-x-auto no-scrollbar" id="market-filters">
+          <button onclick="renderMarketCards('common')" data-tier="common" class="market-filter-btn shrink-0 bg-neutral-800 text-[10px] font-black px-3 py-1.5 rounded-lg border border-neutral-700">⚪️ Старт</button>
+          <button onclick="renderMarketCards('bronze')" data-tier="bronze" class="market-filter-btn shrink-0 bg-neutral-800 text-[10px] font-black px-3 py-1.5 rounded-lg border border-neutral-700">🥉 Бронза</button>
+          <button onclick="renderMarketCards('silver')" data-tier="silver" class="market-filter-btn shrink-0 bg-neutral-800 text-[10px] font-black px-3 py-1.5 rounded-lg border border-neutral-700">🥈 Серебро</button>
+          <button onclick="renderMarketCards('gold')" data-tier="gold" class="market-filter-btn shrink-0 bg-neutral-800 text-[10px] font-black px-3 py-1.5 rounded-lg border border-neutral-700">🥇 Золото</button>
+          <button onclick="renderMarketCards('legend')" data-tier="legend" class="market-filter-btn shrink-0 bg-neutral-800 text-[10px] font-black px-3 py-1.5 rounded-lg border border-neutral-700">🔮 Легенды</button>
+          <button onclick="renderMarketCards('mythic')" data-tier="mythic" class="market-filter-btn shrink-0 bg-neutral-800 text-[10px] font-black px-3 py-1.5 rounded-lg border border-neutral-700">💠 Мифик</button>
         </div>
 
         <div id="market-cards-grid" class="grid grid-cols-3 gap-2 mb-6">
@@ -1007,6 +1093,35 @@
           </div>
         </div>
 
+        <div class="panel-card accent-violet p-3 mb-4">
+          <div class="flex justify-between items-center mb-2">
+            <div class="text-[10px] font-bold text-neutral-200 flex items-center gap-1.5">🎫 Батл Пасс</div>
+            <button onclick="loadBattlePassAdmin()" class="text-[9px] text-violet-400 font-bold">↻ Обновить</button>
+          </div>
+          <div id="bp-admin-summary" class="text-[9px] text-neutral-500 mb-2">Загрузка...</div>
+
+          <div class="flex gap-2 mb-2">
+            <input id="bp-admin-price" type="number" placeholder="Цена премиума, ⭐️"
+              class="flex-1 bg-black border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 focus:border-violet-500 outline-none">
+            <button onclick="adminSetBpPriceClick()" class="bg-violet-500 text-black text-[11px] font-black px-4 rounded-lg active:scale-95 transition-transform">Цена</button>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2 mb-3">
+            <button onclick="adminCloseBpSeasonClick()" class="bg-red-500/20 text-red-300 border border-red-500/40 text-[10px] font-black py-2 rounded-lg active:scale-95 transition-transform">⏹️ Закрыть сезон</button>
+            <button onclick="adminNewBpSeasonClick()" class="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-black py-2 rounded-lg active:scale-95 transition-transform">🆕 Новый сезон</button>
+          </div>
+
+          <p class="text-[9px] text-neutral-500 mb-2">
+            "Закрыть сезон" останавливает начисление XP и продажу премиума, но не сбрасывает прогресс.
+            "Новый сезон" полностью сбрасывает XP/премиум/забранные награды у ВСЕХ игроков и стартует отсчёт 14 дней заново — жетоны Драфта не трогает.
+          </p>
+
+          <div class="text-[9px] text-neutral-500 mb-1.5">Награды по уровням (тип: slive / token / pack / pack_bundle / card):</div>
+          <div id="bp-admin-levels" class="space-y-2 max-h-72 overflow-y-auto pr-1">
+            <div class="text-neutral-500 text-xs">Загрузка...</div>
+          </div>
+        </div>
+
         <div class="flex justify-between items-center mb-2 px-1">
           <div class="text-[10px] font-bold text-neutral-300 flex items-center gap-1.5">👥 Игроки</div>
           <button onclick="loadAdminPanel()" class="text-[9px] text-violet-400 font-bold">↻ Обновить</button>
@@ -1015,7 +1130,6 @@
           <div class="text-neutral-500 text-xs">Загрузка...</div>
         </div>
       </div>
-
 
     </div>
 
@@ -1178,17 +1292,22 @@
     <div id="league-match-modal" class="hidden absolute inset-0 bg-black/95 z-50 flex flex-col items-center justify-center p-4">
       <div class="relative w-full max-w-md bg-neutral-950 border border-neutral-800 rounded-2xl overflow-hidden flex flex-col" style="max-height:92vh;">
 
-        <!-- Шаг 1: выбор тактики -->
+        <!-- Шаг 1: расстановка + тактика (два независимых выбора, см.
+             LEAGUE_FORMATIONS/LEAGUE_TACTICS — перемножаются в startLeagueMatch). -->
         <div id="league-tactic-step" class="p-4">
-          <h3 class="text-center font-black text-sm mb-1">Выбери тактику на матч</h3>
+          <h3 class="text-center font-black text-sm mb-1">Расстановка и тактика</h3>
           <div class="text-center text-[10px] text-neutral-500 mb-3">vs <span id="league-tactic-opponent" class="text-neutral-300 font-bold"></span></div>
-          <div class="grid grid-cols-2 gap-2">
-            <button onclick="startLeagueMatch('gegenpress')" class="bg-red-700 text-white font-black py-2 rounded-xl text-[10px] leading-tight">🔥🔥 Гегенпрессинг<br><span class="font-normal opacity-80">риск, много моментов</span></button>
-            <button onclick="startLeagueMatch('possession')" class="bg-sky-500 text-black font-black py-2 rounded-xl text-[10px] leading-tight">⚽ Контроль мяча<br><span class="font-normal opacity-80">стабильно, без риска</span></button>
-            <button onclick="startLeagueMatch('counter')" class="bg-orange-600 text-white font-black py-2 rounded-xl text-[10px] leading-tight">🎯 Контратаки<br><span class="font-normal opacity-80">моментов мало, но метко</span></button>
-            <button onclick="startLeagueMatch('defend')" class="bg-blue-600 text-white font-black py-2 rounded-xl text-[10px] leading-tight">🛡️ Сушить игру<br><span class="font-normal opacity-80">надёжно, меньше голов</span></button>
-          </div>
-          <button onclick="closeLeagueMatch()" class="w-full mt-3 text-neutral-500 text-[10px] font-bold py-1">Отмена</button>
+
+          <div class="text-[9px] text-neutral-500 font-black uppercase mb-1.5">Расстановка</div>
+          <div id="league-formation-grid" class="grid grid-cols-2 gap-2 mb-3"></div>
+
+          <div class="text-[9px] text-neutral-500 font-black uppercase mb-1.5">Тактика</div>
+          <div id="league-tactic-grid" class="grid grid-cols-2 gap-2 mb-2"></div>
+
+          <div id="league-combo-hint" class="text-[9px] text-neutral-500 text-center mb-3 min-h-[24px]"></div>
+
+          <button onclick="confirmStartLeagueMatch()" class="w-full bg-violet-500 text-black font-black py-2.5 rounded-xl text-sm">▶️ Начать матч</button>
+          <button onclick="closeLeagueMatch()" class="w-full mt-2 text-neutral-500 text-[10px] font-bold py-1">Отмена</button>
         </div>
 
         <!-- Шаг 2: прямой эфир с 3D-моментами -->
@@ -1209,23 +1328,39 @@
           <div class="text-center mb-1 text-[10px] font-bold text-neutral-500 uppercase tracking-wide">Перерыв · <span id="halftime-score">0 : 0</span></div>
           <h3 class="text-center font-black text-base mb-1">🚪 Раздевалка</h3>
           <p class="text-center text-[11px] text-neutral-400 mb-4">Что скажешь команде на второй тайм?</p>
-          <div class="flex flex-col gap-2">
-            <button onclick="chooseHalftimeSpeech('fire')" class="bg-red-700 text-white font-black py-2.5 rounded-xl text-[11px] text-left px-3">🔥 Встряхнуть эмоционально<br><span class="font-normal opacity-80 text-[9px]">сильно больше остроты впереди, риск в обороне</span></button>
-            <button onclick="chooseHalftimeSpeech('calm')" class="bg-sky-600 text-white font-black py-2.5 rounded-xl text-[11px] text-left px-3">🧠 Спокойно разобрать ошибки<br><span class="font-normal opacity-80 text-[9px]">небольшой плюс и к атаке, и к обороне</span></button>
-            <button onclick="chooseHalftimeSpeech('defend')" class="bg-blue-800 text-white font-black py-2.5 rounded-xl text-[11px] text-left px-3">🛡 Жёстко потребовать надёжности<br><span class="font-normal opacity-80 text-[9px]">сильно больше надёжности сзади, меньше остроты впереди</span></button>
-          </div>
+          <div id="halftime-speech-options" class="flex flex-col gap-2"></div>
           <button onclick="chooseHalftimeSpeech('skip')" class="mt-3 text-neutral-600 text-[10px] font-bold py-1">Промолчать</button>
         </div>
 
         <!-- Оверлей: решение перед ударом на СВОИХ опасных моментах — та
              самая "точка принятия решений" внутри самого розыгрыша, а не
-             только в выборе тактики до матча. -->
+             только в выборе тактики до матча. Пул вариантов — 9 штук (см.
+             ATTACK_DECISIONS), сюда каждый раз рендерятся 3 случайных. -->
         <div id="attack-decision-modal" class="hidden absolute inset-0 z-20 bg-neutral-950/97 flex flex-col justify-center p-5">
           <div class="text-center mb-1 text-[10px] font-bold text-emerald-400 uppercase tracking-wide" id="attack-decision-minute"></div>
           <h3 class="text-center font-black text-base mb-4">⚡ Момент! Что делаем?</h3>
+          <div id="attack-decision-options" class="flex flex-col gap-2"></div>
+        </div>
+
+        <!-- Оверлей: решение на ОПАСНЫХ моментах соперника — своя ветка,
+             отдельная от атаки. Пул — 9 вариантов (DEFENSE_DECISIONS), тут
+             тоже каждый раз 3 случайных. -->
+        <div id="defense-decision-modal" class="hidden absolute inset-0 z-20 bg-neutral-950/97 flex flex-col justify-center p-5">
+          <div class="text-center mb-1 text-[10px] font-bold text-red-400 uppercase tracking-wide" id="defense-decision-minute"></div>
+          <h3 class="text-center font-black text-base mb-4">🛡 Опасность у наших ворот!</h3>
+          <div id="defense-decision-options" class="flex flex-col gap-2"></div>
+        </div>
+
+        <!-- Оверлей: спорный момент судьи — отдельный ТИП события (не гол/не
+             удар), со своей веткой решений и последствием на весь остаток
+             матча (жёлтая карточка ослабляет оборону), а не разовым исходом. -->
+        <div id="referee-event-modal" class="hidden absolute inset-0 z-20 bg-neutral-950/97 flex flex-col justify-center p-5">
+          <div class="text-center mb-1 text-[10px] font-bold text-amber-400 uppercase tracking-wide" id="referee-event-minute"></div>
+          <h3 class="text-center font-black text-base mb-1">🟨 Спорное решение судьи</h3>
+          <p class="text-center text-[11px] text-neutral-400 mb-4">Судья не дал очевидный, на твой взгляд, фол в атаке. Как реагируем?</p>
           <div class="flex flex-col gap-2">
-            <button onclick="chooseAttackDecision('risky')" class="bg-orange-600 text-white font-black py-2.5 rounded-xl text-[11px] text-left px-3">🔥 Бить с ходу, без подготовки<br><span class="font-normal opacity-80 text-[9px]">ниже шанс гола, зато бонус монет, если влетит</span></button>
-            <button onclick="chooseAttackDecision('safe')" class="bg-sky-500 text-black font-black py-2.5 rounded-xl text-[11px] text-left px-3">🎯 Обработать и пробить наверняка<br><span class="font-normal opacity-80 text-[9px]">выше шанс гола, без бонуса</span></button>
+            <button onclick="chooseRefereeEvent('argue')" class="bg-red-700 text-white font-black py-2.5 rounded-xl text-[11px] text-left px-3">😤 Пойти качать права<br><span class="font-normal opacity-80 text-[9px]">шанс, что судья передумает — но и шанс схлопотать жёлтую</span></button>
+            <button onclick="chooseRefereeEvent('accept')" class="bg-neutral-700 text-white font-black py-2.5 rounded-xl text-[11px] text-left px-3">🤐 Принять и играть дальше<br><span class="font-normal opacity-80 text-[9px]">без риска, но и без шанса на пересмотр</span></button>
           </div>
         </div>
 
@@ -1235,8 +1370,9 @@
           <div class="text-lg font-black mb-1" id="league-result-title">Победа!</div>
           <div class="text-3xl font-black mb-3 tabular-nums" id="league-result-score">0 : 0</div>
           <div class="text-[11px] text-neutral-400 mb-1">Призовые: <span id="league-result-reward" class="text-amber-400 font-black">+0 🪙</span></div>
-          <div id="league-result-bonus" class="hidden text-[10px] text-orange-400 font-bold mb-3">🔥 Бонус за рискованные удары: <span id="league-result-bonus-amount">+0</span> 🪙</div>
-          <button onclick="closeLeagueMatch()" class="bg-violet-500 text-black font-black py-2.5 px-8 rounded-xl text-sm">Продолжить</button>
+          <div id="league-result-bonus" class="hidden text-[10px] text-orange-400 font-bold mb-3">🔥 Бонус за смелые решения по ходу матча: <span id="league-result-bonus-amount">+0</span> 🪙</div>
+          <div id="league-season-summary" class="hidden"></div>
+          <button onclick="closeLeagueMatch()" class="bg-violet-500 text-black font-black py-2.5 px-8 rounded-xl text-sm mt-3">Продолжить</button>
         </div>
       </div>
     </div>
@@ -1397,6 +1533,142 @@
       tg.expand();
     }
 
+    // ================= ЗВУК =================
+    // Полностью процедурный движок на Web Audio API — ни одного внешнего
+    // .mp3/.wav файла (те же причины, что и с 3D-моделями: в Telegram
+    // WebView внешние ассеты могут не подгрузиться/долго грузиться, плюс
+    // это лишний вес). Все звуки — осцилляторы и белый шум, сгенерированные
+    // кодом на лету.
+    const SoundFX = (() => {
+      let ctx = null;
+      let unlocked = false;
+      let muted = localStorage.getItem('sfxMuted') === 'true';
+
+      function ensureCtx() {
+        if (!ctx) {
+          const AC = window.AudioContext || window.webkitAudioContext;
+          if (!AC) return null;
+          ctx = new AC();
+        }
+        if (ctx.state === 'suspended') ctx.resume();
+        return ctx;
+      }
+
+      // Браузеры/WebView не дают звуку играть до первого жеста пользователя —
+      // разблокируем на первый tap/click где угодно в приложении.
+      function unlock() {
+        if (unlocked) return;
+        unlocked = true;
+        ensureCtx();
+      }
+      window.addEventListener('pointerdown', unlock, { once: true });
+      window.addEventListener('touchstart', unlock, { once: true });
+
+      function master() {
+        const c = ensureCtx();
+        if (!c || muted) return null;
+        return c;
+      }
+
+      // Простой тон: осциллятор с ADSR-конвертом громкости.
+      function tone(freq, dur, { type = 'sine', vol = 0.18, delay = 0, glideTo = null } = {}) {
+        const c = master();
+        if (!c) return;
+        const t0 = c.currentTime + delay;
+        const osc = c.createOscillator();
+        const gain = c.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, t0);
+        if (glideTo) osc.frequency.exponentialRampToValueAtTime(glideTo, t0 + dur);
+        gain.gain.setValueAtTime(0.0001, t0);
+        gain.gain.exponentialRampToValueAtTime(vol, t0 + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+        osc.connect(gain).connect(c.destination);
+        osc.start(t0);
+        osc.stop(t0 + dur + 0.02);
+      }
+
+      // Короткий шумовой всплеск (свист/шорох/толпа) — белый шум через буфер.
+      function noiseBurst(dur, { vol = 0.15, delay = 0, filterFreq = null, filterType = 'lowpass' } = {}) {
+        const c = master();
+        if (!c) return;
+        const t0 = c.currentTime + delay;
+        const bufferSize = Math.floor(c.sampleRate * dur);
+        const buffer = c.createBuffer(1, bufferSize, c.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+        const src = c.createBufferSource();
+        src.buffer = buffer;
+        const gain = c.createGain();
+        gain.gain.setValueAtTime(vol, t0);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+        let node = src;
+        if (filterFreq) {
+          const filt = c.createBiquadFilter();
+          filt.type = filterType;
+          filt.frequency.value = filterFreq;
+          node.connect(filt);
+          node = filt;
+        }
+        node.connect(gain).connect(c.destination);
+        src.start(t0);
+      }
+
+      return {
+        setMuted(v) { muted = v; localStorage.setItem('sfxMuted', String(v)); },
+        isMuted() { return muted; },
+        // Лёгкий UI-тап — переключение вкладок, кнопки решений.
+        click() { tone(720, 0.05, { type: 'square', vol: 0.06 }); },
+        // Мягкое уведомление (тосты alertMsg).
+        notify() { tone(880, 0.09, { type: 'sine', vol: 0.09 }); tone(1180, 0.08, { type: 'sine', vol: 0.07, delay: 0.05 }); },
+        // Монеты — награда, продажа карты, начисление.
+        coin() { tone(1046, 0.09, { type: 'triangle', vol: 0.14 }); tone(1568, 0.12, { type: 'triangle', vol: 0.12, delay: 0.06 }); },
+        // Ошибка / недостаточно средств.
+        error() { tone(180, 0.18, { type: 'sawtooth', vol: 0.1 }); },
+        // Свисток судьи — перерыв/спорный момент.
+        whistle() { tone(2200, 0.22, { type: 'square', vol: 0.09, glideTo: 2600 }); },
+        // Гол — короткая "труба" вверх + шум "трибуны".
+        goal() {
+          tone(523, 0.12, { type: 'sawtooth', vol: 0.15 });
+          tone(659, 0.12, { type: 'sawtooth', vol: 0.15, delay: 0.1 });
+          tone(880, 0.28, { type: 'sawtooth', vol: 0.16, delay: 0.2 });
+          noiseBurst(0.9, { vol: 0.1, delay: 0.05, filterFreq: 1800, filterType: 'lowpass' });
+        },
+        // Момент не реализован — короткий разочарованный спад.
+        miss() { tone(400, 0.2, { type: 'sine', vol: 0.09, glideTo: 220 }); },
+        // Разворот открытия пака: whoosh нарастающий по мере приближения к реveal.
+        packWhoosh() { noiseBurst(1.1, { vol: 0.07, filterFreq: 900, filterType: 'bandpass' }); },
+        // Реveal карты — чем выше редкость, тем "богаче" звук.
+        packReveal(tier) {
+          if (tier === 'mythic') {
+            [523, 659, 784, 1046, 1318].forEach((f, i) => tone(f, 0.32, { type: 'triangle', vol: 0.17, delay: i * 0.08 }));
+            noiseBurst(0.7, { vol: 0.09, filterFreq: 3400 });
+          } else if (tier === 'legend') {
+            [523, 659, 784, 1046].forEach((f, i) => tone(f, 0.3, { type: 'triangle', vol: 0.16, delay: i * 0.09 }));
+            noiseBurst(0.6, { vol: 0.08, filterFreq: 3000 });
+          } else if (tier === 'gold') {
+            [523, 784, 1046].forEach((f, i) => tone(f, 0.22, { type: 'triangle', vol: 0.15, delay: i * 0.08 }));
+          } else if (tier === 'silver') {
+            [440, 660].forEach((f, i) => tone(f, 0.18, { type: 'triangle', vol: 0.13, delay: i * 0.08 }));
+          } else {
+            tone(392, 0.16, { type: 'triangle', vol: 0.12 });
+          }
+        },
+        // Итог матча.
+        win() { [523, 659, 784, 1046].forEach((f, i) => tone(f, 0.24, { type: 'square', vol: 0.14, delay: i * 0.1 })); },
+        draw() { tone(440, 0.2, { type: 'sine', vol: 0.1 }); tone(440, 0.2, { type: 'sine', vol: 0.1, delay: 0.18 }); },
+        lose() { tone(300, 0.3, { type: 'sine', vol: 0.1, glideTo: 160 }); },
+      };
+    })();
+
+    function toggleSfx() {
+      const next = !SoundFX.isMuted();
+      SoundFX.setMuted(next);
+      const btn = document.getElementById('sfx-toggle-btn');
+      if (btn) btn.innerText = next ? '🔇' : '🔊';
+      if (!next) SoundFX.click(); // короткое подтверждение при включении звука обратно
+    }
+
     // Доп. защита от "прыжков" масштаба при частых тапах: viewport
     // (maximum-scale=1, user-scalable=no) и touch-action: manipulation в CSS
     // отключают зум в большинстве WebView, но Safari/некоторые Android-вебвью
@@ -1490,6 +1762,8 @@
         myClub = user.myClub; // карты — только те, что реально есть в инвентаре на сервере
         squad = instIdMapToSquad(user.squad, myClub);
         passiveIncome = user.farmRate;
+        saveData(); // сразу сохраняем локально — если пришёл стартовый набор, он должен пережить перезагрузку страницы
+        handleStarterPackCards(user.starterPackCards);
         if (starsToSliveRate) {
           exchangeRate = starsToSliveRate;
           const rateLabel = document.getElementById('exchange-rate-label');
@@ -1524,6 +1798,7 @@
         document.getElementById('admin-referral-channel').value = link || '';
         loadReferralRequests();
         loadAdminBetEvents();
+        loadBattlePassAdmin();
         // Затравка формы создания ивента двумя пустыми вариантами — но только
         // при первом открытии, иначе каждое "↻ Обновить" дублировало бы строки.
         if (document.getElementById('admin-bet-options').children.length === 0) {
@@ -1931,7 +2206,131 @@
       }
     }
 
-    // ---------- ЛИДЕРБОРД ----------
+    // ---------- АДМИН: Батл Пасс ----------
+    const BP_REWARD_TYPES = ['slive', 'token', 'pack', 'pack_bundle', 'card'];
+    let bpAdminConfigCache = null;
+
+    async function loadBattlePassAdmin() {
+      const summaryEl = document.getElementById('bp-admin-summary');
+      const levelsEl = document.getElementById('bp-admin-levels');
+      try {
+        const config = await apiPost('/api/admin/battlepass/config');
+        bpAdminConfigCache = config;
+        document.getElementById('bp-admin-price').value = config.priceStars;
+        summaryEl.innerHTML = `День ${config.currentDay}/${config.seasonDays} · Цена ⭐️ ${config.priceStars} · Статус: `
+          + (config.closed
+            ? '<span class="text-red-400 font-black">закрыт</span>'
+            : '<span class="text-emerald-400 font-black">активен</span>');
+        renderBpAdminLevels(config.levels);
+      } catch (e) {
+        console.error(e);
+        summaryEl.innerText = 'Не удалось загрузить конфиг Батл Пасса.';
+        levelsEl.innerHTML = '';
+      }
+    }
+
+    // Компактный редактор одной ветки (free/premium) одного уровня: селект
+    // типа награды + 1 поле-параметр (число ИЛИ playerId/pack — в зависимости
+    // от типа), плюс отдельное поле "Кол-во" только для pack_bundle.
+    function bpTrackEditorHtml(level, track, reward) {
+      const uid = `bp-${level}-${track}`;
+      const type = reward?.type || 'slive';
+      const amount = reward?.amount ?? '';
+      const pack = reward?.pack || 'bronze';
+      const count = reward?.count ?? 1;
+      const playerId = reward?.playerId || '';
+
+      const options = BP_REWARD_TYPES.map(t => `<option value="${t}" ${t === type ? 'selected' : ''}>${t}</option>`).join('');
+      return `
+        <div class="bg-black/40 border border-neutral-800 rounded-lg p-1.5">
+          <div class="text-[8px] text-neutral-500 font-bold uppercase mb-1">${track === 'free' ? 'Бесплатно' : 'Премиум'}</div>
+          <select id="${uid}-type" class="w-full bg-neutral-900 border border-neutral-700 rounded px-1.5 py-1 text-[9px] text-white mb-1">${options}</select>
+          <input id="${uid}-amount" type="number" placeholder="Сумма (slive/token)" value="${type === 'slive' || type === 'token' ? amount : ''}"
+            class="w-full bg-neutral-900 border border-neutral-700 rounded px-1.5 py-1 text-[9px] text-white placeholder-neutral-600 mb-1">
+          <input id="${uid}-pack" type="text" placeholder="pack: bronze/silver/gold/legend" value="${type === 'pack' || type === 'pack_bundle' ? pack : ''}"
+            class="w-full bg-neutral-900 border border-neutral-700 rounded px-1.5 py-1 text-[9px] text-white placeholder-neutral-600 mb-1">
+          <input id="${uid}-count" type="number" placeholder="Кол-во (pack_bundle)" value="${type === 'pack_bundle' ? count : ''}"
+            class="w-full bg-neutral-900 border border-neutral-700 rounded px-1.5 py-1 text-[9px] text-white placeholder-neutral-600 mb-1">
+          <input id="${uid}-playerid" type="text" placeholder="playerId (card), напр. l4" value="${type === 'card' ? playerId : ''}"
+            class="w-full bg-neutral-900 border border-neutral-700 rounded px-1.5 py-1 text-[9px] text-white placeholder-neutral-600 mb-1">
+          <button onclick="adminSaveBpLevelReward(${level}, '${track}')" class="w-full bg-violet-500/80 text-black text-[9px] font-black py-1 rounded">💾</button>
+        </div>`;
+    }
+
+    function renderBpAdminLevels(levels) {
+      const levelsEl = document.getElementById('bp-admin-levels');
+      levelsEl.innerHTML = levels.map(lvl => `
+        <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-2">
+          <div class="text-[10px] font-black text-white mb-1.5">Уровень ${lvl.level}</div>
+          <div class="grid grid-cols-2 gap-1.5">
+            ${bpTrackEditorHtml(lvl.level, 'free', lvl.free)}
+            ${bpTrackEditorHtml(lvl.level, 'premium', lvl.premium)}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Собирает reward-объект из полей редактора по текущему выбранному типу
+    // и отправляет на сервер (сервер сам валидирует форму — см. adminUpdateBattlePassLevel в db.js).
+    async function adminSaveBpLevelReward(level, track) {
+      const uid = `bp-${level}-${track}`;
+      const type = document.getElementById(`${uid}-type`).value;
+      let reward = { type };
+      if (type === 'slive' || type === 'token') {
+        reward.amount = Number(document.getElementById(`${uid}-amount`).value);
+      } else if (type === 'pack') {
+        reward.pack = document.getElementById(`${uid}-pack`).value.trim();
+      } else if (type === 'pack_bundle') {
+        reward.pack = document.getElementById(`${uid}-pack`).value.trim();
+        reward.count = Number(document.getElementById(`${uid}-count`).value);
+      } else if (type === 'card') {
+        reward.playerId = document.getElementById(`${uid}-playerid`).value.trim();
+      }
+
+      try {
+        const result = await apiPost('/api/admin/battlepass/update-level', { level, track, reward });
+        renderBpAdminLevels(result.levels);
+        alertMsg(`Награда уровня ${level} (${track === 'free' ? 'бесплатно' : 'премиум'}) сохранена.`);
+      } catch (e) {
+        alertMsg('Не удалось сохранить награду — проверь формат полей.');
+      }
+    }
+
+    async function adminSetBpPriceClick() {
+      const priceStars = Number(document.getElementById('bp-admin-price').value);
+      if (!Number.isFinite(priceStars) || priceStars <= 0) return alertMsg('Укажи корректную цену в ⭐️.');
+      try {
+        await apiPost('/api/admin/battlepass/set-price', { priceStars });
+        alertMsg(`Цена Батл Пасса обновлена: ⭐️ ${priceStars}`);
+        loadBattlePassAdmin();
+      } catch (e) {
+        alertMsg('Не удалось обновить цену.');
+      }
+    }
+
+    async function adminCloseBpSeasonClick() {
+      if (!confirm('Закрыть текущий сезон Батл Пасса? XP перестанет начисляться, премиум временно нельзя будет купить. Прогресс игроков не сбрасывается.')) return;
+      try {
+        await apiPost('/api/admin/battlepass/close-season');
+        alertMsg('Сезон закрыт.');
+        loadBattlePassAdmin();
+      } catch (e) {
+        alertMsg('Не удалось закрыть сезон.');
+      }
+    }
+
+    async function adminNewBpSeasonClick() {
+      if (!confirm('Начать НОВЫЙ сезон? Это сбросит XP/премиум/забранные награды у ВСЕХ игроков и запустит отсчёт 14 дней заново. Жетоны Драфта останутся нетронутыми. Действие необратимо.')) return;
+      try {
+        await apiPost('/api/admin/battlepass/new-season', {});
+        alertMsg('Новый сезон Батл Пасса запущен!');
+        loadBattlePassAdmin();
+      } catch (e) {
+        alertMsg('Не удалось запустить новый сезон.');
+      }
+    }
+
+
     async function loadLeaderboard() {
       const listEl = document.getElementById('leaderboard-list');
       listEl.innerHTML = '<div class="text-neutral-500 text-xs">Загрузка...</div>';
@@ -2097,6 +2496,10 @@
       if (reward.type === 'token') return `${reward.amount} Жетон Драфта 🎟️`;
       if (reward.type === 'pack') return `Пак: ${reward.pack === 'gold' ? 'Золото' : reward.pack === 'silver' ? 'Серебро' : 'Бронза'}`;
       if (reward.type === 'pack_bundle') return `Набор: ${reward.count}x ${reward.pack === 'gold' ? 'Золото' : reward.pack === 'silver' ? 'Серебро' : 'Бронза'} 🏆`;
+      if (reward.type === 'card') {
+        const p = PLAYERS_BY_ID[reward.playerId];
+        return p ? `⭐ ${p.name} (${p.rating})` : '⭐ Легенда';
+      }
       return '—';
     }
 
@@ -2403,6 +2806,7 @@
     }
 
     function alertMsg(txt) {
+      SoundFX.notify();
       document.getElementById('alert-text').innerText = txt;
       document.getElementById('alert-modal').classList.remove('hidden');
     }
@@ -2547,9 +2951,11 @@
     // 'micro' = сверхкомпактная под 11 слотов на поле.
     function genCardHTML(p, size) {
       const cls = `card-${p.type}`;
-      const bg = p.type === 'legend' ? 'from-purple-800 to-indigo-950' : 
+      const bg = p.type === 'mythic' ? 'from-sky-600 to-blue-950' :
+                 p.type === 'legend' ? 'from-purple-800 to-indigo-950' : 
                  p.type === 'gold' ? 'from-yellow-600 to-yellow-900' : 
-                 p.type === 'silver' ? 'from-slate-400 to-slate-700' : 'from-orange-700 to-orange-950';
+                 p.type === 'silver' ? 'from-slate-400 to-slate-700' :
+                 p.type === 'common' ? 'from-neutral-700 to-neutral-900' : 'from-orange-700 to-orange-950';
       const avatar = footballerSVG(p);
 
       if (size === 'micro') {
@@ -2618,6 +3024,19 @@
     // Локальный справочник для витрины "Возможный дроп" в табе ПАКИ — не влияет
     // на игровую логику (реальный дроп решает сервер по players-data.js).
     const PLAYER_POOL = {
+      common: [
+        { id: 'c1', name: 'Trafford', rating: 68, pos: 'GK', nation: 'ENG', type: 'common', income: 5 },
+        { id: 'c2', name: 'Colwill', rating: 67, pos: 'DEF', nation: 'ENG', type: 'common', income: 5 },
+        { id: 'c3', name: 'Estupinan', rating: 69, pos: 'DEF', nation: 'ESP', type: 'common', income: 5 },
+        { id: 'c4', name: 'Yarmoliuk', rating: 65, pos: 'MID', nation: 'UKR', type: 'common', income: 5 },
+        { id: 'c5', name: 'Veerman', rating: 66, pos: 'MID', nation: 'NED', type: 'common', income: 5 },
+        { id: 'c6', name: 'Doue', rating: 66, pos: 'MID', nation: 'FRA', type: 'common', income: 5 },
+        { id: 'c7', name: 'Alarcon', rating: 64, pos: 'MID', nation: 'ARG', type: 'common', income: 5 },
+        { id: 'c8', name: 'Kayky', rating: 63, pos: 'FWD', nation: 'BRA', type: 'common', income: 5 },
+        { id: 'c9', name: 'Bynoe-Gittens', rating: 68, pos: 'FWD', nation: 'ENG', type: 'common', income: 5 },
+        { id: 'c10', name: 'Nmecha', rating: 65, pos: 'FWD', nation: 'GER', type: 'common', income: 5 },
+        { id: 'c11', name: 'Lukebakio', rating: 68, pos: 'FWD', nation: 'BEL', type: 'common', income: 6 },
+      ],
       bronze: [
         { id: 'b1', name: 'Zinchenko', rating: 79, pos: 'DEF', nation: 'UKR', type: 'bronze', income: 10 },
         { id: 'b2', name: 'Mudryk', rating: 77, pos: 'FWD', nation: 'UKR', type: 'bronze', income: 10 },
@@ -2659,8 +3078,20 @@
         { id: 'l4', name: 'Maradona', rating: 98, pos: 'MID', nation: 'ARG', type: 'legend', income: 600 },
         { id: 'l5', name: 'Pele', rating: 99, pos: 'FWD', nation: 'BRA', type: 'legend', income: 650 },
         { id: 'l6', name: 'C. Ronaldo', rating: 96, pos: 'FWD', nation: 'POR', type: 'legend', income: 520 },
+      ],
+      mythic: [
+        { id: 'm1', name: 'J. Cruyff', rating: 97, pos: 'MID', nation: 'NED', type: 'mythic', income: 800 },
+        { id: 'm2', name: 'F. Beckenbauer', rating: 96, pos: 'DEF', nation: 'GER', type: 'mythic', income: 780 },
+        { id: 'm3', name: 'A. Di Stefano', rating: 98, pos: 'FWD', nation: 'ESP', type: 'mythic', income: 850 },
+        { id: 'm4', name: 'Eusebio', rating: 97, pos: 'FWD', nation: 'POR', type: 'mythic', income: 830 },
+        { id: 'm5', name: 'M. Platini', rating: 96, pos: 'MID', nation: 'FRA', type: 'mythic', income: 800 },
+        { id: 'm6', name: 'Romario', rating: 97, pos: 'FWD', nation: 'BRA', type: 'mythic', income: 840 },
       ]
     };
+
+    // Плоский индекс id -> карточка — нужен там, где приходит только id игрока
+    // (например reward.playerId в наградах Батл Пасса), а не весь объект.
+    const PLAYERS_BY_ID = Object.values(PLAYER_POOL).flat().reduce((acc, p) => { acc[p.id] = p; return acc; }, {});
 
     const FLAGS = {'UKR':'🇺🇦', 'ARG':'🇦🇷', 'ESP':'🇪🇸', 'ENG':'🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'FRA':'🇫🇷', 'BRA':'🇧🇷', 'NED':'🇳🇱', 'BEL':'🇧🇪', 'GER':'🇩🇪', 'NOR':'🇳🇴', 'POR':'🇵🇹'};
 
@@ -2690,6 +3121,8 @@
     let slotToFill = null;
 
     window.onload = () => {
+      const sfxBtn = document.getElementById('sfx-toggle-btn');
+      if (sfxBtn) sfxBtn.innerText = SoundFX.isMuted() ? '🔇' : '🔊';
       initOnboarding();
       renderSquad();
       updateHeader();
@@ -2746,10 +3179,31 @@
         `).join('');
       };
 
+      renderDrops(PLAYER_POOL.common, 'drop-common', 'from-[#3a3a3a] to-black', 'border-[#6b7280]', 'text-[#d4d4d8]');
       renderDrops(PLAYER_POOL.bronze, 'drop-bronze', 'from-[#4e342e] to-black', 'border-[#8d6e63]', 'text-[#d7ccc8]');
       renderDrops(PLAYER_POOL.silver, 'drop-silver', 'from-[#455a64] to-black', 'border-[#90a4ae]', 'text-[#cfd8dc]');
       renderDrops(PLAYER_POOL.gold, 'drop-gold', 'from-[#827717] to-black', 'border-[#fbc02d]', 'text-[#fff59d]');
       renderDrops(PLAYER_POOL.legend, 'drop-legend', 'from-[#4527a0] to-black', 'border-[#b39ddb]', 'text-[#ede7f6]');
+      renderDrops(PLAYER_POOL.mythic, 'drop-mythic', 'from-[#0c4a6e] to-black', 'border-[#7dd3fc]', 'text-[#e0f2fe]');
+    }
+
+    // Фильтр вкладки ПАКИ: 'all' | 'cheap' | 'expensive'. Каждая карточка пака
+    // помечена атрибутом data-price-group="cheap|expensive" (common/bronze/
+    // silver — дешёвые; gold/legend/mythic — дорогие) — просто скрываем те,
+    // что не подходят под выбранный фильтр, без похода на сервер.
+    function filterPacksByPrice(group) {
+      document.querySelectorAll('.packs-filter-btn').forEach(b => {
+        const active = b.dataset.priceFilter === group;
+        b.classList.toggle('bg-violet-500', active);
+        b.classList.toggle('text-black', active);
+        b.classList.toggle('bg-neutral-800', !active);
+        b.classList.toggle('border', !active);
+        b.classList.toggle('border-neutral-700', !active);
+      });
+      document.querySelectorAll('.pack-card').forEach(card => {
+        const show = group === 'all' || card.dataset.priceGroup === group;
+        card.classList.toggle('hidden', !show);
+      });
     }
 
     // Тапалка полностью удалена по ТЗ — валюта теперь идёт только от
@@ -2924,48 +3378,104 @@
       if (btn) btn.disabled = stadiumPending <= 0;
     }
 
-    // --- Турнирная таблица и соперники ---
-    // Простая "лайт"-лига без полноценного календаря всех клубов друг с
-    // другом: бот-соперники держат фиксированную силу и стартовые очки
-    // (сгенерированы один раз и лежат в localStorage), реально считаются и
-    // обновляются только результаты ИГРОКА. Этого достаточно, чтобы таблица
-    // ощущалась живой (есть кого догонять/от кого отрываться), без имитации
-    // бэкенда целого сезона на клиенте.
-    const LEAGUE_BOTS_SEED = [
-      { id: 'bot1', name: 'Динамо Львов', strength: 74 },
-      { id: 'bot2', name: 'Карпаты', strength: 78 },
-      { id: 'bot3', name: 'Шахтёр U23', strength: 82 },
-      { id: 'bot4', name: 'Металлист', strength: 86 },
-      { id: 'bot5', name: 'Ворскла', strength: 90 },
-      { id: 'bot6', name: 'Заря', strength: 94 },
-      { id: 'bot7', name: 'Полесье', strength: 98 },
+    // --- Пирамида дивизионов, турнирная таблица и соперники ---
+    // Лига теперь не один плоский список ботов, а пирамида из 5 дивизионов:
+    // от низшего любительского до Премьер-лиги. Один сезон = один круг
+    // (каждый бот сыгран по разу), после чего таблица подводится и топ-2
+    // повышаются в дивизион выше, а низ-2 понижаются — ровно как в реальном
+    // футболе. Бот-соперники в рамках сезона держат фиксированную силу и
+    // стартовые очки (сгенерированы один раз и лежат в localStorage),
+    // реально считаются и обновляются только результаты ИГРОКА — этого
+    // достаточно, чтобы таблица ощущалась живой, без имитации бэкенда целого
+    // календаря на клиенте.
+    //
+    // Названия клубов — полностью вымышленные (никаких реальных лиг/клубов
+    // и их брендов), но в узнаваемом английском стиле, как и просили.
+    const CLUB_NAME_POOL = [
+      'Ashwood Rovers', 'Kingsbridge Town', 'Redcliffe United', 'Brackenfield Athletic',
+      'Sterling Harbour FC', 'Whitmoor Wanderers', 'Larkspur City', 'Fenwick Albion',
+      'Oakhaven United', 'Thornbury Rangers', 'Millbrook Town', 'Hartley Dynamos',
+      'Ridgeway Athletic', 'Northgate United', 'Silverdale FC', 'Brightlea Rovers',
+      'Ashford Town', 'Kestrel Park Rangers', 'Copperfield United', 'Draymoor FC',
+      'Ivybridge Athletic', 'Foxhollow United', 'Grayling Town', 'Sandpiper FC',
+      'Elmswood Rangers', 'Bellmont United', 'Cranfield Athletic', 'Rosemere Town',
+      'Wexbury FC', 'Hollow Creek United', 'Dunmore Athletic', 'Ferngate Rovers',
+      'Kingswell FC', 'Marchwood United', 'Staverton Albion',
     ];
+
+    // Фамилии игроков ботов-клубов (те же, что рисуются на 3D-поле) —
+    // сгенерированы отдельно от реального имени пользователя, просто чтобы
+    // поле не пестрело "Игрок 1/Игрок 2" и звучало по-английски.
+    const OPPONENT_SURNAMES = [
+      'Smith', 'Johnson', 'Williams', 'Brown', 'Taylor', 'Davies', 'Wilson', 'Evans',
+      'Thomas', 'Roberts', 'Walker', 'Wright', 'Green', 'Hall', 'Wood', 'Clarke',
+      'Jackson', 'Kelly', 'Owen', 'Cook', 'Bailey', 'Parker', 'Reed', 'Bennett',
+      'Harris', 'Baker', 'Turner', 'Phillips', 'Campbell', 'Mitchell', 'Carter',
+      'Duncan', 'Sharp', 'Hunter', 'Marsh', 'Pearce', 'Fletcher',
+    ];
+
+    // 5 дивизионов от низшего (index 0) до высшего (index DIVISIONS.length-1).
+    // strengthRange задаёт разброс силы ботов в этом дивизионе, rewardMult
+    // масштабирует призовые за матч — в топ-дивизионе играть выгоднее.
+    const DIVISIONS = [
+      { name: 'Регион-Лига', strengthRange: [50, 68], rewardMult: 0.7 },
+      { name: 'Лига Два', strengthRange: [62, 80], rewardMult: 0.85 },
+      { name: 'Лига Один', strengthRange: [74, 92], rewardMult: 1.0 },
+      { name: 'Чемпионшип', strengthRange: [86, 104], rewardMult: 1.3 },
+      { name: 'Премьер-Лига', strengthRange: [98, 120], rewardMult: 1.65 },
+    ];
+    const BOTS_PER_DIVISION = 7; // столько же соперников, сколько туров в сезоне
+    const TOP_PROMOTE_COUNT = 2;
+    const BOTTOM_RELEGATE_COUNT = 2;
+
+    function shuffledPick(pool, count) {
+      const copy = [...pool];
+      for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+      }
+      return copy.slice(0, count);
+    }
+
+    // Генерирует свежий комплект ботов для дивизиона divIdx — используется и
+    // при первом заходе в лигу, и при повышении/понижении между сезонами.
+    function generateDivisionBots(divIdx) {
+      const div = DIVISIONS[divIdx];
+      const names = shuffledPick(CLUB_NAME_POOL, BOTS_PER_DIVISION);
+      const [lo, hi] = div.strengthRange;
+      const bots = names.map((name, i) => ({
+        id: 'bot' + i,
+        name,
+        strength: Math.round(lo + (hi - lo) * (i / (BOTS_PER_DIVISION - 1))),
+        played: Math.floor(Math.random() * 3),
+        wins: 0, draws: 0, losses: 0, gf: 0, ga: 0, pts: 0,
+      }));
+      // Один раз "разыгрываем" ботам стартовую форму между собой, чтобы
+      // таблица не начиналась с одних нулей — чисто косметика.
+      bots.forEach(b => {
+        for (let i = 0; i < b.played; i++) {
+          const r = Math.random();
+          if (r < 0.4) { b.wins++; b.pts += 3; b.gf += 2; b.ga += 1; }
+          else if (r < 0.6) { b.draws++; b.pts += 1; b.gf += 1; b.ga += 1; }
+          else { b.losses++; b.gf += 1; b.ga += 2; }
+        }
+      });
+      return bots;
+    }
 
     function loadLeagueState() {
       let state = JSON.parse(localStorage.getItem('leagueState'));
-      if (!state) {
+      // divIdx/season — обязательные поля новой пирамиды дивизионов; старое
+      // сохранение (плоская лига без дивизионов) мигрируем на дивизион 0,
+      // сохранив только очки/результаты сезона игрока не имеет смысла —
+      // начинаем новый сезон снизу пирамиды.
+      if (!state || typeof state.divIdx !== 'number') {
         state = {
+          divIdx: 0,
           round: 1,
-          bots: LEAGUE_BOTS_SEED.map(b => ({
-            ...b,
-            played: Math.floor(Math.random() * 4),
-          })).map(b => ({
-            ...b,
-            wins: 0, draws: 0, losses: 0, gf: 0, ga: 0,
-            pts: 0,
-          })),
+          bots: generateDivisionBots(0),
           user: { played: 0, wins: 0, draws: 0, losses: 0, gf: 0, ga: 0, pts: 0 },
         };
-        // Один раз "разыгрываем" ботам стартовую форму между собой, чтобы
-        // таблица не начиналась с одних нулей — чисто косметика.
-        state.bots.forEach(b => {
-          for (let i = 0; i < b.played; i++) {
-            const r = Math.random();
-            if (r < 0.4) { b.wins++; b.pts += 3; b.gf += 2; b.ga += 1; }
-            else if (r < 0.6) { b.draws++; b.pts += 1; b.gf += 1; b.ga += 1; }
-            else { b.losses++; b.gf += 1; b.ga += 2; }
-          }
-        });
         localStorage.setItem('leagueState', JSON.stringify(state));
       }
       return state;
@@ -2977,6 +3487,56 @@
 
     function currentOpponent(state) {
       return state.bots[(state.round - 1) % state.bots.length];
+    }
+
+    // Итоговая турнирная таблица дивизиона (боты + пользователь), уже
+    // отсортированная — используется и для отображения, и для подведения
+    // итогов сезона (кто повышается/понижается).
+    function leagueStandings(state) {
+      return [...state.bots.map(b => ({ ...b, isUser: false })),
+              { ...state.user, name: 'Твой клуб', isUser: true }]
+        .sort((a, b) => b.pts - a.pts || (b.gf - b.ga) - (a.gf - a.ga));
+    }
+
+    // Сезон = один круг (каждый бот сыгран по разу). Проверяется после
+    // каждого сыгранного матча (см. finishLeagueMatch) — если сезон окончен,
+    // считаем итоговое место игрока и повышаем/понижаем дивизион, затем
+    // начинаем новый сезон новым комплектом ботов текущего дивизиона.
+    function checkSeasonEnd(state) {
+      if (state.round <= state.bots.length) return null;
+
+      const standings = leagueStandings(state);
+      const userRank = standings.findIndex(r => r.isUser); // 0-based место
+      const total = standings.length;
+      const divIdx = state.divIdx;
+      const divName = DIVISIONS[divIdx].name;
+
+      let outcome, newDivIdx = divIdx;
+      if (userRank < TOP_PROMOTE_COUNT && divIdx < DIVISIONS.length - 1) {
+        outcome = 'promoted';
+        newDivIdx = divIdx + 1;
+      } else if (userRank >= total - BOTTOM_RELEGATE_COUNT && divIdx > 0) {
+        outcome = 'relegated';
+        newDivIdx = divIdx - 1;
+      } else {
+        outcome = 'stayed';
+      }
+
+      const result = {
+        outcome, divName, newDivName: DIVISIONS[newDivIdx].name,
+        userRank: userRank + 1, total, pts: state.user.pts,
+      };
+
+      // Новый сезон: свежий комплект ботов (в старом или новом дивизионе),
+      // очки/статистика игрока обнуляются, тур снова с первого.
+      const freshState = {
+        divIdx: newDivIdx,
+        round: 1,
+        bots: generateDivisionBots(newDivIdx),
+        user: { played: 0, wins: 0, draws: 0, losses: 0, gf: 0, ga: 0, pts: 0 },
+      };
+      saveLeagueState(freshState);
+      return result;
     }
 
     // Сила состава игрока: средний рейтинг заполненных слотов + бонус химии
@@ -2998,62 +3558,297 @@
     function renderLeagueTab() {
       const state = loadLeagueState();
       const opp = currentOpponent(state);
+      const div = DIVISIONS[state.divIdx];
 
-      document.getElementById('league-round').innerText = state.round;
+      document.getElementById('league-round').innerText = `${state.round} / ${state.bots.length}`;
+      document.getElementById('league-division-name').innerText = div.name;
       document.getElementById('league-opponent-name').innerText = opp.name;
       document.getElementById('league-opponent-strength').innerText = `СИЛА ${opp.strength}`;
       updateStadiumWidget();
 
-      const rows = [...state.bots.map(b => ({ ...b, name: b.name, isUser: false })),
-                    { ...state.user, name: 'Твой клуб', isUser: true }]
-        .sort((a, b) => b.pts - a.pts || (b.gf - b.ga) - (a.gf - a.ga));
-
-      document.getElementById('league-table-body').innerHTML = rows.map((r, i) => `
-        <div class="grid grid-cols-[16px_1fr_24px_30px_34px] gap-1 items-center text-[10px] rounded-lg px-1 py-1 ${r.isUser ? 'bg-violet-500/15 border border-violet-500/30 font-black text-violet-300' : 'text-neutral-300'}">
+      const rows = leagueStandings(state);
+      document.getElementById('league-table-body').innerHTML = rows.map((r, i) => {
+        // Зона повышения (топ-2) — зелёная полоска слева, зона понижения
+        // (низ-2) — красная; наглядно показывает, за что игрок борется в
+        // текущем сезоне, ещё до его завершения.
+        let zoneClass = '';
+        if (i < TOP_PROMOTE_COUNT && state.divIdx < DIVISIONS.length - 1) zoneClass = 'border-l-2 border-l-emerald-500';
+        else if (i >= rows.length - BOTTOM_RELEGATE_COUNT && state.divIdx > 0) zoneClass = 'border-l-2 border-l-red-500';
+        return `
+        <div class="grid grid-cols-[16px_1fr_24px_30px_34px] gap-1 items-center text-[10px] rounded-lg px-1 py-1 ${zoneClass} ${r.isUser ? 'bg-violet-500/15 border border-violet-500/30 font-black text-violet-300' : 'text-neutral-300'}">
           <div class="text-neutral-500 font-bold">${i + 1}</div>
           <div class="truncate">${r.name}</div>
           <div class="text-center">${r.played}</div>
           <div class="text-center text-neutral-400">${r.gf - r.ga >= 0 ? '+' : ''}${r.gf - r.ga}</div>
           <div class="text-right font-black">${r.pts}</div>
-        </div>
-      `).join('');
+        </div>`;
+      }).join('');
     }
 
     // --- Матч: тактика -> симуляция с 3D-моментами -> решения по ходу игры
     // (в т.ч. речь в раздевалке на перерыве) -> результат ---
-    const LEAGUE_TACTICS = {
-      gegenpress: { atk: 1.35, def: 0.75, chances: 6 },
-      possession: { atk: 1.05, def: 1.05, chances: 4 },
-      counter:    { atk: 1.15, def: 0.95, chances: 3 },
-      defend:     { atk: 0.7,  def: 1.4,  chances: 3 },
+
+    // Случайный вариант текста из пула — используется везде, где раньше был
+    // один фиксированный лог на исход, чтобы одинаковые решения звучали
+    // по-разному от матча к матчу ("ветки развития событий" каждый раз новые).
+    function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+    // N случайных РАЗНЫХ ключей из пула — используется, чтобы на каждый
+    // игровой момент выпадало 3 варианта из 9 возможных решений (см.
+    // ATTACK_DECISIONS/DEFENSE_DECISIONS), а не одни и те же кнопки каждый раз.
+    function pickN(keys, n) {
+      const copy = [...keys];
+      const out = [];
+      while (out.length < n && copy.length) {
+        out.push(copy.splice(Math.floor(Math.random() * copy.length), 1)[0]);
+      }
+      return out;
+    }
+
+    // Расстановка — второй (независимый от тактики) параметр перед матчем.
+    // Комбинируется с тактикой умножением (см. startLeagueMatch) — то есть
+    // 4-3-3 + Гегенпрессинг даёт совсем другую игру, чем 5-3-2 + Сушить игру.
+    const LEAGUE_FORMATIONS = {
+      f433: { atk: 1.15, def: 0.88, label: '4-3-3', sub: 'Атакующие фланги', desc: 'Больше моментов впереди, дыры на флангах в обороне' },
+      f442: { atk: 1.0,  def: 1.0,  label: '4-4-2',  sub: 'Классика', desc: 'Без явных сильных и слабых сторон' },
+      f352: { atk: 1.12, def: 0.85, label: '3-5-2',  sub: 'Перегруз центра', desc: 'Давим в центре поля, но обороне тяжело без 4-го защитника' },
+      f532: { atk: 0.78, def: 1.32, label: '5-3-2',  sub: 'Автобус', desc: 'Играем от обороны, впереди почти пусто' },
     };
+
+    // Спред тактик заметно расширен (было atk 0.7–1.35) — чтобы выбор ДО
+    // матча уже ощутимо решал игру, а не был косметикой.
+    const LEAGUE_TACTICS = {
+      gegenpress: { atk: 1.4,  def: 0.68, chances: 6, label: '🔥🔥 Гегенпрессинг', sub: 'риск, много моментов', color: 'bg-red-700' },
+      possession: { atk: 1.05, def: 1.08, chances: 4, label: '⚽ Контроль мяча', sub: 'стабильно, без риска', color: 'bg-sky-500 text-black' },
+      counter:    { atk: 1.2,  def: 0.9,  chances: 3, label: '🎯 Контратаки', sub: 'моментов мало, но метко', color: 'bg-orange-600' },
+      defend:     { atk: 0.62, def: 1.5,  chances: 3, label: '🛡️ Сушить игру', sub: 'надёжно, меньше голов', color: 'bg-blue-600' },
+    };
+
+    // ---------- Momentum ("кураж"/"надлом") — то самое "1-2 решения меняют
+    // ход матча": смелый выбор, сыгравший или провалившийся, качает шкалу
+    // на 2 СЛЕДУЮЩИХ момента (не на весь тайм, как речь в раздевалке — это
+    // короткий, но резкий всплеск, а не фон). Момент "тратит" 1 деление
+    // окна при розыгрыше (см. playNextMoment), так что эффект реально живёт
+    // ровно 2 следующих опасных момента и потом сходит на нет.
+    function applyMomentum(ctx, atk, def, duration, log) {
+      ctx.momentum = { atk, def, remaining: duration };
+      ctx.lastMomentumLog = log;
+    }
+    function momentumMults(ctx) {
+      const active = ctx.momentum && ctx.momentum.remaining > 0;
+      return { atk: active ? ctx.momentum.atk : 1, def: active ? ctx.momentum.def : 1 };
+    }
+
+    const MOMENTUM_LOG = {
+      riskyGoalIn: () => pick([
+        '🔥 Команда поймала кураж после этого гола — следующие моменты острее!',
+        '🚀 Волна эмоций после гола — партнёры играют смелее!',
+        '⚡ Трибуны взорвались — команда летит вперёд на кураже!',
+      ]),
+      riskyGoalOut: () => pick([
+        '😞 Смазанный момент подкосил уверенность — следующие атаки будут вязче.',
+        '🥶 Команда поникла после промаха — игра разладилась.',
+        '💭 Тренер за бровкой хватается за голову — концентрация просела.',
+      ]),
+      pressWinBoost: () => pick([
+        '🔥 Жёсткий отбор поднял всю команду — и вперёд, и назад сейчас мощнее!',
+        '⚡ После такого отбора всё поле забегало быстрее!',
+        '💪 Команда почувствовала кровь — сейчас самое время дожимать!',
+      ]),
+      pressLossPenalty: () => pick([
+        '😰 Оборона дрогнула после неудачного отбора — жди новых атак соперника.',
+        '🚨 Линия обороны рассыпалась — задняя часть поля в смятении.',
+        '🥵 Паника в штрафной — следующие атаки соперника опаснее.',
+      ]),
+      refereeCardPenalty: () => pick([
+        '🟨 После карточки команда играет нервно — концентрация просела.',
+        '😤 Судейский спор выбил из колеи — минуту-две будет тяжело.',
+      ]),
+      refereeWinBoost: () => pick([
+        '🎉 Пересмотр решения в нашу пользу окрылил команду!',
+        '🙌 Победа над судьёй подняла боевой дух!',
+      ]),
+    };
+
 
     // Речь в раздевалке на перерыве: модификаторы действуют только на второй
     // тайм (moment.minute >= 45) поверх уже выбранной перед матчем тактики.
     const HALFTIME_SPEECHES = {
-      fire:   { atk: 1.25, def: 0.9,  log: '🔥 Ты встряхнул раздевалку — команда летит вперёд, но сзади дыра.' },
-      calm:   { atk: 1.08, def: 1.1,  log: '🧠 Спокойный разбор ошибок — команда играет собраннее по всем фазам.' },
-      defend: { atk: 0.9,  def: 1.3,  log: '🛡 Жёсткий разнос за оборону — сзади надёжно, но остроты впереди меньше.' },
+      fire:   { atk: 1.4,  def: 0.82, log: '🔥 Ты встряхнул раздевалку — команда летит вперёд, но сзади дыра.' },
+      calm:   { atk: 1.1,  def: 1.12, log: '🧠 Спокойный разбор ошибок — команда играет собраннее по всем фазам.' },
+      defend: { atk: 0.85, def: 1.4,  log: '🛡 Жёсткий разнос за оборону — сзади надёжно, но остроты впереди меньше.' },
+      allin:  { atk: 1.85, def: 0.42, log: '🎲 Ва-банк! Все вперёд — либо отыграемся, либо влетим ещё больше.' },
+      park:   { atk: 0.42, def: 1.8,  log: '🚌 "Автобус" у своих ворот — тащим счёт любой ценой.' },
       skip:   { atk: 1,    def: 1,    log: 'Ты промолчал в перерыве — команда играет по инерции первого тайма.' },
     };
 
-    // Решение перед ударом на СВОИХ опасных моментах.
+    // Какие варианты речи показать — зависит от счёта на перерыве, это и
+    // есть "разные ситуации => разные решения": отстающим доступен рискованный
+    // ва-банк, ведущим — глухая оборона, при ничьей — только базовые 3.
+    function halftimeSpeechOptions(ctx) {
+      const diff = ctx.scoreUser - ctx.scoreOpp;
+      const base = ['fire', 'calm', 'defend'];
+      if (diff <= -2) return ['allin', ...base]; // горим — открывается отчаянный вариант
+      if (diff >= 2) return [...base, 'park'];   // комфортно ведём — открывается "автобус"
+      return base;
+    }
+
+    // Решение перед ударом на СВОИХ опасных моментах — 3 варианта с разным
+    // риском/наградой. Спред расширен (было 0.82/1.0/1.18) — риск теперь
+    // реально РИСК, а не лёгкий нюанс.
+    // 9 вариантов решения на СВОЁМ опасном моменте — каждый матч на конкретный
+    // момент выпадает 3 случайных из этих 9 (см. showAttackDecision/pickN),
+    // так что даже одинаковая ситуация каждый раз выглядит по-разному.
+    // risk (1-3) определяет силу momentum-качели при успехе/провале (см.
+    // attackMomentumFor) — чем рискованнее решение, тем сильнее оно может
+    // качнуть ход матча в 1-2 следующих моментах.
     const ATTACK_DECISIONS = {
-      risky: { chanceMult: 0.82, bonus: 25, log: (goal) => goal ? '🔥 Ударил с ходу — и это шедевр!' : '🔥 Пробил с ходу — не хватило точности.' },
-      safe:  { chanceMult: 1.18, bonus: 0,  log: (goal) => goal ? '🎯 Хладнокровно докатил в угол — гол!' : '🎯 Пробил наверняка, но вратарь спас.' },
+      safe:    { emoji: '🎯', label: 'Обработать и пробить наверняка', desc: 'выше шанс гола, без бонуса', color: 'bg-sky-500 text-black',
+        chanceMult: 1.15, bonus: 0, risk: 1,
+        log: (g) => g ? pick(['🎯 Хладнокровно докатил в угол — гол!', '🎯 Спокойно, без суеты — и это гол.']) : pick(['🎯 Пробил наверняка, но вратарь спас.', '🎯 Целил в угол — вратарь дотянулся в шпагате.']) },
+      pass:    { emoji: '🎁', label: 'Отдать на свободного партнёра', desc: 'средний шанс, небольшой бонус в любом случае', color: 'bg-violet-600 text-white',
+        chanceMult: 1.0, bonus: 12, risk: 1,
+        log: (g) => g ? pick(['🎁 Отдал на партнёра — и тот не подвёл, гол!', '🎁 Красивая комбинация — и партнёр забивает!']) : pick(['🎁 Отдал на партнёра — тот пробил, но не забил.', '🎁 Пас нашёл партнёра, но удар получился слабым.']) },
+      cutback: { emoji: '↩️', label: 'Прострел низом на набегающего', desc: 'чуть выше шанс, небольшой бонус', color: 'bg-teal-600 text-white',
+        chanceMult: 1.05, bonus: 10, risk: 1,
+        log: (g) => g ? pick(['↩️ Прострел низом — партнёр закатывает в пустой угол!', '↩️ Точная передача поперёк — гол первым касанием!']) : pick(['↩️ Прострел прошёл через всю штрафную — никто не успел.', '↩️ Защитник в последний момент выбил мяч на угловой.']) },
+      oneTwo:  { emoji: '🔁', label: 'Розыгрыш в стенку', desc: 'риск средний, бонус за красивый гол', color: 'bg-indigo-600 text-white',
+        chanceMult: 0.9, bonus: 18, risk: 2,
+        log: (g) => g ? pick(['🔁 Стенка сработала идеально — гол в касание!', '🔁 Быстрый розыгрыш разрезал оборону — красавец!']) : pick(['🔁 Стенка не получилась — оборона перестроилась.', '🔁 Партнёр не успел вернуть пас — момент упущен.']) },
+      header:  { emoji: '🙆', label: 'Удар головой после навеса', desc: 'риск средний, приличный бонус', color: 'bg-fuchsia-600 text-white',
+        chanceMult: 0.95, bonus: 15, risk: 2,
+        log: (g) => g ? pick(['🙆 Навес — и удар головой точно в угол!', '🙆 Выше всех на подборе — и гол головой!']) : pick(['🙆 Навес был отличным, но пробил над перекладиной.', '🙆 Вратарь в кулаках забрал мяч над головами.']) },
+      dribble: { emoji: '💃', label: 'Обыграть один в один финтом', desc: 'риск выше среднего, солидный бонус', color: 'bg-rose-600 text-white',
+        chanceMult: 0.75, bonus: 28, risk: 2,
+        log: (g) => g ? pick(['💃 Обыграл защитника финтом — и хладнокровно забил!', '💃 Финт корпусом — защитник упал, гол!']) : pick(['💃 Финт не прошёл — мяч выбили в подкате.', '💃 Обыграл одного, но зацепился о второго защитника.']) },
+      risky:   { emoji: '🔥', label: 'Бить с ходу, без подготовки', desc: 'ниже шанс, зато крупный бонус, если влетит', color: 'bg-orange-600 text-white',
+        chanceMult: 0.68, bonus: 35, risk: 3,
+        log: (g) => g ? pick(['🔥 Ударил с ходу — и это шедевр!', '🔥 Не глядя, с лёту — и мяч в сетке!!', '🔥 Дерзкий удар без подготовки — и вратарь бессилен!']) : pick(['🔥 Пробил с ходу — не хватило точности.', '🔥 Замах был знатный, но мяч ушёл выше ворот.', '🔥 Слишком поспешил — вратарь даже не шелохнулся.']) },
+      chip:    { emoji: '🪄', label: 'Подрезать мяч над вратарём', desc: 'рискованно, но крупный бонус за дерзость', color: 'bg-amber-600 text-black',
+        chanceMult: 0.7, bonus: 30, risk: 3,
+        log: (g) => g ? pick(['🪄 Дерзкая "свеча" — вратарь и не пытался достать!', '🪄 Подрезал через голкипера — гол мечты!']) : pick(['🪄 "Свеча" ушла выше перекладины — слишком дерзко.', '🪄 Вратарь в последний момент дотянулся кончиками пальцев.']) },
+      longshot:{ emoji: '💥', label: 'Удар издали, со всей силы', desc: 'самый низкий шанс, зато самый крупный бонус', color: 'bg-red-700 text-white',
+        chanceMult: 0.55, bonus: 45, risk: 3,
+        log: (g) => g ? pick(['💥 Разряд с 25 метров — вратарь даже не шевельнулся!', '💥 Мяч влетел в девятку — невероятный гол!']) : pick(['💥 Прогремело выше перекладины — до трибун.', '💥 Мощно, но неточно — мяч в аут.']) },
+    };
+
+    // 9 вариантов на ОПАСНОМ моменте соперника — риск здесь означает риск
+    // при попытке остановить атаку, а не риск для гола. chanceMult множит
+    // ШАНС СОПЕРНИКА забить (ниже = надёжнее). Спред расширен, как и в атаке.
+    const DEFENSE_DECISIONS = {
+      hold:        { emoji: '🧊', label: 'Сохранять позицию', desc: 'надёжнее, без риска, без бонуса', color: 'bg-sky-500 text-black',
+        chanceMult: 0.82, bonus: 0, risk: 1,
+        log: (c) => c ? pick(['🧊 Аккуратно держали позицию — но пробили точно в угол.', '🧊 Сохраняли структуру — но удар получился неберущимся.']) : pick(['🧊 Хладнокровно разрушили атаку, оборона на месте.', '🧊 Не полезли в отбор — и момент прошёл мимо, атака захлебнулась.']) },
+      coverZone:   { emoji: '📐', label: 'Страховать зону', desc: 'надёжно, небольшой бонус за перехват', color: 'bg-cyan-600 text-white',
+        chanceMult: 0.9, bonus: 8, risk: 1,
+        log: (c) => c ? pick(['📐 Зону держали, но соперник нашёл щель.', '📐 Позиционно всё верно — но удар получился точным.']) : pick(['📐 Грамотная страховка — перехватили передачу!', '📐 Закрыли зону — соперник не нашёл продолжения.']) },
+      wall:        { emoji: '🧱', label: 'Выстроить стенку', desc: 'надёжно перед ударом, небольшой бонус', color: 'bg-blue-700 text-white',
+        chanceMult: 0.75, bonus: 5, risk: 1,
+        log: (c) => c ? pick(['🧱 Стенка была, но мяч перелетел через неё.', '🧱 Пробили в угол мимо стенки.']) : pick(['🧱 Стенка накрыла удар намертво!', '🧱 Мяч влетел прямо в стенку — атака погашена.']) },
+      foul:        { emoji: '✋', label: 'Тактический фол на подступах', desc: 'средний риск, атака гасится сразу', color: 'bg-slate-600 text-white',
+        chanceMult: 0.7, bonus: 0, risk: 2,
+        log: (c) => c ? pick(['✋ Фол не помог — со штрафного забили точно в угол.', '✋ Остановили атаку фолом, но штрафной оказался точным.']) : pick(['✋ Тактический фол погасил быструю атаку соперника.', '✋ Прервали контратаку вовремя — угрозы больше нет.']) },
+      doubleTeam:  { emoji: '👥', label: 'Вдвоём прессинговать нападающего', desc: 'риск средний, солидный бонус за отбор', color: 'bg-emerald-600 text-white',
+        chanceMult: 0.65, bonus: 15, risk: 2,
+        log: (c) => c ? pick(['👥 Вдвоём не удержали — нападающий вырвался и забил.', '👥 Слишком высоко прессинговали — за спиной образовалась дыра.']) : pick(['👥 Задавили вдвоём — мяч наш, контратака!', '👥 Взяли в "коробочку" — нападающий потерял мяч.']) },
+      keeperOut:   { emoji: '🧤', label: 'Вратарь идёт на выход', desc: 'риск повыше, хороший бонус за смелость', color: 'bg-lime-600 text-black',
+        chanceMult: 1.1, bonus: 22, risk: 2,
+        log: (c) => c ? pick(['🧤 Вратарь вышел — и не успел, гол в пустые ворота почти.', '🧤 Смело пошёл на выход — но нападающий перекинул его.']) : pick(['🧤 Смелый выход вратаря — забрал мяч на ногах у форварда!', '🧤 Вратарь сыграл на опережение — атака погашена в зародыше.']) },
+      press:       { emoji: '🔥', label: 'Идти в жёсткий отбор', desc: 'выше риск, но бонус и контратака при успехе', color: 'bg-orange-600 text-white',
+        chanceMult: 1.35, bonus: 20, risk: 3,
+        log: (c) => c ? pick(['🔥 Пошли в жёсткий отбор — не устояли, гол соперника.', '🔥 Прессинг не сработал — соперник наказал за дыру в обороне.']) : pick(['🔥 Агрессивный отбор сработал! Мяч у нас — контратака.', '🔥 Выиграли единоборство в стык — и сразу вперёд!']) },
+      slide:       { emoji: '🛝', label: 'Подкат в последний момент', desc: 'очень рискованно, крупный бонус при удаче', color: 'bg-red-700 text-white',
+        chanceMult: 1.5, bonus: 30, risk: 3,
+        log: (c) => c ? pick(['🛝 Подкат мимо мяча — соперник забивает в пустые ворота почти.', '🛝 Не достали до мяча — верный гол соперника.']) : pick(['🛝 Идеальный подкат в последний момент — мяч в отбой!', '🛝 Вынесли мяч почти с линии ворот в подкате!']) },
+      offsideTrap: { emoji: '🚩', label: 'Сыграть на искусственный офсайд', desc: 'самый рискованный вариант — либо офсайд, либо голая штрафная', color: 'bg-fuchsia-700 text-white',
+        chanceMult: 0.55, bonus: 25, risk: 3,
+        log: (c) => c ? pick(['🚩 Ловушка не сработала — нападающий один на один и забивает.', '🚩 Линия вышла слишком рано — судья гол засчитал.']) : pick(['🚩 Идеальный офсайд — фиксируют, атака отменена!', '🚩 Ловушка сработала — свисток, вне игры!']) },
+    };
+
+    // Спорный момент судьи — отдельный от гол/не-гол ТИП события. У решения
+    // есть эффект на весь остаток матча (жёлтая карточка бьёт по обороне),
+    // а не только на текущий момент.
+    const REFEREE_EVENT_CHANCE = 0.35; // с такой вероятностью один из моментов заменяется на споный эпизод
+    function resolveRefereeEvent(key, ctx) {
+      if (key === 'argue') {
+        const reversed = Math.random() < 0.35;
+        if (reversed) {
+          ctx.bonusReward += 20;
+          applyMomentum(ctx, 1.2, 1.1, 2, MOMENTUM_LOG.refereeWinBoost());
+          return { log: pick([
+            '😤 Качнул права — и судья реально пересмотрел решение в нашу пользу! (+20 🪙)',
+            '😤 Спор дошёл до ВАР — и решение изменили в нашу пользу! (+20 🪙)',
+          ]), penalty: false };
+        }
+        // Не повезло — жёлтая карточка ослабляет оборону до конца матча
+        // (постоянный эффект) + короткий провал концентрации (моментум).
+        ctx.halfMods = ctx.halfMods || { atk: 1, def: 1 };
+        ctx.halfMods.def *= 0.85;
+        ctx.refereePenalty = true;
+        applyMomentum(ctx, 0.9, 0.8, 2, MOMENTUM_LOG.refereeCardPenalty());
+        return { log: pick([
+          '🟨 Судья не оценил — жёлтая карточка, оборона слабее до конца матча.',
+          '🟨 Арбитр разозлился на спор — карточка, и держаться сзади стало тяжелее.',
+        ]), penalty: true };
+      }
+      return { log: pick([
+        '🤐 Принял решение молча — матч продолжается без последствий.',
+        '🤐 Смолчал и вернулся в игру — никаких последствий.',
+      ]), penalty: false };
+    }
+
+    // Ситуативные варианты речи — по контексту показываются только 3 базовых,
+    // либо +1 экстремальный (ва-банк/автобус), см. halftimeSpeechOptions().
+    const SPEECH_UI = {
+      fire:   { emoji: '🔥', title: 'Встряхнуть эмоционально', desc: 'сильно больше остроты впереди, риск в обороне', color: 'bg-red-700' },
+      calm:   { emoji: '🧠', title: 'Спокойно разобрать ошибки', desc: 'небольшой плюс и к атаке, и к обороне', color: 'bg-sky-600' },
+      defend: { emoji: '🛡', title: 'Жёстко потребовать надёжности', desc: 'сильно больше надёжности сзади, меньше остроты впереди', color: 'bg-blue-800' },
+      allin:  { emoji: '🎲', title: 'Играть ва-банк', desc: 'огромный плюс к атаке, оборона почти открыта — отыгрываемся или проигрываем крупно', color: 'bg-fuchsia-700' },
+      park:   { emoji: '🚌', title: 'Поставить автобус', desc: 'огромный плюс к обороне, атака почти не работает — тащим счёт', color: 'bg-neutral-700' },
     };
 
     let leagueMatchCtx = null; // текущее состояние розыгрыша матча
+    let leagueSelectedFormation = 'f433';
+    let leagueSelectedTactic = 'gegenpress';
+
+    // Рисует обе сетки выбора (расстановка + тактика) с подсветкой текущего
+    // выбора — вызывается при открытии экрана и при каждом клике по кнопке.
+    function renderLeagueTacticStep() {
+      const fGrid = document.getElementById('league-formation-grid');
+      fGrid.innerHTML = Object.entries(LEAGUE_FORMATIONS).map(([key, f]) => {
+        const active = key === leagueSelectedFormation;
+        return `<button onclick="selectLeagueFormation('${key}')" class="${active ? 'bg-violet-500 text-black ring-2 ring-violet-300' : 'bg-neutral-800 text-neutral-300'} font-black py-2 rounded-xl text-[10px] leading-tight text-left px-2.5">${f.label}<br><span class="font-normal opacity-80">${f.sub}</span></button>`;
+      }).join('');
+
+      const tGrid = document.getElementById('league-tactic-grid');
+      tGrid.innerHTML = Object.entries(LEAGUE_TACTICS).map(([key, t]) => {
+        const active = key === leagueSelectedTactic;
+        return `<button onclick="selectLeagueTactic('${key}')" class="${t.color} font-black py-2 rounded-xl text-[10px] leading-tight text-left px-2.5 ${active ? 'ring-2 ring-white' : 'opacity-60'}">${t.label}<br><span class="font-normal opacity-80">${t.sub}</span></button>`;
+      }).join('');
+
+      const f = LEAGUE_FORMATIONS[leagueSelectedFormation];
+      const t = LEAGUE_TACTICS[leagueSelectedTactic];
+      document.getElementById('league-combo-hint').innerText = `${f.label} + ${t.label.replace(/^\S+\s?/, '')}: ${f.desc}`;
+    }
+
+    function selectLeagueFormation(key) { leagueSelectedFormation = key; renderLeagueTacticStep(); }
+    function selectLeagueTactic(key) { leagueSelectedTactic = key; renderLeagueTacticStep(); }
+
+    function confirmStartLeagueMatch() {
+      startLeagueMatch(leagueSelectedTactic, leagueSelectedFormation);
+    }
 
     function openLeagueMatch() {
       const state = loadLeagueState();
       const opp = currentOpponent(state);
       document.getElementById('league-tactic-opponent').innerText = opp.name;
+      renderLeagueTacticStep();
       document.getElementById('league-tactic-step').classList.remove('hidden');
       document.getElementById('league-live-step').classList.add('hidden');
       document.getElementById('league-result-step').classList.add('hidden');
       document.getElementById('halftime-modal').classList.add('hidden');
       document.getElementById('attack-decision-modal').classList.add('hidden');
+      document.getElementById('defense-decision-modal').classList.add('hidden');
+      document.getElementById('referee-event-modal').classList.add('hidden');
       document.getElementById('league-match-modal').classList.remove('hidden');
     }
 
@@ -3064,12 +3859,15 @@
       renderLeagueTab();
     }
 
-    function startLeagueMatch(tacticKey) {
+    function startLeagueMatch(tacticKey, formationKey) {
       const state = loadLeagueState();
       const opp = currentOpponent(state);
       const tactic = LEAGUE_TACTICS[tacticKey];
-      const myStrength = userTeamStrength() * tactic.atk;
-      const oppStrength = opp.strength * (2 - tactic.def) * 0.9;
+      const formation = LEAGUE_FORMATIONS[formationKey] || LEAGUE_FORMATIONS.f442;
+      // Расстановка и тактика перемножаются — независимые оси одного и того
+      // же выбора "как играем", каждая со своим atk/def весом.
+      const myStrength = userTeamStrength() * tactic.atk * formation.atk;
+      const oppStrength = opp.strength * (2 - tactic.def) * (2 - formation.def) * 0.9;
 
       // Генерируем список ключевых моментов матча: у кого чаще будут шансы,
       // определяется соотношением сил. Сам исход (гол/мимо) теперь считается
@@ -3087,9 +3885,10 @@
       moments.sort((a, b) => a.minute - b.minute);
 
       leagueMatchCtx = {
-        state, opp, moments, idx: 0, scoreUser: 0, scoreOpp: 0, tacticKey,
+        state, opp, moments, idx: 0, scoreUser: 0, scoreOpp: 0, tacticKey, formationKey,
         myStrength, oppStrength,
         halfMods: { atk: 1, def: 1 }, halftimeShown: false,
+        momentum: { atk: 1, def: 1, remaining: 0 }, lastMomentumLog: null,
         bonusReward: 0,
       };
 
@@ -3104,11 +3903,16 @@
     }
 
     // Шанс гола на конкретный момент — считается "вживую" (не заранее), с
-    // учётом модификаторов, выставленных речью в раздевалке для второго тайма.
+    // учётом модификаторов речи в раздевалке (на весь 2-й тайм) И momentum
+    // (короткий 2-моментный всплеск/провал от смелых решений по ходу игры —
+    // см. applyMomentum). Оба множителя складываются в один общий коэффициент.
     function computeScoreChance(m, ctx) {
       const half2 = m.minute >= 45;
-      const atkMod = half2 ? ctx.halfMods.atk : 1;
-      const defMod = half2 ? ctx.halfMods.def : 1;
+      const speechAtk = half2 ? ctx.halfMods.atk : 1;
+      const speechDef = half2 ? ctx.halfMods.def : 1;
+      const mom = momentumMults(ctx);
+      const atkMod = speechAtk * mom.atk;
+      const defMod = speechDef * mom.def;
       const attackerStrength = m.side === 'user' ? ctx.myStrength * atkMod : ctx.oppStrength;
       const defenderStrength = m.side === 'user' ? ctx.oppStrength : ctx.myStrength * defMod;
       return attackerStrength / (attackerStrength + defenderStrength * 1.15);
@@ -3132,18 +3936,55 @@
       ctx.idx++;
       document.getElementById('league-live-clock').innerText = `${m.minute}'`;
       m.scoreChance = computeScoreChance(m, ctx);
+      // Момент "тратит" одно деление окна momentum — эффект живёт ровно N
+      // следующих опасных моментов, а не до конца тайма.
+      if (ctx.momentum && ctx.momentum.remaining > 0) ctx.momentum.remaining--;
+
+      // Один раз за матч обычный момент может смениться спорным решением
+      // судьи — отдельный тип события, не завязанный на голы вообще.
+      if (!ctx.refereeEventUsed && Math.random() < REFEREE_EVENT_CHANCE) {
+        ctx.refereeEventUsed = true;
+        ctx.pendingMoment = m;
+        SoundFX.whistle();
+        document.getElementById('referee-event-minute').innerText = `${m.minute}'`;
+        document.getElementById('referee-event-modal').classList.remove('hidden');
+        return;
+      }
 
       if (m.side === 'user') {
         showAttackDecision(m);
       } else {
-        m.isGoal = Math.random() < m.scoreChance;
-        runMomentAnimation(m);
+        showDefenseDecision(m);
       }
+    }
+
+    function chooseRefereeEvent(key) {
+      const ctx = leagueMatchCtx;
+      if (!ctx || !ctx.pendingMoment) return;
+      const m = ctx.pendingMoment;
+      ctx.pendingMoment = null;
+      document.getElementById('referee-event-modal').classList.add('hidden');
+
+      const result = resolveRefereeEvent(key, ctx);
+      const logEl = document.getElementById('league-moment-log');
+      logEl.className = 'p-3 text-[11px] min-h-[42px] text-center font-bold flex items-center justify-center text-amber-400';
+      logEl.innerText = result.log;
+      // Сам момент, на который наложился спор судьи, доигрывается как обычно
+      // после короткой паузы — эффект (жёлтая карточка) уже применён выше.
+      setTimeout(() => {
+        if (m.side === 'user') showAttackDecision(m); else showDefenseDecision(m);
+      }, 900);
     }
 
     function showHalftimeSpeech() {
       const ctx = leagueMatchCtx;
+      SoundFX.whistle();
       document.getElementById('halftime-score').innerText = `${ctx.scoreUser} : ${ctx.scoreOpp}`;
+      const optionsEl = document.getElementById('halftime-speech-options');
+      optionsEl.innerHTML = halftimeSpeechOptions(ctx).map(key => {
+        const ui = SPEECH_UI[key];
+        return `<button onclick="chooseHalftimeSpeech('${key}')" class="${ui.color} text-white font-black py-2.5 rounded-xl text-[11px] text-left px-3">${ui.emoji} ${ui.title}<br><span class="font-normal opacity-80 text-[9px]">${ui.desc}</span></button>`;
+      }).join('');
       document.getElementById('halftime-modal').classList.remove('hidden');
     }
 
@@ -3161,8 +4002,27 @@
 
     function showAttackDecision(m) {
       document.getElementById('attack-decision-minute').innerText = `${m.minute}' · твоя команда выходит один на один с обороной`;
+      const keys = pickN(Object.keys(ATTACK_DECISIONS), 3);
+      document.getElementById('attack-decision-options').innerHTML = keys.map(k => {
+        const d = ATTACK_DECISIONS[k];
+        return `<button onclick="chooseAttackDecision('${k}')" class="${d.color} font-black py-2.5 rounded-xl text-[11px] text-left px-3">${d.emoji} ${d.label}<br><span class="font-normal opacity-80 text-[9px]">${d.desc}</span></button>`;
+      }).join('');
       document.getElementById('attack-decision-modal').classList.remove('hidden');
       leagueMatchCtx.pendingMoment = m;
+    }
+
+    // Момент качели по уровню риска решения: risk1 — без эффекта (надёжный
+    // выбор должен оставаться надёжным), risk2 — умеренный всплеск/провал на
+    // 1 следующий момент, risk3 — крупный всплеск/провал на 2 момента. Так
+    // "1-2 смелых решения" реально способны развернуть матч, а безопасная
+    // игра остаётся безопасной и предсказуемой.
+    function attackMomentumFor(risk, goal) {
+      if (risk < 2) return null;
+      const mag = risk === 3 ? 0.35 : 0.16;
+      const dur = risk === 3 ? 2 : 1;
+      return goal
+        ? { atk: 1 + mag, def: 1, dur, log: MOMENTUM_LOG.riskyGoalIn() }
+        : { atk: 1 - mag * 0.6, def: 1, dur, log: MOMENTUM_LOG.riskyGoalOut() };
     }
 
     function chooseAttackDecision(key) {
@@ -3179,6 +4039,50 @@
         ctx.bonusReward += decision.bonus;
         m.bonus = decision.bonus;
       }
+      const mom = attackMomentumFor(decision.risk, m.isGoal);
+      if (mom) applyMomentum(ctx, mom.atk, mom.def, mom.dur, mom.log);
+      runMomentAnimation(m);
+    }
+
+    function showDefenseDecision(m) {
+      document.getElementById('defense-decision-minute').innerText = `${m.minute}' · соперник входит в нашу штрафную`;
+      const keys = pickN(Object.keys(DEFENSE_DECISIONS), 3);
+      document.getElementById('defense-decision-options').innerHTML = keys.map(k => {
+        const d = DEFENSE_DECISIONS[k];
+        return `<button onclick="chooseDefenseDecision('${k}')" class="${d.color} font-black py-2.5 rounded-xl text-[11px] text-left px-3">${d.emoji} ${d.label}<br><span class="font-normal opacity-80 text-[9px]">${d.desc}</span></button>`;
+      }).join('');
+      document.getElementById('defense-decision-modal').classList.remove('hidden');
+      leagueMatchCtx.pendingMoment = m;
+    }
+
+    function defenseMomentumFor(risk, conceded) {
+      if (risk < 2) return null;
+      const mag = risk === 3 ? 0.3 : 0.15;
+      const dur = risk === 3 ? 2 : 1;
+      return !conceded
+        ? { atk: 1 + mag * 0.7, def: 1 + mag, dur, log: MOMENTUM_LOG.pressWinBoost() }
+        : { atk: 1, def: 1 - mag * 0.8, dur, log: MOMENTUM_LOG.pressLossPenalty() };
+    }
+
+    function chooseDefenseDecision(key) {
+      const ctx = leagueMatchCtx;
+      if (!ctx || !ctx.pendingMoment) return;
+      const m = ctx.pendingMoment;
+      ctx.pendingMoment = null;
+      document.getElementById('defense-decision-modal').classList.add('hidden');
+
+      const decision = DEFENSE_DECISIONS[key];
+      // Тут "chanceMult" применяется к шансу СОПЕРНИКА забить — риск в защите
+      // работает наоборот по сравнению с риском в атаке.
+      m.isGoal = Math.random() < m.scoreChance * decision.chanceMult;
+      m.decisionLog = decision.log(m.isGoal);
+      if (!m.isGoal && decision.bonus) {
+        // Успешный жёсткий отбор — бонус (как перехваченная контратака).
+        ctx.bonusReward += decision.bonus;
+        m.bonus = decision.bonus;
+      }
+      const mom = defenseMomentumFor(decision.risk, m.isGoal);
+      if (mom) applyMomentum(ctx, mom.atk, mom.def, mom.dur, mom.log);
       runMomentAnimation(m);
     }
 
@@ -3188,15 +4092,26 @@
         if (m.isGoal) {
           if (m.side === 'user') ctx.scoreUser++; else ctx.scoreOpp++;
           document.getElementById('league-live-score').innerText = `${ctx.scoreUser} : ${ctx.scoreOpp}`;
+          SoundFX.goal();
+        } else {
+          SoundFX.miss();
         }
         const logEl = document.getElementById('league-moment-log');
+        const momentumLine = ctx.lastMomentumLog
+          ? `<div class="text-[9px] text-amber-400 font-bold mt-1">${ctx.lastMomentumLog}</div>` : '';
+        ctx.lastMomentumLog = null;
         if (m.side === 'user') {
-          logEl.className = 'p-3 text-[11px] min-h-[42px] text-center font-bold flex items-center justify-center text-emerald-400';
-          const base = m.isGoal ? `⚽ ${m.minute}' ГОЛ! Твоя команда забивает!` : `${m.minute}' Момент — не забили.`;
-          logEl.innerText = m.decisionLog ? `${base} ${m.bonus ? `(+${m.bonus} 🪙 бонус риска)` : ''}`.trim() : base;
+          logEl.className = 'p-3 text-[11px] min-h-[42px] text-center font-bold flex flex-col items-center justify-center text-emerald-400';
+          const base = m.isGoal
+            ? pick([`⚽ ${m.minute}' ГОЛ! Забивает ${m.scorerName || 'наш игрок'}!`, `⚽ ${m.minute}' Есть гол! ${m.scorerName || 'Наш игрок'} не оставил шанса вратарю!`, `⚽ ${m.minute}' ${m.scorerName || 'Наш игрок'} забивает — трибуны в восторге!`])
+            : pick([`${m.minute}' Момент — не забили.`, `${m.minute}' Момент есть, гола нет.`, `${m.minute}' Опасно, но не получилось.`]);
+          logEl.innerHTML = (m.decisionLog ? `${base} ${m.bonus ? `(+${m.bonus} 🪙 бонус риска)` : ''}`.trim() : base) + momentumLine;
         } else {
-          logEl.className = 'p-3 text-[11px] min-h-[42px] text-center font-bold flex items-center justify-center text-red-400';
-          logEl.innerText = m.isGoal ? `⚽ ${m.minute}' Гол соперника...` : `${m.minute}' Соперник бил мимо.`;
+          logEl.className = 'p-3 text-[11px] min-h-[42px] text-center font-bold flex flex-col items-center justify-center text-red-400';
+          const base = m.isGoal
+            ? pick([`⚽ ${m.minute}' Гол соперника! Забивает ${m.scorerName || 'игрок соперника'}.`, `⚽ ${m.minute}' Соперник наказывает — гол.`, `⚽ ${m.minute}' ${m.scorerName || 'Игрок соперника'} не простил ошибку в обороне.`])
+            : pick([`${m.minute}' Соперник бил мимо.`, `${m.minute}' Опасность миновала.`, `${m.minute}' Соперник не смог реализовать момент.`]);
+          logEl.innerHTML = (m.decisionLog ? `${base} ${m.bonus ? `(+${m.bonus} 🪙 бонус за отбор)` : ''}`.trim() : base) + momentumLine;
         }
         setTimeout(playNextMoment, 700);
       });
@@ -3207,17 +4122,20 @@
       const ctx = leagueMatchCtx;
       document.getElementById('halftime-modal').classList.add('hidden');
       document.getElementById('attack-decision-modal').classList.add('hidden');
+      document.getElementById('defense-decision-modal').classList.add('hidden');
+      document.getElementById('referee-event-modal').classList.add('hidden');
       ctx.pendingMoment = null;
       while (ctx.idx < ctx.moments.length) {
         const m = ctx.moments[ctx.idx];
         ctx.idx++;
         // При быстром пропуске решения принимаются "по умолчанию": речь в
-        // раздевалке — нейтральная, удар — надёжный (без риска и без бонуса).
+        // раздевалке — нейтральная, удар — надёжный, оборона — без риска,
+        // споры с судьёй не затеваем (без риска и без пересмотра).
         if (!ctx.halftimeShown && m.minute >= 45) {
           ctx.halftimeShown = true;
         }
         const chance = computeScoreChance(m, ctx);
-        const mult = m.side === 'user' ? ATTACK_DECISIONS.safe.chanceMult : 1;
+        const mult = m.side === 'user' ? ATTACK_DECISIONS.safe.chanceMult : DEFENSE_DECISIONS.hold.chanceMult;
         if (Math.random() < chance * mult) {
           if (m.side === 'user') ctx.scoreUser++; else ctx.scoreOpp++;
         }
@@ -3226,10 +4144,13 @@
       finishLeagueMatch();
     }
 
+    let pendingSeasonResult = null; // итог сезона (повышение/понижение), показывается на экране результата матча
+
     function finishLeagueMatch() {
       const ctx = leagueMatchCtx;
       if (!ctx) return;
       const { state, opp, scoreUser, scoreOpp } = ctx;
+      const div = DIVISIONS[state.divIdx];
 
       state.user.played++;
       state.user.gf += scoreUser;
@@ -3245,20 +4166,31 @@
         oppRow.losses++;
         reward = 200 + opp.strength * 3;
         title = 'Победа!'; emoji = '🏆';
+        SoundFX.win();
       } else if (scoreUser === scoreOpp) {
         state.user.draws++; state.user.pts += 1;
         oppRow.draws++; oppRow.pts += 1;
         reward = 80 + opp.strength;
         title = 'Ничья'; emoji = '🤝';
+        SoundFX.draw();
       } else {
         state.user.losses++;
         oppRow.wins++; oppRow.pts += 3;
         reward = 40;
         title = 'Поражение'; emoji = '💔';
+        SoundFX.lose();
       }
+      // Дивизион рангом выше платит больше призовых за тот же результат —
+      // стимул реально бороться за повышение, а не просто ради таблицы.
+      reward = Math.round(reward * div.rewardMult);
       reward += ctx.bonusReward;
       state.round++;
       saveLeagueState(state);
+
+      // Проверяем конец сезона ПОСЛЕ инкремента тура: если это был последний
+      // матч круга, checkSeasonEnd сам подведёт итоги, повысит/понизит
+      // дивизион и запишет свежее состояние нового сезона.
+      pendingSeasonResult = checkSeasonEnd(state);
 
       sliveTokens += reward;
       updateHeader();
@@ -3277,6 +4209,29 @@
       } else {
         bonusEl.classList.add('hidden');
       }
+
+      const seasonEl = document.getElementById('league-season-summary');
+      if (pendingSeasonResult) {
+        const r = pendingSeasonResult;
+        let text, cls;
+        if (r.outcome === 'promoted') {
+          text = `📈 Сезон окончен — ${r.userRank}-е место в «${r.divName}»! Повышение в «${r.newDivName}».`;
+          cls = 'text-emerald-400';
+          SoundFX.win();
+        } else if (r.outcome === 'relegated') {
+          text = `📉 Сезон окончен — ${r.userRank}-е место в «${r.divName}». Понижение в «${r.newDivName}».`;
+          cls = 'text-red-400';
+        } else {
+          text = `🔁 Сезон окончен — ${r.userRank}-е место в «${r.divName}». Остаёшься в этом дивизионе, новый сезон уже начался.`;
+          cls = 'text-neutral-300';
+        }
+        seasonEl.innerText = text;
+        seasonEl.className = `text-[11px] font-bold mt-3 ${cls}`;
+        seasonEl.classList.remove('hidden');
+      } else {
+        seasonEl.classList.add('hidden');
+      }
+
       teardown3DPitch();
     }
 
@@ -3319,77 +4274,126 @@
       return pos;
     }
 
-    // "Фигурка" игрока: голова + торс (майка) + шорты + руки + ноги на
-    // "шарнирах" (pivot-группы в бедре/плече), чтобы бег/удар анимировались
-    // реальным взмахом конечностей, а не только покачиванием корпуса.
-    function createPlayerMesh(kitColor, shortsColor, isGK) {
+    // Кэш текстуры золотого "вспышка"-glow при голе — она одинаковая для всех
+    // игроков, поэтому канвас рисуется один раз, а не 22 раза.
+    let _scoreGlowTex = null;
+    function scoreGlowTexture() {
+      if (_scoreGlowTex) return _scoreGlowTex;
+      const c = document.createElement('canvas');
+      c.width = c.height = 128;
+      const ctx = c.getContext('2d');
+      const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+      g.addColorStop(0, 'rgba(250,204,21,0.95)');
+      g.addColorStop(0.5, 'rgba(250,204,21,0.4)');
+      g.addColorStop(1, 'rgba(250,204,21,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, 128, 128);
+      _scoreGlowTex = new THREE.CanvasTexture(c);
+      return _scoreGlowTex;
+    }
+
+    // Роль (GK/D/M/F) на верхней грани фишки — канвас-кружок с буквой.
+    function makeRoleTexture(letter, bgHex) {
+      const c = document.createElement('canvas');
+      c.width = c.height = 128;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = bgHex;
+      ctx.beginPath(); ctx.arc(64, 64, 62, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 52px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(letter, 64, 68);
+      return new THREE.CanvasTexture(c);
+    }
+
+    // Светящаяся фамилия под фишкой — белый текст с цветным ореолом команды,
+    // отрисован на канвасе и наклеен на billboard-спрайт (Sprite в three.js
+    // всегда развёрнут на камеру сам по себе — читается под любым углом).
+    function makeNameTagTexture(text, glowHex) {
+      const c = document.createElement('canvas');
+      c.width = 256; c.height = 64;
+      const ctx = c.getContext('2d');
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = 'bold 32px Arial';
+      ctx.shadowColor = glowHex;
+      ctx.shadowBlur = 16;
+      ctx.fillStyle = glowHex;
+      ctx.fillText((text || '?').toUpperCase(), 128, 32);
+      ctx.shadowBlur = 3;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText((text || '?').toUpperCase(), 128, 32);
+      return new THREE.CanvasTexture(c);
+    }
+
+    // Игрок — "фишка" тактического табло, а не мини-человечек: цветной диск
+    // команды с белым ободком, буквой роли сверху и светящейся фамилией на
+    // табличке прямо под ним. Читается мгновенно, кто есть кто и где на
+    // поле, — то, ради чего вообще существует такой вид сверху.
+    function createPlayerMesh(kitColor, shortsColor, isGK, name, role) {
       const group = new THREE.Group();
       const jerseyColor = isGK ? 0xfbbf24 : kitColor;
-      const skin = 0xffe0bd;
+      const accentHex = '#' + jerseyColor.toString(16).padStart(6, '0');
 
-      const torso = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.15, 0.19, 0.34, 8),
-        new THREE.MeshStandardMaterial({ color: jerseyColor })
+      const rim = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.27, 0.27, 0.03, 20),
+        new THREE.MeshStandardMaterial({ color: 0xffffff })
       );
-      torso.position.y = 0.46;
-      torso.castShadow = true;
+      rim.position.y = 0.015;
 
-      const shorts = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.18, 0.15, 0.16, 8),
-        new THREE.MeshStandardMaterial({ color: shortsColor })
+      const roleLetter = isGK ? 'GK' : (role || '?')[0];
+      const topTex = makeRoleTexture(roleLetter, accentHex);
+      const disc = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.22, 0.22, 0.06, 20),
+        [
+          new THREE.MeshStandardMaterial({ color: jerseyColor }),
+          new THREE.MeshStandardMaterial({ map: topTex }),
+          new THREE.MeshStandardMaterial({ color: shortsColor }),
+        ]
       );
-      shorts.position.y = 0.26;
-      shorts.castShadow = true;
-
-      const bootMat = new THREE.MeshStandardMaterial({ color: 0x111827 });
-      const legMat = new THREE.MeshStandardMaterial({ color: skin });
-      function makeLeg(side) {
-        const hip = new THREE.Group();
-        hip.position.set(side * 0.07, 0.34, 0);
-        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.05, 0.24, 6), legMat);
-        leg.position.y = -0.12;
-        leg.castShadow = true;
-        const boot = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.045, 0.11), bootMat);
-        boot.position.set(0, -0.24, 0.02);
-        boot.castShadow = true;
-        hip.add(leg, boot);
-        return hip;
-      }
-      const legL = makeLeg(-1);
-      const legR = makeLeg(1);
-
-      const armMat = new THREE.MeshStandardMaterial({ color: jerseyColor });
-      function makeArm(side) {
-        const shoulder = new THREE.Group();
-        shoulder.position.set(side * 0.16, 0.58, 0);
-        const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.035, 0.24, 6), armMat);
-        arm.position.y = -0.12;
-        arm.castShadow = true;
-        const hand = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 6), new THREE.MeshStandardMaterial({ color: skin }));
-        hand.position.y = -0.24;
-        shoulder.add(arm, hand);
-        return shoulder;
-      }
-      const armL = makeArm(-1);
-      const armR = makeArm(1);
-
-      const head = new THREE.Mesh(
-        new THREE.SphereGeometry(0.13, 10, 10),
-        new THREE.MeshStandardMaterial({ color: skin })
-      );
-      head.position.y = 0.72;
-      head.castShadow = true;
+      disc.position.y = 0.045;
+      disc.castShadow = true;
 
       const shadow = new THREE.Mesh(
-        new THREE.CircleGeometry(0.26, 16),
-        new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3 })
+        new THREE.CircleGeometry(0.3, 16),
+        new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.25 })
       );
       shadow.rotation.x = -Math.PI / 2;
-      shadow.position.y = 0.01;
-      group.add(shadow, legL, legR, armL, armR, shorts, torso, head);
-      // Ссылки на "шарниры" — renderLoop крутит их для эффекта бега.
-      group.userData.rig = { legL, legR, armL, armR };
+      shadow.position.y = 0.005;
+
+      // Фамилия под фишкой — светится цветом команды, видна с любого ракурса.
+      const nameTex = makeNameTagTexture(name, accentHex);
+      const nameSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: nameTex, transparent: true, depthTest: false }));
+      nameSprite.scale.set(0.8, 0.2, 1);
+      nameSprite.position.set(0, 0.012, 0);
+      nameSprite.renderOrder = 2;
+
+      // Золотой всплеск гола — невидим по умолчанию (scale ~0), см. pulseScorer().
+      const scoreGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: scoreGlowTexture(), transparent: true, opacity: 0, depthTest: false }));
+      scoreGlow.scale.set(0.01, 0.01, 1);
+      scoreGlow.position.y = 0.05;
+      scoreGlow.renderOrder = 1;
+
+      group.add(shadow, rim, disc, scoreGlow, nameSprite);
+      group.userData.name = name || '';
+      group.userData.nameSprite = nameSprite;
+      group.userData.scoreGlow = scoreGlow;
       return group;
+    }
+
+    // Кратковременно укрупняет фишку забившего игрока и раскрывает золотой
+    // ореол вокруг неё — ровно тот момент, когда должно быть видно "кто
+    // забил", а не просто "гол где-то там".
+    function pulseScorer(mesh) {
+      if (!mesh) return;
+      const glow = mesh.userData.scoreGlow;
+      mesh.scale.set(1.7, 1.7, 1.7);
+      if (glow) { glow.material.opacity = 0.9; glow.scale.set(2.4, 2.4, 1); }
+      setTimeout(() => {
+        mesh.scale.set(1, 1, 1);
+        if (glow) { glow.material.opacity = 0; glow.scale.set(0.01, 0.01, 1); }
+      }, 1100);
     }
 
     // Канвас-текстура газона: полосы "стрижки" + разметка (боковые, центр,
@@ -3623,6 +4627,11 @@
     // обычно). Если модель не настроена/не загрузилась — onDone вызывается
     // сразу, процедурные игроки остаются видны всё это время (fallback).
     function playBroadcastIntro(pitchState, onDone) {
+      // pitch3D может быть null, если THREE.js не успел/не смог загрузиться
+      // (см. init3DPitch: `if (typeof THREE === 'undefined') return;`) —
+      // в этом случае интро выхода команд просто пропускаем и сразу стартуем
+      // матч, вместо падения с TypeError на pitchState.userPlayers.
+      if (!pitchState) return onDone();
       const proceduralPlayers = [...pitchState.userPlayers, ...pitchState.oppPlayers];
       loadPlayerModelOnce(
         (gltf) => {
@@ -3730,13 +4739,29 @@
       // Игроки: наши — изумрудные (тот же акцент, что и "гол за нас" в логе),
       // соперник — красные (тот же акцент, что и "гол соперника"); вратари
       // выделены жёлтым в любой команде. Шорты — контрастный второй цвет кита.
+      // Порядок слотов ровно как в EMPTY_SQUAD/formationPositions — по нему
+      // фишка на позиции i получает имя реального игрока из состава.
+      const SQUAD_SLOT_ORDER = ['GK', 'DEF1', 'DEF2', 'DEF3', 'DEF4', 'MID1', 'MID2', 'MID3', 'FWD1', 'FWD2', 'FWD3'];
+      // У ботов-соперников нет реального состава (это клубы, не карточки
+      // игроков) — подписываем их фишки generic-фамилиями (общий английский
+      // список OPPONENT_SURNAMES из раздела лиги), ничего общего с реальными
+      // людьми, просто чтобы поле не пестрело знаками вопроса.
+      function surnameOf(fullName) {
+        if (!fullName) return '';
+        const parts = fullName.trim().split(/\s+/);
+        return parts[parts.length - 1];
+      }
+
       function buildTeam(side, kitColor, shortsColor) {
         const positions = formationPositions(side);
-        return positions.map(p => {
-          const mesh = createPlayerMesh(kitColor, shortsColor, p.role === 'GK');
+        return positions.map((p, i) => {
+          const name = side === 'user'
+            ? (squad[SQUAD_SLOT_ORDER[i]] ? surnameOf(squad[SQUAD_SLOT_ORDER[i]].name) : `Игрок ${i + 1}`)
+            : OPPONENT_SURNAMES[i % OPPONENT_SURNAMES.length];
+          const mesh = createPlayerMesh(kitColor, shortsColor, p.role === 'GK', name, p.role);
           mesh.position.set(p.x, 0, p.z);
           // Важно: не перезаписывать userData целиком — createPlayerMesh уже
-          // положил туда userData.rig (ссылки на ноги/руки для анимации бега).
+          // положил туда userData.name/nameSprite/scoreGlow.
           Object.assign(mesh.userData, { base: { x: p.x, z: p.z }, role: p.role, phase: Math.random() * Math.PI * 2 });
           scene.add(mesh);
           return mesh;
@@ -3790,37 +4815,48 @@
       dir.shadow.mapSize.set(1024, 1024);
       scene.add(dir);
 
-      let rafId = null;
+      // ВАЖНО: объект pitch3D создаётся ДО первого запуска renderLoop, а не
+      // после. renderLoop обращается к глобальной pitch3D уже на первом,
+      // синхронном вызове (renderLoop(0) ниже) — если присвоить pitch3D
+      // после этого вызова, на первом кадре pitch3D всё ещё null (его обнулил
+      // предыдущий teardown3DPitch()), и `pitch3D.ballBusy` кидает
+      // TypeError прямо внутри startLeagueMatch(), до того как отыграется
+      // хоть один игровой момент — матч зависает на экране "Матч начинается...".
+      pitch3D = {
+        scene, camera, renderer, ball, goalLeft, goalRight, userPlayers, oppPlayers, container, rafId: null,
+        WIDE_POS, WIDE_LOOK, broadcastToken: 0, ballBusy: false
+      };
+
       function renderLoop(now) {
-        // Лёгкая "дышащая" idle-анимация: каждый игрок слегка покачивается и
-        // смещается вокруг своей базовой позиции, чтобы поле выглядело живым
-        // между ключевыми моментами (никак не влияет на исход, чисто визуал).
+        // Idle-анимация вне ключевых моментов: игроки не просто "дышат" на
+        // месте — их лёгкое смещение слегка тянется в сторону мяча (ближние
+        // к мячу дрожат заметнее), а сам мяч, пока не идёт розыгрыш момента
+        // (ballBusy=false), медленно "гуляет" между случайными точками поля —
+        // без этого поле между моментами выглядело мертво (мяч висел в центре).
         const t = (now || 0) / 1000;
+        if (!pitch3D.ballBusy) {
+          if (!pitch3D.ballIdleTarget || now > pitch3D.ballIdleNextChange) {
+            pitch3D.ballIdleTarget = { x: (Math.random() - 0.5) * 11, z: (Math.random() - 0.5) * 6 };
+            pitch3D.ballIdleNextChange = now + 3000 + Math.random() * 3000;
+          }
+          ball.position.x += (pitch3D.ballIdleTarget.x - ball.position.x) * 0.012;
+          ball.position.z += (pitch3D.ballIdleTarget.z - ball.position.z) * 0.012;
+          ball.position.y = 0.2 + Math.abs(Math.sin(t * 2)) * 0.03;
+        }
         [...userPlayers, ...oppPlayers].forEach(p => {
           const ph = p.userData.phase;
-          p.position.x = p.userData.base.x + Math.sin(t * 1.3 + ph) * 0.18;
-          p.position.z = p.userData.base.z + Math.cos(t * 1.1 + ph) * 0.22;
-          p.position.y = Math.abs(Math.sin(t * 3 + ph)) * 0.04;
-          // Взмах ног/рук в противофазе — читается как лёгкий бег трусцой,
-          // а не просто "плавающая" фигурка.
-          const rig = p.userData.rig;
-          if (rig) {
-            const swing = Math.sin(t * 6 + ph) * 0.5;
-            rig.legL.rotation.x = swing;
-            rig.legR.rotation.x = -swing;
-            rig.armL.rotation.x = -swing * 0.7;
-            rig.armR.rotation.x = swing * 0.7;
-          }
+          const dx = ball.position.x - p.userData.base.x;
+          const dz = ball.position.z - p.userData.base.z;
+          const dist = Math.max(1, Math.hypot(dx, dz));
+          const pull = Math.min(0.55, 2.2 / dist); // ближе к мячу — сильнее тянет из базовой позиции
+          p.position.x = p.userData.base.x + Math.sin(t * 1.3 + ph) * 0.16 + dx * pull * 0.12;
+          p.position.z = p.userData.base.z + Math.cos(t * 1.1 + ph) * 0.2 + dz * pull * 0.12;
+          p.position.y = Math.abs(Math.sin(t * 3 + ph)) * 0.03;
         });
         renderer.render(scene, camera);
-        rafId = requestAnimationFrame(renderLoop);
+        pitch3D.rafId = requestAnimationFrame(renderLoop);
       }
       renderLoop(0);
-
-      pitch3D = {
-        scene, camera, renderer, ball, goalLeft, goalRight, userPlayers, oppPlayers, container, rafId,
-        WIDE_POS, WIDE_LOOK, broadcastToken: 0
-      };
 
       // Прогрессивное улучшение: сцена уже полностью готова и рисуется
       // процедурным окружением (см. envGroup выше) — это гарантированный
@@ -3891,6 +4927,7 @@
       if (!pitch3D) { callback(); return; }
       const { ball, goalLeft, goalRight, userPlayers, oppPlayers, WIDE_POS, WIDE_LOOK } = pitch3D;
       const token = ++pitch3D.broadcastToken;
+      pitch3D.ballBusy = true; // идле-блуждание мяча приостановлено на время розыгрыша момента
       const attackers = moment.side === 'user' ? userPlayers : oppPlayers;
       const defenders = moment.side === 'user' ? oppPlayers : userPlayers;
       const targetGoal = moment.side === 'user' ? goalLeft : goalRight; // атакуем ворота соперника слева, если момент "user"
@@ -3966,6 +5003,11 @@
               runLeg();
             } else {
               if (moment.isGoal) {
+                // Кто именно забил — тот самый "forward", кому шёл финальный
+                // пас перед ударом (см. выбор p2/p3 выше). Имя уходит в сам
+                // moment, чтобы лог матча мог написать "Забивает Фамилия!".
+                moment.scorerName = forward.userData.name;
+                pulseScorer(forward);
                 targetGoal.material.color.set(0xfacc15);
                 setTimeout(() => targetGoal.material.color.set(0xffffff), 500);
                 flashCrowd();
@@ -3980,6 +5022,7 @@
                   flyCamera(pitch3D.camera.position.clone(), goalCamLook.clone(), WIDE_POS.clone(), WIDE_LOOK.clone(), 600, token);
                 }
               }, moment.isGoal ? 550 : 250);
+              if (pitch3D) pitch3D.ballBusy = false; // отдаём мяч обратно idle-блужданию
               callback();
             }
           }
@@ -4080,10 +5123,12 @@
     function openPackAnim(card) {
       const loader = document.getElementById('pack-loader');
       loader.classList.remove('hidden');
+      SoundFX.packWhoosh();
 
       setTimeout(() => {
         loader.classList.add('hidden');
         tempOpened = card;
+        SoundFX.packReveal(card.type);
 
         document.getElementById('revealed-card-container').innerHTML = genCardHTML(tempOpened, true);
         document.getElementById('reveal-income').innerText = `+${tempOpened.income}/день`;
@@ -4105,6 +5150,7 @@
       // сама вкладка визуально не откроется без прав, а любой запрос данных
       // всё равно получит 403 от сервера, так что подделать тут нечего.
       if (tabId === 'admin' && !isAdmin) return;
+      SoundFX.click();
 
       document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
       document.getElementById(`tab-${tabId}`).classList.remove('hidden');
@@ -4918,6 +5964,7 @@
         saveData();
         updateHeader();
         renderClubInventory();
+        SoundFX.coin();
         alertMsg(`Продан дубликат ${playerName} за +${gained} 🪙 SLive.`);
       } catch (e) {
         if (e.message === 'last_copy') {
@@ -4933,10 +5980,14 @@
     }
 
     // --- ОНБОРДИНГ (первый запуск) ---
-    // 4 шага, полностью локально: приветствие -> имя клуба -> тур по вкладкам
-    // -> стартовый капитал. Показывается один раз, флаг лежит в localStorage.
-    const ONBOARDING_STEPS = 4;
+    // 5 шагов, полностью локально: приветствие -> имя клуба -> тур по вкладкам
+    // -> стартовый капитал -> стартовый состав из 11 карт. Показывается один
+    // раз, флаг лежит в localStorage.
+    const ONBOARDING_STEPS = 5;
     let onboardingStep = 0;
+    // Карты стартового набора (common), которые вернул сервер в /api/me —
+    // см. handleStarterPackCards(). null, пока /api/me ещё не ответил.
+    let pendingStarterCards = null;
 
     function initOnboarding() {
       if (localStorage.getItem('onboardingDone') === 'true') return;
@@ -4954,22 +6005,96 @@
       });
       const nextBtn = document.getElementById('ob-next-btn');
       const skipBtn = document.getElementById('ob-skip-btn');
+      const backBtn = document.getElementById('ob-back-btn');
       const isLast = onboardingStep === ONBOARDING_STEPS - 1;
       nextBtn.innerText = isLast ? 'Погнали! ⚽' : 'Далее';
       skipBtn.classList.toggle('hidden', isLast);
+      backBtn.classList.toggle('hidden', onboardingStep === 0);
 
       if (onboardingStep === 1) {
-        setTimeout(() => document.getElementById('ob-club-name-input')?.focus(), 200);
+        // Возврат на этот шаг — подставляем то, что уже успели ввести,
+        // а не показываем пустое поле (сохраняем черновик в onboardingNext).
+        const input = document.getElementById('ob-club-name-input');
+        const draft = localStorage.getItem('onboardingClubNameDraft');
+        if (input && draft && !input.value) input.value = draft;
+        setTimeout(() => input?.focus(), 200);
       }
       if (onboardingStep === 3) {
+        // Реальный баланс на момент онбординга, а не захардкоженные "1000" —
+        // если стартовый капитал когда-нибудь изменится, тут не разъедется.
+        const balEl = document.getElementById('ob-start-balance');
+        if (balEl) balEl.innerText = sliveTokens.toLocaleString('ru-RU');
         spawnOnboardingConfetti();
+        SoundFX.coin();
+      }
+      if (onboardingStep === 4) {
+        renderOnboardingStarterGrid();
+        SoundFX.packReveal('common');
       }
     }
 
+    // Рисует грид из 11 карт стартового набора на шаге 4 визарда. Вызывается
+    // и при переходе на этот шаг, и повторно из handleStarterPackCards(),
+    // когда карты наконец приходят с сервера (на случай если игрок пролистал
+    // визард быстрее, чем ответил /api/me).
+    function renderOnboardingStarterGrid() {
+      const el = document.getElementById('ob-starter-cards');
+      if (!el) return;
+      if (!pendingStarterCards || !pendingStarterCards.length) {
+        el.innerHTML = '<div class="col-span-4 text-[10px] text-neutral-500 text-center py-4">Собираем твой стартовый состав…</div>';
+        return;
+      }
+      el.innerHTML = pendingStarterCards.map(p => genCardHTML(p, 'micro')).join('');
+    }
+
+    // Вызывается из syncBalanceFromServer() при каждом ответе /api/me.
+    // starterPackCards ненулевой ТОЛЬКО в тот единственный раз, когда сервер
+    // реально выдал набор (см. claimStarterPackIfNeeded в db.js) — поэтому
+    // здесь не нужен свой собственный "уже показывали" флаг.
+    function handleStarterPackCards(cards) {
+      if (!cards || !cards.length) return;
+      if (localStorage.getItem('onboardingDone') === 'true') {
+        // Онбординг уже пройден раньше (существующий игрок) — визарда не
+        // будет, показываем отдельный попап сразу.
+        showStarterPackReveal(cards);
+      } else {
+        // Ещё в визарде — карты подставятся на шаге 4 (или прямо сейчас,
+        // если игрок уже там и просто ждал ответа сервера).
+        pendingStarterCards = cards;
+        if (onboardingStep === 4) renderOnboardingStarterGrid();
+      }
+    }
+
+    function showStarterPackReveal(cards) {
+      const grid = document.getElementById('starter-pack-grid');
+      if (grid) grid.innerHTML = cards.map(p => genCardHTML(p, false)).join('');
+      document.getElementById('starter-pack-modal')?.classList.remove('hidden');
+      SoundFX.packReveal('common');
+    }
+
+    function closeStarterPackModal() {
+      document.getElementById('starter-pack-modal')?.classList.add('hidden');
+      renderClubInventory();
+    }
+
+    function onboardingHaptic() {
+      // Мягкая тактильная отдача на шаге — no-op вне Telegram (tg?. паттерн,
+      // как и везде в файле), плюс тот же мягкий тап-звук, что и везде в игре.
+      tg?.HapticFeedback?.impactOccurred?.('light');
+      SoundFX.click();
+    }
+
+    function saveClubNameDraft() {
+      const val = document.getElementById('ob-club-name-input')?.value.trim();
+      if (val) localStorage.setItem('onboardingClubNameDraft', val);
+      return val;
+    }
+
     function onboardingNext() {
+      onboardingHaptic();
       // Шаг с именем клуба — сохраняем (пустое поле = имя по умолчанию не трогаем).
       if (onboardingStep === 1) {
-        const val = document.getElementById('ob-club-name-input').value.trim();
+        const val = saveClubNameDraft();
         if (val) {
           localStorage.setItem('clubName', val);
           document.getElementById('manager-name-label').innerText = val;
@@ -4983,8 +6108,18 @@
       renderOnboardingStep();
     }
 
+    function onboardingBack() {
+      if (onboardingStep === 0) return;
+      onboardingHaptic();
+      if (onboardingStep === 1) saveClubNameDraft(); // не терять набранное при уходе назад
+      onboardingStep--;
+      renderOnboardingStep();
+    }
+
     function onboardingFinish() {
+      onboardingHaptic();
       localStorage.setItem('onboardingDone', 'true');
+      localStorage.removeItem('onboardingClubNameDraft');
       document.getElementById('onboarding-modal').classList.add('hidden');
     }
 
