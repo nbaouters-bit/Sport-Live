@@ -107,21 +107,32 @@ const MAX_CUSTOM_STARS = 100000;
 // не ту сумму, которую видел игрок, и Telegram/клиент ругался на несостыковку.
 // Цены ниже — единственный источник правды, ПОДГОНЯЙТЕ КНОПКИ В index.html ПОД НИХ,
 // а не наоборот.
+// common и mythic добавлены, чтобы расширить линейку паков и в дешёвый, и
+// в дорогой край (см. фильтр "Дешёвые"/"Дорогие" в табе ПАКИ на клиенте):
+// common — самый дешёвый вход (дешевле bronze), mythic — топ дорогого
+// сегмента (дороже legend). Обычный (не стартовый бесплатный) common-пак
+// всё ещё существует как платная опция — стартовый набор при онбординге
+// это ОТДЕЛЬНАЯ разовая выдача (см. claimStarterPackIfNeeded в db.js), она
+// не расходует эти цены и не идёт через /api/buy-pack.
 const GAME_PACKS = {
+  common: { price: 20, currency: 'stars' },
   bronze: { price: 50, currency: 'stars' },
   silver: { price: 100, currency: 'stars' },
   gold: { price: 400, currency: 'stars' },
   legend: { price: 1000, currency: 'stars' },
+  mythic: { price: 3000, currency: 'stars' },
 };
 
 // Паки за внутриигровую валюту $SLive — те же паки, но с ценой в SLive.
 // Цены в SLive подняты ещё раз относительно Stars-цен (SLive легче фармить
 // пассивно, чем купить Stars, так что цену в SLive держим ощутимо выше).
 const GAME_PACKS_SLIVE = {
+  common: 500,
   bronze: 1500,
   silver: 7500,
   gold: 30000,
   legend: 150000,
+  mythic: 600000,
 };
 
 // Цена VIP-статуса в Stars (разовая покупка, см. /api/buy-vip).
