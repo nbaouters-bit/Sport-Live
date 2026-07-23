@@ -114,6 +114,20 @@
       60% { transform: scale(1.04); opacity: 1; }
       100% { transform: scale(1); opacity: 1; }
     }
+    @keyframes shakeError {
+      0%, 100% { transform: translateX(0); }
+      20% { transform: translateX(-8px); }
+      40% { transform: translateX(7px); }
+      60% { transform: translateX(-5px); }
+      80% { transform: translateX(3px); }
+    }
+    /* Валидация имени клуба в онбординге: нельзя проскочить шаг без имени —
+       см. onboardingNext(). Класс вешается на #ob-club-name-input и снимается
+       сам через animationend. */
+    .ob-input-error {
+      animation: shakeError 0.4s ease-in-out;
+      border-color: #f87171 !important;
+    }
     @keyframes confettiFall {
       0% { transform: translateY(-10vh) rotate(0deg); opacity: 1; }
       100% { transform: translateY(110vh) rotate(540deg); opacity: 0.9; }
@@ -287,8 +301,9 @@
          каждому игроку, включая уже игравших — после апдейтов тура (версия
          в localStorage.onboardingVersionSeen сравнивается с ONBOARDING_VERSION).
          5 шагов: приветствие -> имя клуба -> быстрый тур по вкладкам ->
-         стартовый капитал -> стартовый состав (для новых игроков). Полностью
-         клиентский, ничего не шлёт на сервер — см. initOnboarding()/
+         стартовый капитал -> стартовый состав (шаг с картами показывается
+         ВСЕМ, включая уже игравших — см. onboardingActive в конце скрипта).
+         Полностью клиентский, ничего не шлёт на сервер — см. initOnboarding()/
          renderOnboardingStep() в конце скрипта. -->
     <div id="onboarding-modal" class="hidden absolute inset-0 z-[70] flex flex-col bg-[#050505]">
       <div class="absolute inset-0 opacity-40" style="background: radial-gradient(circle at 50% 0%, rgba(167,139,250,0.35), transparent 60%);"></div>
@@ -314,15 +329,19 @@
         </div>
         <style>@keyframes floodPulse { 0%,100% { opacity: 0.6; transform: scale(1); } 50% { opacity: 1; transform: scale(1.12); } }</style>
 
-        <!-- Шаг 1: Имя клуба -->
+        <!-- Шаг 1: Имя клуба. Обязательный — нельзя пройти дальше и нельзя
+             скипнуть, пока поле пустое (см. onboardingNext(), кнопка
+             "Пропустить" на этом шаге тоже скрыта в renderOnboardingStep()). -->
         <div id="ob-step-1" class="ob-step hidden flex-1 flex flex-col items-center justify-center text-center gap-4">
           <div class="text-4xl">🛡️</div>
           <div class="w-full">
             <h2 class="text-lg font-black uppercase italic tracking-tight mb-1">Как назовём твой клуб?</h2>
             <p class="text-[11px] text-neutral-500 mb-4">Это имя увидят соперники в Лиге и Ставках</p>
             <input id="ob-club-name-input" type="text" maxlength="18" placeholder="Например: FC Champions"
+              oninput="document.getElementById('ob-club-name-error').classList.add('hidden')"
               onkeydown="if(event.key==='Enter'){event.preventDefault(); onboardingNext();}"
               class="w-full bg-neutral-900 border border-neutral-700 focus:border-violet-500 rounded-xl px-4 py-3 text-center text-sm font-black text-white placeholder-neutral-600 outline-none" />
+            <p id="ob-club-name-error" class="hidden text-[10px] text-red-400 font-bold mt-2">Придумай имя клуба, чтобы продолжить</p>
           </div>
         </div>
 
@@ -386,16 +405,17 @@
           <button id="ob-next-btn" onclick="onboardingNext()" class="w-full bg-violet-500 text-black font-black py-3.5 rounded-2xl text-sm uppercase tracking-tight">Далее</button>
           <div class="flex items-center justify-between">
             <button id="ob-back-btn" onclick="onboardingBack()" class="hidden text-neutral-600 text-[10px] font-bold py-3 px-2">← Назад</button>
-            <button id="ob-skip-btn" onclick="onboardingFinish()" class="flex-1 text-neutral-600 text-[10px] font-bold py-3">Пропустить</button>
+            <button id="ob-skip-btn" onclick="onboardingSkip()" class="flex-1 text-neutral-600 text-[10px] font-bold py-3">Пропустить</button>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- СТАРТОВЫЙ НАБОР ДЛЯ УЖЕ ИГРАЮЩИХ: те, кто прошёл 4-шаговый онбординг
-         раньше (localStorage.onboardingDone === 'true'), не увидят шаг 4 из
-         визарда выше — им набор из 11 карт показывается этим отдельным
-         попапом поверх всего (см. handleStarterPackCards/showStarterPackReveal). -->
+    <!-- ПОПАП СТАРТОВОГО НАБОРА (запасной путь): показывается, только если
+         сервер прислал 11 карт, а тур онбординга при этом СЕЙЧАС не открыт
+         (onboardingActive === false) — например, версия тура у игрока уже
+         отмечена просмотренной. Пока тур открыт, карты показываются прямо
+         внутри него на шаге 4 (см. handleStarterPackCards/showStarterPackReveal). -->
     <div id="starter-pack-modal" class="hidden absolute inset-0 z-[71] flex flex-col bg-black/95 p-6 items-center justify-center">
       <div class="text-4xl mb-2" style="animation: popIn 0.5s ease-out;">🎁</div>
       <h2 class="text-lg font-black uppercase italic text-center mb-1">Новый стартовый набор!</h2>
@@ -3779,12 +3799,18 @@
       return state.bots[(state.round - 1) % state.bots.length];
     }
 
+    // Имя клуба, выбранное игроком в онбординге (шаг 1) — используется
+    // везде, где раньше был захардкожен плейсхолдер "Твой клуб"/"Менеджер".
+    function getClubName() {
+      return localStorage.getItem('clubName') || 'Твой клуб';
+    }
+
     // Итоговая турнирная таблица дивизиона (боты + пользователь), уже
     // отсортированная — используется и для отображения, и для подведения
     // итогов сезона (кто повышается/понижается).
     function leagueStandings(state) {
       return [...state.bots.map(b => ({ ...b, isUser: false })),
-              { ...state.user, name: 'Твой клуб', isUser: true }]
+              { ...state.user, name: getClubName(), isUser: true }]
         .sort((a, b) => b.pts - a.pts || (b.gf - b.ga) - (a.gf - a.ga));
     }
 
@@ -6299,28 +6325,27 @@
 
     // --- ОНБОРДИНГ (первый запуск + повторный показ после апдейтов) ---
     // 5 шагов, полностью локально: приветствие -> имя клуба -> тур по вкладкам
-    // -> стартовый капитал -> стартовый состав из 11 карт.
+    // -> стартовый капитал -> стартовый состав из 11 карт. Шаг с картами
+    // показывается ВСЕМ — и новым, и уже игравшим — прямо внутри тура.
     //
     // Показ управляется ДВУМЯ флагами в localStorage:
     //  - onboardingDone — "визард пройден хотя бы раз когда-либо" (не версионный,
-    //    не трогаем — от него зависит showStarterPackReveal/handleStarterPackCards
-    //    ниже: уже проходившим визард раньше 11 стартовых карт показываются
-    //    отдельным попапом, а не шагом 4).
+    //    не трогаем — используется только для обратной совместимости старых
+    //    сохранений, самим показом шагов больше не управляет).
     //  - onboardingVersionSeen — версия онбординга, которую игрок уже видел.
     //    Сравнивается с ONBOARDING_VERSION: если у игрока сохранена версия
     //    меньше текущей, тур показывается заново ОДИН раз (даже тем, кто уже
-    //    когда-то проходил онбординг) — так апдейты тура/новых вкладок видят
-    //    все игроки, а не только новые. После показа версия обновляется, и
-    //    повторно тур больше не всплывает, пока ONBOARDING_VERSION не вырастет.
+    //    когда-то проходил онбординг) — так апдейты тура видят все игроки, а
+    //    не только новые. После показа версия обновляется, и повторно тур
+    //    больше не всплывает, пока ONBOARDING_VERSION не вырастет.
     const ONBOARDING_STEPS = 5;
     const ONBOARDING_VERSION = 2;
     let onboardingStep = 0;
-    // Для уже игравших (onboardingDone уже true до этого показа) шаг 4
-    // (выдача 11 карт) пропускается — свой стартовый набор они либо уже
-    // получили раньше, либо получат отдельным попапом starter-pack-modal
-    // через handleStarterPackCards() ниже. Тур в таком случае состоит из
-    // шагов 0-3 (это и есть onboardingStepsCount = ONBOARDING_STEPS - 1).
-    let onboardingStepsCount = ONBOARDING_STEPS;
+    // true, пока модалка тура реально открыта — по этому флагу (а не по
+    // onboardingDone) handleStarterPackCards() ниже решает, подставлять ли
+    // пришедшие с сервера карты в шаг 4 тура или показывать их отдельным
+    // попапом (starter-pack-modal) для случая, когда тур сейчас не открыт.
+    let onboardingActive = false;
     // Карты стартового набора (common), которые вернул сервер в /api/me —
     // см. handleStarterPackCards(). null, пока /api/me ещё не ответил.
     let pendingStarterCards = null;
@@ -6329,10 +6354,8 @@
       const seenVersion = parseInt(localStorage.getItem('onboardingVersionSeen') || '0', 10);
       if (seenVersion >= ONBOARDING_VERSION) return;
 
-      const alreadyCompletedEver = localStorage.getItem('onboardingDone') === 'true';
-      onboardingStepsCount = alreadyCompletedEver ? ONBOARDING_STEPS - 1 : ONBOARDING_STEPS;
-
       onboardingStep = 0;
+      onboardingActive = true;
       renderOnboardingStep();
       document.getElementById('onboarding-modal').classList.remove('hidden');
     }
@@ -6347,9 +6370,11 @@
       const nextBtn = document.getElementById('ob-next-btn');
       const skipBtn = document.getElementById('ob-skip-btn');
       const backBtn = document.getElementById('ob-back-btn');
-      const isLast = onboardingStep === onboardingStepsCount - 1;
+      const isLast = onboardingStep === ONBOARDING_STEPS - 1;
       nextBtn.innerText = isLast ? 'Погнали! ⚽' : 'Далее';
-      skipBtn.classList.toggle('hidden', isLast);
+      // Шаг с именем клуба (1) нельзя пропустить — кнопка "Пропустить" на нём
+      // скрыта так же, как и на последнем шаге.
+      skipBtn.classList.toggle('hidden', isLast || onboardingStep === 1);
       backBtn.classList.toggle('hidden', onboardingStep === 0);
 
       if (onboardingStep === 1) {
@@ -6394,15 +6419,17 @@
     // здесь не нужен свой собственный "уже показывали" флаг.
     function handleStarterPackCards(cards) {
       if (!cards || !cards.length) return;
-      if (localStorage.getItem('onboardingDone') === 'true') {
-        // Онбординг уже пройден раньше (существующий игрок) — визарда не
-        // будет, показываем отдельный попап сразу.
-        showStarterPackReveal(cards);
-      } else {
-        // Ещё в визарде — карты подставятся на шаге 4 (или прямо сейчас,
-        // если игрок уже там и просто ждал ответа сервера).
+      if (onboardingActive) {
+        // Тур сейчас открыт (у нового ИЛИ у уже игравшего игрока — версия
+        // онбординга ниже текущей) — карты подставятся на шаге 4 (или прямо
+        // сейчас, если игрок уже там и просто ждал ответа сервера).
         pendingStarterCards = cards;
         if (onboardingStep === 4) renderOnboardingStarterGrid();
+      } else {
+        // Тур сейчас не открыт (например, версия онбординга уже отмечена
+        // просмотренной, а сервер всё равно прислал набор) — показываем
+        // отдельный попап сразу.
+        showStarterPackReveal(cards);
       }
     }
 
@@ -6433,15 +6460,27 @@
 
     function onboardingNext() {
       onboardingHaptic();
-      // Шаг с именем клуба — сохраняем (пустое поле = имя по умолчанию не трогаем).
+      // Шаг с именем клуба — обязателен: пустое поле не пропускает дальше.
       if (onboardingStep === 1) {
         const val = saveClubNameDraft();
-        if (val) {
-          localStorage.setItem('clubName', val);
-          document.getElementById('manager-name-label').innerText = val;
+        if (!val) {
+          const input = document.getElementById('ob-club-name-input');
+          const error = document.getElementById('ob-club-name-error');
+          error?.classList.remove('hidden');
+          if (input) {
+            input.classList.remove('ob-input-error');
+            // reflow, чтобы анимация shake сыграла заново при повторной попытке
+            void input.offsetWidth;
+            input.classList.add('ob-input-error');
+            input.focus();
+            input.addEventListener('animationend', () => input.classList.remove('ob-input-error'), { once: true });
+          }
+          return;
         }
+        localStorage.setItem('clubName', val);
+        document.getElementById('manager-name-label').innerText = val;
       }
-      if (onboardingStep >= onboardingStepsCount - 1) {
+      if (onboardingStep >= ONBOARDING_STEPS - 1) {
         onboardingFinish();
         return;
       }
@@ -6457,8 +6496,25 @@
       renderOnboardingStep();
     }
 
+    // "Пропустить" видна на шаге 0 и шагах 2+ (на шаге 1 скрыта совсем, см.
+    // renderOnboardingStep). С шага 0 она НЕ должна сразу завершать онбординг —
+    // иначе имя клуба обходится стороной — поэтому сначала принудительно
+    // доводит до шага 1. С шага 2+ имя уже точно введено (иначе сюда было бы
+    // не попасть, см. валидацию в onboardingNext), так что там ведёт себя
+    // как раньше — сразу завершает тур.
+    function onboardingSkip() {
+      onboardingHaptic();
+      if (onboardingStep < 1) {
+        onboardingStep = 1;
+        renderOnboardingStep();
+        return;
+      }
+      onboardingFinish();
+    }
+
     function onboardingFinish() {
       onboardingHaptic();
+      onboardingActive = false;
       localStorage.setItem('onboardingDone', 'true');
       localStorage.setItem('onboardingVersionSeen', String(ONBOARDING_VERSION));
       localStorage.removeItem('onboardingClubNameDraft');
