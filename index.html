@@ -283,10 +283,13 @@
 
   <div class="app-shell w-full max-w-md h-screen sm:h-[840px] bg-[#0a0a0a] flex flex-col relative overflow-hidden sm:rounded-[40px] sm:border-[8px] border-[#181818] shadow-2xl">
 
-    <!-- ОНБОРДИНГ: показывается один раз при первом запуске (флаг onboardingDone
-         в localStorage). 4 шага: приветствие -> имя клуба -> быстрый тур по
-         вкладкам -> стартовый капитал. Полностью клиентский, ничего не шлёт
-         на сервер — см. initOnboarding()/renderOnboardingStep() в конце скрипта. -->
+    <!-- ОНБОРДИНГ: показывается при первом запуске, а также заново — один раз
+         каждому игроку, включая уже игравших — после апдейтов тура (версия
+         в localStorage.onboardingVersionSeen сравнивается с ONBOARDING_VERSION).
+         5 шагов: приветствие -> имя клуба -> быстрый тур по вкладкам ->
+         стартовый капитал -> стартовый состав (для новых игроков). Полностью
+         клиентский, ничего не шлёт на сервер — см. initOnboarding()/
+         renderOnboardingStep() в конце скрипта. -->
     <div id="onboarding-modal" class="hidden absolute inset-0 z-[70] flex flex-col bg-[#050505]">
       <div class="absolute inset-0 opacity-40" style="background: radial-gradient(circle at 50% 0%, rgba(167,139,250,0.35), transparent 60%);"></div>
 
@@ -1224,6 +1227,18 @@
         <button onclick="closeBench()" class="text-neutral-500 text-2xl">&times;</button>
       </div>
       <div id="bench-list" class="grid grid-cols-3 gap-2 overflow-y-auto pb-10"></div>
+    </div>
+
+    <!-- Оверлей "+N ещё": полный пул конкретной редкости пака — открывается
+         кликом по бейджу "+N ещё" в витрине "Возможный дроп" на вкладке
+         ПАКИ (см. renderPackDrops/openPackPlayersModal). -->
+    <div id="pack-players-modal" class="hidden absolute inset-0 bg-black/95 z-40 flex flex-col pt-16 p-4">
+      <div class="flex justify-between items-center mb-1">
+        <h3 class="font-black text-lg" id="pack-players-title">ВСЕ ИГРОКИ ПАКА</h3>
+        <button onclick="closePackPlayersModal()" class="text-neutral-500 text-2xl">&times;</button>
+      </div>
+      <div class="text-[10px] text-neutral-500 mb-3" id="pack-players-subtitle"></div>
+      <div id="pack-players-list" class="flex flex-col gap-1.5 overflow-y-auto pb-10"></div>
     </div>
 
     <div id="pack-loader" class="hidden absolute inset-0 bg-black/95 z-50 flex flex-col justify-center items-center">
@@ -3031,18 +3046,20 @@
   // одной на каждую позицию будущего состава из 11 футболистов. Income
   // нарочно ниже bronze, чтобы бесплатный набор не обесценивал экономику
   // платных паков.
+  // Подобран РОВНО под 11 слотов состава (GK, DEF1-4, MID1-3, FWD1-3 —
+  // формация 4-3-3): 1×GK, 4×DEF, 3×MID, 3×FWD, см. players-data.js.
   common: [
     { id: 'c1', name: 'Trafford', rating: 68, pos: 'GK', nation: 'ENG', type: 'common', income: 5 },
     { id: 'c2', name: 'Colwill', rating: 67, pos: 'DEF', nation: 'ENG', type: 'common', income: 5 },
-    { id: 'c3', name: 'Estupinan', rating: 69, pos: 'DEF', nation: 'ESP', type: 'common', income: 5 },
-    { id: 'c4', name: 'Yarmoliuk', rating: 65, pos: 'MID', nation: 'UKR', type: 'common', income: 5 },
-    { id: 'c5', name: 'Veerman', rating: 66, pos: 'MID', nation: 'NED', type: 'common', income: 5 },
-    { id: 'c6', name: 'Doue', rating: 66, pos: 'MID', nation: 'FRA', type: 'common', income: 5 },
-    { id: 'c7', name: 'Alarcon', rating: 64, pos: 'MID', nation: 'ARG', type: 'common', income: 5 },
-    { id: 'c8', name: 'Kayky', rating: 63, pos: 'FWD', nation: 'BRA', type: 'common', income: 5 },
-    { id: 'c9', name: 'Bynoe-Gittens', rating: 68, pos: 'FWD', nation: 'ENG', type: 'common', income: 5 },
-    { id: 'c10', name: 'Nmecha', rating: 65, pos: 'FWD', nation: 'GER', type: 'common', income: 5 },
-    { id: 'c11', name: 'Lukebakio', rating: 68, pos: 'FWD', nation: 'BEL', type: 'common', income: 6 },
+    { id: 'c3', name: 'Estupinan', rating: 69, pos: 'DEF', nation: 'ESP', type: 'common', income: 6 },
+    { id: 'c4', name: 'Chalobah', rating: 66, pos: 'DEF', nation: 'ENG', type: 'common', income: 5 },
+    { id: 'c5', name: 'Wan-Bissaka', rating: 65, pos: 'DEF', nation: 'ENG', type: 'common', income: 5 },
+    { id: 'c6', name: 'Yarmoliuk', rating: 65, pos: 'MID', nation: 'UKR', type: 'common', income: 5 },
+    { id: 'c7', name: 'Veerman', rating: 66, pos: 'MID', nation: 'NED', type: 'common', income: 5 },
+    { id: 'c8', name: 'Doue', rating: 66, pos: 'MID', nation: 'FRA', type: 'common', income: 5 },
+    { id: 'c9', name: 'Kayky', rating: 63, pos: 'FWD', nation: 'BRA', type: 'common', income: 5 },
+    { id: 'c10', name: 'Bynoe-Gittens', rating: 68, pos: 'FWD', nation: 'ENG', type: 'common', income: 5 },
+    { id: 'c11', name: 'Nmecha', rating: 65, pos: 'FWD', nation: 'GER', type: 'common', income: 5 },
   ],
   bronze: [
     { id: 'b1', name: 'Zinchenko', rating: 79, pos: 'DEF', nation: 'UKR', type: 'bronze', income: 10 },
@@ -3382,16 +3399,55 @@
       setInterval(loadReferralInfo, 30000);
     };
 
+    // Полный пул каждой редкости для оверлея "+N ещё" (см. openPackPlayersModal
+    // ниже) — заголовок/цвета берутся отсюда же, чтобы оверлей визуально
+    // совпадал с карточкой конкретного пака на вкладке ПАКИ.
+    const PACK_TIER_META = {
+      common: { label: 'СТАРТОВЫЙ ПАК ⚪️', text: 'text-[#d4d4d8]', border: 'border-[#6b7280]' },
+      bronze: { label: 'БРОНЗОВЫЙ ПАК 🥉', text: 'text-[#d7ccc8]', border: 'border-[#8d6e63]' },
+      silver: { label: 'СЕРЕБРЯНЫЙ ПАК 🥈', text: 'text-[#cfd8dc]', border: 'border-[#90a4ae]' },
+      gold:   { label: 'ЗОЛОТОЙ ПАК 🥇', text: 'text-[#fff59d]', border: 'border-[#fbc02d]' },
+      legend: { label: 'ИКОНЫ ФУТБОЛА 🔮', text: 'text-[#ede7f6]', border: 'border-[#b39ddb]' },
+      mythic: { label: 'МИФИЧЕСКИЙ ПАК 💠', text: 'text-[#e0f2fe]', border: 'border-[#7dd3fc]' },
+    };
+
+    // Открывает оверлей со ВСЕМИ игроками указанной редкости, отсортированными
+    // по рейтингу — по клику на бейдж "+N ещё" в витрине дропа.
+    function openPackPlayersModal(tier) {
+      const pool = PLAYER_POOL[tier];
+      if (!pool) return;
+      const meta = PACK_TIER_META[tier] || {};
+      document.getElementById('pack-players-title').innerText = meta.label || 'ВСЕ ИГРОКИ ПАКА';
+      document.getElementById('pack-players-subtitle').innerText =
+        `Полный пул этой редкости — ${pool.length} игроков. Какая карта выпадет конкретно тебе — решает сервер случайно.`;
+      const sorted = [...pool].sort((a, b) => b.rating - a.rating);
+      document.getElementById('pack-players-list').innerHTML = sorted.map(p => `
+        <div class="flex items-center justify-between bg-neutral-900 border ${meta.border || 'border-neutral-800'} rounded-lg px-3 py-2">
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="text-xs font-black ${meta.text || 'text-white'} w-7 text-center shrink-0">${p.rating}</span>
+            <span class="text-[11px] font-bold text-white truncate">${FLAGS[p.nation] || ''} ${p.name}</span>
+          </div>
+          <span class="text-[9px] font-black text-neutral-500 shrink-0">${p.pos}</span>
+        </div>
+      `).join('');
+      document.getElementById('pack-players-modal').classList.remove('hidden');
+    }
+
+    function closePackPlayersModal() {
+      document.getElementById('pack-players-modal').classList.add('hidden');
+    }
+
     // Рендер витрины (Возможный дроп)
     function renderPackDrops() {
       // Показываем не весь пул (у бронзы/серебра теперь по 70 карт — вывалить
       // их все в один flex-wrap блок сделало бы вкладку ПАКИ нечитаемо
       // длинной), а случайную выборку + бейдж "+N ещё", чтобы было видно,
       // что пул стал заметно больше, но карточка пака осталась компактной.
-      // Реальный дроп по-прежнему решает сервер по ПОЛНОМУ пулу — это
-      // только превью.
+      // Бейдж кликабелен и открывает openPackPlayersModal() с ПОЛНЫМ пулом —
+      // реальный дроп по-прежнему решает сервер, это просто возможность
+      // посмотреть весь список заранее.
       const PREVIEW_LIMIT = 10;
-      const renderDrops = (pool, elementId, bgClass, borderClass, textClass) => {
+      const renderDrops = (tier, pool, elementId, bgClass, borderClass, textClass) => {
         const container = document.getElementById(elementId);
         const shown = pool.length <= PREVIEW_LIMIT
           ? pool
@@ -3405,20 +3461,20 @@
         const rest = pool.length - shown.length;
         if (rest > 0) {
           chips.push(`
-            <div class="bg-black/40 border border-dashed ${borderClass} rounded px-1.5 py-0.5 flex items-center gap-1">
+            <button onclick="openPackPlayersModal('${tier}')" class="bg-black/40 border border-dashed ${borderClass} rounded px-1.5 py-0.5 flex items-center gap-1 active:scale-95 transition-transform">
               <span class="text-[8px] font-black ${textClass}">+${rest} ещё</span>
-            </div>
+            </button>
           `);
         }
         container.innerHTML = chips.join('');
       };
 
-      renderDrops(PLAYER_POOL.common, 'drop-common', 'from-[#3a3a3a] to-black', 'border-[#6b7280]', 'text-[#d4d4d8]');
-      renderDrops(PLAYER_POOL.bronze, 'drop-bronze', 'from-[#4e342e] to-black', 'border-[#8d6e63]', 'text-[#d7ccc8]');
-      renderDrops(PLAYER_POOL.silver, 'drop-silver', 'from-[#455a64] to-black', 'border-[#90a4ae]', 'text-[#cfd8dc]');
-      renderDrops(PLAYER_POOL.gold, 'drop-gold', 'from-[#827717] to-black', 'border-[#fbc02d]', 'text-[#fff59d]');
-      renderDrops(PLAYER_POOL.legend, 'drop-legend', 'from-[#4527a0] to-black', 'border-[#b39ddb]', 'text-[#ede7f6]');
-      renderDrops(PLAYER_POOL.mythic, 'drop-mythic', 'from-[#0c4a6e] to-black', 'border-[#7dd3fc]', 'text-[#e0f2fe]');
+      renderDrops('common', PLAYER_POOL.common, 'drop-common', 'from-[#3a3a3a] to-black', 'border-[#6b7280]', 'text-[#d4d4d8]');
+      renderDrops('bronze', PLAYER_POOL.bronze, 'drop-bronze', 'from-[#4e342e] to-black', 'border-[#8d6e63]', 'text-[#d7ccc8]');
+      renderDrops('silver', PLAYER_POOL.silver, 'drop-silver', 'from-[#455a64] to-black', 'border-[#90a4ae]', 'text-[#cfd8dc]');
+      renderDrops('gold', PLAYER_POOL.gold, 'drop-gold', 'from-[#827717] to-black', 'border-[#fbc02d]', 'text-[#fff59d]');
+      renderDrops('legend', PLAYER_POOL.legend, 'drop-legend', 'from-[#4527a0] to-black', 'border-[#b39ddb]', 'text-[#ede7f6]');
+      renderDrops('mythic', PLAYER_POOL.mythic, 'drop-mythic', 'from-[#0c4a6e] to-black', 'border-[#7dd3fc]', 'text-[#e0f2fe]');
     }
 
     // Фильтр вкладки ПАКИ: 'all' | 'cheap' | 'expensive'. Каждая карточка пака
@@ -6241,18 +6297,41 @@
       }
     }
 
-    // --- ОНБОРДИНГ (первый запуск) ---
+    // --- ОНБОРДИНГ (первый запуск + повторный показ после апдейтов) ---
     // 5 шагов, полностью локально: приветствие -> имя клуба -> тур по вкладкам
-    // -> стартовый капитал -> стартовый состав из 11 карт. Показывается один
-    // раз, флаг лежит в localStorage.
+    // -> стартовый капитал -> стартовый состав из 11 карт.
+    //
+    // Показ управляется ДВУМЯ флагами в localStorage:
+    //  - onboardingDone — "визард пройден хотя бы раз когда-либо" (не версионный,
+    //    не трогаем — от него зависит showStarterPackReveal/handleStarterPackCards
+    //    ниже: уже проходившим визард раньше 11 стартовых карт показываются
+    //    отдельным попапом, а не шагом 4).
+    //  - onboardingVersionSeen — версия онбординга, которую игрок уже видел.
+    //    Сравнивается с ONBOARDING_VERSION: если у игрока сохранена версия
+    //    меньше текущей, тур показывается заново ОДИН раз (даже тем, кто уже
+    //    когда-то проходил онбординг) — так апдейты тура/новых вкладок видят
+    //    все игроки, а не только новые. После показа версия обновляется, и
+    //    повторно тур больше не всплывает, пока ONBOARDING_VERSION не вырастет.
     const ONBOARDING_STEPS = 5;
+    const ONBOARDING_VERSION = 2;
     let onboardingStep = 0;
+    // Для уже игравших (onboardingDone уже true до этого показа) шаг 4
+    // (выдача 11 карт) пропускается — свой стартовый набор они либо уже
+    // получили раньше, либо получат отдельным попапом starter-pack-modal
+    // через handleStarterPackCards() ниже. Тур в таком случае состоит из
+    // шагов 0-3 (это и есть onboardingStepsCount = ONBOARDING_STEPS - 1).
+    let onboardingStepsCount = ONBOARDING_STEPS;
     // Карты стартового набора (common), которые вернул сервер в /api/me —
     // см. handleStarterPackCards(). null, пока /api/me ещё не ответил.
     let pendingStarterCards = null;
 
     function initOnboarding() {
-      if (localStorage.getItem('onboardingDone') === 'true') return;
+      const seenVersion = parseInt(localStorage.getItem('onboardingVersionSeen') || '0', 10);
+      if (seenVersion >= ONBOARDING_VERSION) return;
+
+      const alreadyCompletedEver = localStorage.getItem('onboardingDone') === 'true';
+      onboardingStepsCount = alreadyCompletedEver ? ONBOARDING_STEPS - 1 : ONBOARDING_STEPS;
+
       onboardingStep = 0;
       renderOnboardingStep();
       document.getElementById('onboarding-modal').classList.remove('hidden');
@@ -6268,7 +6347,7 @@
       const nextBtn = document.getElementById('ob-next-btn');
       const skipBtn = document.getElementById('ob-skip-btn');
       const backBtn = document.getElementById('ob-back-btn');
-      const isLast = onboardingStep === ONBOARDING_STEPS - 1;
+      const isLast = onboardingStep === onboardingStepsCount - 1;
       nextBtn.innerText = isLast ? 'Погнали! ⚽' : 'Далее';
       skipBtn.classList.toggle('hidden', isLast);
       backBtn.classList.toggle('hidden', onboardingStep === 0);
@@ -6362,7 +6441,7 @@
           document.getElementById('manager-name-label').innerText = val;
         }
       }
-      if (onboardingStep >= ONBOARDING_STEPS - 1) {
+      if (onboardingStep >= onboardingStepsCount - 1) {
         onboardingFinish();
         return;
       }
@@ -6381,6 +6460,7 @@
     function onboardingFinish() {
       onboardingHaptic();
       localStorage.setItem('onboardingDone', 'true');
+      localStorage.setItem('onboardingVersionSeen', String(ONBOARDING_VERSION));
       localStorage.removeItem('onboardingClubNameDraft');
       document.getElementById('onboarding-modal').classList.add('hidden');
     }
