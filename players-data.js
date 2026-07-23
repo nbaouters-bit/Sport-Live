@@ -20,18 +20,23 @@ export const PLAYER_POOL = {
   // одной на каждую позицию будущего состава из 11 футболистов. Income
   // нарочно ниже bronze, чтобы бесплатный набор не обесценивал экономику
   // платных паков.
+  // Состав пула подобран РОВНО под 11 слотов состава (см. EMPTY_SQUAD в
+  // index.html: GK, DEF1-4, MID1-3, FWD1-3, т.е. формация 4-3-3) — поэтому
+  // здесь строго 1×GK, 4×DEF, 3×MID, 3×FWD. Так бесплатный стартовый набор
+  // всегда закрывает КАЖДУЮ позицию состава ровно одной картой, без дыр и
+  // без лишних дублей на одной позиции.
   common: [
     { id: 'c1', name: 'Trafford', rating: 68, pos: 'GK', nation: 'ENG', type: 'common', income: 5 },
     { id: 'c2', name: 'Colwill', rating: 67, pos: 'DEF', nation: 'ENG', type: 'common', income: 5 },
-    { id: 'c3', name: 'Estupinan', rating: 69, pos: 'DEF', nation: 'ESP', type: 'common', income: 5 },
-    { id: 'c4', name: 'Yarmoliuk', rating: 65, pos: 'MID', nation: 'UKR', type: 'common', income: 5 },
-    { id: 'c5', name: 'Veerman', rating: 66, pos: 'MID', nation: 'NED', type: 'common', income: 5 },
-    { id: 'c6', name: 'Doue', rating: 66, pos: 'MID', nation: 'FRA', type: 'common', income: 5 },
-    { id: 'c7', name: 'Alarcon', rating: 64, pos: 'MID', nation: 'ARG', type: 'common', income: 5 },
-    { id: 'c8', name: 'Kayky', rating: 63, pos: 'FWD', nation: 'BRA', type: 'common', income: 5 },
-    { id: 'c9', name: 'Bynoe-Gittens', rating: 68, pos: 'FWD', nation: 'ENG', type: 'common', income: 5 },
-    { id: 'c10', name: 'Nmecha', rating: 65, pos: 'FWD', nation: 'GER', type: 'common', income: 5 },
-    { id: 'c11', name: 'Lukebakio', rating: 68, pos: 'FWD', nation: 'BEL', type: 'common', income: 6 },
+    { id: 'c3', name: 'Estupinan', rating: 69, pos: 'DEF', nation: 'ESP', type: 'common', income: 6 },
+    { id: 'c4', name: 'Chalobah', rating: 66, pos: 'DEF', nation: 'ENG', type: 'common', income: 5 },
+    { id: 'c5', name: 'Wan-Bissaka', rating: 65, pos: 'DEF', nation: 'ENG', type: 'common', income: 5 },
+    { id: 'c6', name: 'Yarmoliuk', rating: 65, pos: 'MID', nation: 'UKR', type: 'common', income: 5 },
+    { id: 'c7', name: 'Veerman', rating: 66, pos: 'MID', nation: 'NED', type: 'common', income: 5 },
+    { id: 'c8', name: 'Doue', rating: 66, pos: 'MID', nation: 'FRA', type: 'common', income: 5 },
+    { id: 'c9', name: 'Kayky', rating: 63, pos: 'FWD', nation: 'BRA', type: 'common', income: 5 },
+    { id: 'c10', name: 'Bynoe-Gittens', rating: 68, pos: 'FWD', nation: 'ENG', type: 'common', income: 5 },
+    { id: 'c11', name: 'Nmecha', rating: 65, pos: 'FWD', nation: 'GER', type: 'common', income: 5 },
   ],
   bronze: [
     { id: 'b1', name: 'Zinchenko', rating: 79, pos: 'DEF', nation: 'UKR', type: 'bronze', income: 10 },
