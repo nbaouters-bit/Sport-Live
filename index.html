@@ -651,8 +651,7 @@
                 <p class="text-[10px] text-neutral-400 mt-0.5">Самый дешёвый вход: ~5-6 $SLive/день</p>
               </div>
               <div class="flex flex-col gap-1.5">
-                <button onclick="buyPack('common', 500, 'SLive')" class="bg-neutral-800 text-violet-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 500</button>
-                <button onclick="buyPack('common', 20, 'Stars')" class="bg-amber-500 text-black text-[11px] font-black px-3 py-1.5 rounded-xl hover:bg-amber-400 text-center">⭐️ 20</button>
+                <button onclick="buyPack('common', 500, 'SLive')" class="bg-neutral-800 text-violet-400 text-[11px] font-black px-4 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 500</button>
               </div>
             </div>
             <div class="bg-black/50 rounded-xl p-2 border border-[#6b7280]/50">
@@ -672,7 +671,7 @@
                 <p class="text-[10px] text-neutral-400 mt-0.5">Базовый доход: ~10-20 $SLive/день</p>
               </div>
               <div class="flex flex-col gap-1.5">
-                <button onclick="buyPack('bronze', 1500, 'SLive')" class="bg-neutral-800 text-violet-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 1.5K</button>
+                <button onclick="buyPack('bronze', 5000, 'SLive')" class="bg-neutral-800 text-violet-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 5K</button>
                 <button onclick="buyPack('bronze', 50, 'Stars')" class="bg-amber-500 text-black text-[11px] font-black px-3 py-1.5 rounded-xl hover:bg-amber-400 text-center">⭐️ 50</button>
               </div>
             </div>
@@ -694,7 +693,7 @@
                 <p class="text-[10px] text-neutral-400 mt-0.5">Улучшенный доход: ~26-58 $SLive/день</p>
               </div>
               <div class="flex flex-col gap-1.5">
-                <button onclick="buyPack('silver', 7500, 'SLive')" class="bg-neutral-800 text-violet-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 7.5K</button>
+                <button onclick="buyPack('silver', 10000, 'SLive')" class="bg-neutral-800 text-violet-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 10K</button>
                 <button onclick="buyPack('silver', 100, 'Stars')" class="bg-amber-500 text-black text-[11px] font-black px-3 py-1.5 rounded-xl hover:bg-amber-400 text-center">⭐️ 100</button>
               </div>
             </div>
@@ -758,7 +757,7 @@
               </div>
               <div class="flex flex-col gap-1.5">
                 <button onclick="buyPack('mythic', 600000, 'SLive')" class="bg-neutral-800 text-violet-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 600K</button>
-                <button onclick="buyPack('mythic', 3000, 'Stars')" class="bg-amber-500 text-black text-[11px] font-black px-3 py-1.5 rounded-xl hover:bg-amber-400 text-center">⭐️ 3000</button>
+                <button onclick="buyPack('mythic', 2000, 'Stars')" class="bg-amber-500 text-black text-[11px] font-black px-3 py-1.5 rounded-xl hover:bg-amber-400 text-center">⭐️ 2000</button>
               </div>
             </div>
             <div class="bg-black/50 rounded-xl p-2 border border-[#7dd3fc]/30">
@@ -881,13 +880,20 @@
         </div>
       </div>
 
-      <!-- ТАБ ДРАФТ: отдельный от основного Клуба состав из 5 карт + PvP-бои.
-           Карты драфта НЕ попадают в inventory/Клуб и не выставляются в обычный
-           "Состав" — это полностью изолированный режим (см. draft_squads в db.js). -->
+      <!-- ТАБ ДРАФТ: отдельный от основного Клуба состав из 11 карт (по одной
+           на позицию, формация 4-3-3) + 3 запасных + PvP-бои. Карты драфта
+           НЕ попадают в inventory/Клуб и не выставляются в обычный "Состав" —
+           это полностью изолированный режим (см. draft_squads в db.js).
+           ВАЖНО: сервер (/api/draft/start) должен отдавать squad.starters
+           (11 карт, порядок как в EMPTY_SQUAD: GK, DEF1-4, MID1-3, FWD1-3) и
+           squad.subs (3 карты) — см. renderDraftUI()/revealDraftSquad() ниже.
+           Старый плоский squad.players (5 карт) по-прежнему поддерживается
+           как фолбэк, чтобы страница не падала, пока бэкенд не обновлён. -->
       <div id="tab-draft" class="tab-content hidden p-4">
         <h2 class="text-xl font-black uppercase italic tracking-tight mb-2">Драфт</h2>
         <p class="text-[10px] text-neutral-400 mb-3 bg-neutral-900 p-2 rounded-lg border border-neutral-800">
-          Собери случайный состав из 5 карт и бейся с другими игроками по сумме рейтинга.
+          Собери случайный состав из 11 карт (формация 4-3-3, по одной на позицию) + 3 запасных
+          и бейся с другими игроками по сумме рейтинга основного состава.
           Одно поражение — и серия заканчивается, для нового боя нужен новый вход.
         </p>
 
@@ -909,14 +915,28 @@
 
         <div id="draft-squad-block" class="hidden">
           <div class="flex justify-between items-center mb-2">
-            <div class="text-[10px] font-bold text-neutral-300">Состав драфта:</div>
+            <div class="text-[10px] font-bold text-neutral-300">Основной состав (4-3-3):</div>
             <div id="draft-status-badge" class="text-[9px] font-black px-2 py-0.5 rounded-full"></div>
           </div>
-          <div id="draft-cards-grid" class="grid grid-cols-3 gap-2 mb-3"></div>
+          <div id="draft-cards-grid" class="grid grid-cols-4 gap-1.5 mb-3"></div>
+
+          <div class="text-[10px] font-bold text-neutral-300 mb-1.5">Запасные:</div>
+          <div id="draft-subs-grid" class="grid grid-cols-3 gap-1.5 mb-3"></div>
+
           <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-2.5 flex justify-between items-center mb-3">
             <div class="text-[10px] text-neutral-400">Рейтинг: <span id="draft-rating" class="text-white font-black">0</span></div>
             <div class="text-[10px] text-neutral-400">Побед в серии: <span id="draft-wins" class="text-violet-400 font-black">0</span></div>
           </div>
+
+          <!-- Выбор схемы перед боем — как в League (LEAGUE_FORMATIONS), но
+               компактно, прямо на вкладке, без отдельной модалки. Влияет на
+               множители силы состава в playDraftBattleClick(). -->
+          <div class="mb-3">
+            <div class="text-[10px] font-bold text-neutral-300 mb-1.5">Схема на матч:</div>
+            <div id="draft-formation-grid" class="grid grid-cols-2 gap-1.5 mb-1.5"></div>
+            <div id="draft-formation-hint" class="text-[9px] text-neutral-500 px-0.5"></div>
+          </div>
+
           <button onclick="playDraftBattleClick()" id="draft-battle-btn" class="w-full bg-red-500 text-white font-black py-3 rounded-xl text-sm">⚔️ В БОЙ</button>
         </div>
 
@@ -1272,6 +1292,18 @@
       <button onclick="closeReveal()" class="mt-8 bg-yellow-500 text-black font-black text-xs px-8 py-3 rounded-xl hover:scale-105 transition-all">
         ЗАБРАТЬ В КЛУБ
       </button>
+    </div>
+
+    <!-- Вскрытие состава Драфта: 5 карт показываются ПО ОДНОЙ с суспенсом
+         (как открытие пака в FIFA Draft), а не сразу единой сеткой — см.
+         revealDraftSquad(). Сами карты уже выбраны сервером в /api/draft/start,
+         это только презентационный слой поверх готового результата. -->
+    <div id="draft-reveal-modal" class="hidden absolute inset-0 bg-black/95 z-50 flex flex-col justify-center items-center p-6">
+      <div class="text-[10px] uppercase tracking-widest text-neutral-500 font-black mb-1">Твой состав драфта</div>
+      <div id="draft-reveal-slot-label" class="text-sm font-black text-violet-400 mb-4 uppercase"></div>
+      <div id="draft-reveal-card-container" class="mb-4" style="animation: popIn 0.35s ease-out;"></div>
+      <div id="draft-reveal-dots" class="flex gap-1.5 mb-5"></div>
+      <button onclick="advanceDraftReveal()" id="draft-reveal-next-btn" class="bg-violet-500 text-black font-black text-xs px-8 py-3 rounded-xl active:scale-95 transition-transform">ДАЛЕЕ ▶</button>
     </div>
 
     <!-- Проигрыватель интерактивного матча драфта: показывает события сегмента
@@ -5410,6 +5442,12 @@
       if (!tg?.initData) {
         return alertMsg('Открытие паков работает только внутри Telegram.');
       }
+      // Стартовый (common) пак продаётся ТОЛЬКО за $SLive — кнопка за Stars
+      // убрана из разметки выше, но проверяем и здесь на случай другого
+      // вызова этой функции в обход UI.
+      if (type === 'common' && currencyLabel === 'Stars') {
+        return alertMsg('Стартовый пак можно купить только за $SLive.');
+      }
       const currency = currencyLabel === 'SLive' ? 'slive' : 'stars';
 
       try {
@@ -5551,7 +5589,7 @@
         <div class="flex flex-col items-center gap-1">
           ${genCardHTML(p, false)}
           <div class="flex gap-1 w-full">
-            <button onclick="buyPlayerCard('${p.id}', 'stars')" class="flex-1 bg-amber-500 text-black text-[8px] font-black py-1 rounded">⭐️${price.stars}</button>
+            ${price.stars ? `<button onclick="buyPlayerCard('${p.id}', 'stars')" class="flex-1 bg-amber-500 text-black text-[8px] font-black py-1 rounded">⭐️${price.stars}</button>` : ''}
             <button onclick="buyPlayerCard('${p.id}', 'slive')" class="flex-1 bg-neutral-800 text-violet-400 text-[8px] font-black py-1 rounded border border-neutral-700">🪙${price.slive}</button>
           </div>
         </div>
@@ -5587,6 +5625,32 @@
     // Всё состояние (состав, победы, очки, лимит бесплатного входа) хранится
     // и проверяется на сервере — клиент только показывает то, что вернул API.
     let draftState = null;
+    // Схема на предстоящий бой Драфта — по умолчанию классика 4-4-2 (без явных
+    // сильных/слабых сторон), выбор живёт только на клиенте между боями.
+    // ВАЖНО: чтобы схема реально влияла на исход, а не была косметикой,
+    // /api/draft/battle/start должен на сервере читать formationKey из body
+    // и применять atk/def множители — см. те же значения, что и в
+    // LEAGUE_FORMATIONS выше (startLeagueMatch). Пока сервер это не учитывает,
+    // playDraftBattleClick() дополнительно проверяет ответ на признак
+    // formationApplied и предупреждает в консоли, если бэкенд его не вернул.
+    let draftSelectedFormation = 'f442';
+
+    function renderDraftFormationPicker() {
+      const grid = document.getElementById('draft-formation-grid');
+      if (!grid) return;
+      grid.innerHTML = Object.entries(LEAGUE_FORMATIONS).map(([key, f]) => {
+        const active = key === draftSelectedFormation;
+        return `<button onclick="selectDraftFormation('${key}')" class="${active ? 'bg-violet-500 text-black ring-2 ring-violet-300' : 'bg-neutral-800 text-neutral-300 border border-neutral-700'} font-black py-2 rounded-xl text-[10px] leading-tight text-left px-2.5">${f.label}<br><span class="font-normal opacity-80">${f.sub}</span></button>`;
+      }).join('');
+      const f = LEAGUE_FORMATIONS[draftSelectedFormation];
+      document.getElementById('draft-formation-hint').innerText = f.desc;
+    }
+
+    function selectDraftFormation(key) {
+      draftSelectedFormation = key;
+      SoundFX.click();
+      renderDraftFormationPicker();
+    }
 
     async function loadDraftState() {
       if (!tg?.initData) {
@@ -5621,11 +5685,19 @@
       }
 
       squadBlock.classList.remove('hidden');
-      const { players, rating, active, wins } = draftState.squad;
+      // Фолбэк на старый формат (плоский squad.players из 5 карт), пока
+      // бэкенд не обновлён на squad.starters (11) + squad.subs (3).
+      const { rating, active, wins } = draftState.squad;
+      const starters = draftState.squad.starters || draftState.squad.players || [];
+      const subs = draftState.squad.subs || [];
 
-      document.getElementById('draft-cards-grid').innerHTML = players.map(p => genCardHTML(p, false)).join('');
+      document.getElementById('draft-cards-grid').innerHTML = starters.map(p => genCardHTML(p, 'micro')).join('');
+      document.getElementById('draft-subs-grid').innerHTML = subs.length
+        ? subs.map(p => genCardHTML(p, 'micro')).join('')
+        : '<div class="col-span-3 text-[9px] text-neutral-600 text-center py-2">Запасных нет</div>';
       document.getElementById('draft-rating').innerText = rating;
       document.getElementById('draft-wins').innerText = wins;
+      renderDraftFormationPicker();
 
       const badge = document.getElementById('draft-status-badge');
       const battleBtn = document.getElementById('draft-battle-btn');
@@ -5642,6 +5714,63 @@
         battleBtn.classList.add('opacity-40');
         battleBtn.innerText = 'Серия завершена — войди заново';
       }
+    }
+
+    // Показывает состав нового драфта (11 основных + 3 запасных) ПО ОДНОЙ
+    // карте, с подписью "ОСНОВА/ЗАПАС · позиция" и прогресс-точками — суспенс
+    // в духе вскрытия пака FIFA. Карты уже выбраны сервером, тут только
+    // презентация; возвращает Promise, который резолвится, когда игрок
+    // долистал до конца (нажал "СОСТАВ ГОТОВ").
+    let draftRevealItems = [];
+    let draftRevealIndex = 0;
+    let draftRevealResolve = null;
+
+    function revealDraftSquad(starters, subs) {
+      return new Promise(resolve => {
+        draftRevealItems = [
+          ...starters.map(p => ({ p, isSub: false })),
+          ...subs.map(p => ({ p, isSub: true })),
+        ];
+        draftRevealIndex = 0;
+        draftRevealResolve = resolve;
+        document.getElementById('draft-reveal-modal').classList.remove('hidden');
+        SoundFX.packWhoosh();
+        renderDraftRevealStep();
+      });
+    }
+
+    function renderDraftRevealStep() {
+      const { p, isSub } = draftRevealItems[draftRevealIndex];
+      document.getElementById('draft-reveal-slot-label').innerText = `${isSub ? 'ЗАПАС' : 'ОСНОВА'} · ${p.pos || ''}`;
+      const container = document.getElementById('draft-reveal-card-container');
+      container.innerHTML = genCardHTML(p, true);
+      // Рестарт CSS-анимации попапа при каждой новой карте (reflow-трюк, как
+      // и в spawnOnboardingConfetti/onboardingNext выше).
+      container.style.animation = 'none';
+      void container.offsetWidth;
+      container.style.animation = 'popIn 0.35s ease-out';
+      SoundFX.packReveal(p.type);
+
+      const dots = document.getElementById('draft-reveal-dots');
+      dots.innerHTML = draftRevealItems.map((_, i) =>
+        `<div class="w-1.5 h-1.5 rounded-full ${i === draftRevealIndex ? 'bg-violet-500' : i < draftRevealIndex ? 'bg-violet-500/40' : 'bg-neutral-800'}"></div>`
+      ).join('');
+
+      const isLast = draftRevealIndex === draftRevealItems.length - 1;
+      document.getElementById('draft-reveal-next-btn').innerText = isLast ? 'СОСТАВ ГОТОВ ⚽' : 'ДАЛЕЕ ▶';
+    }
+
+    function advanceDraftReveal() {
+      SoundFX.click();
+      if (draftRevealIndex < draftRevealItems.length - 1) {
+        draftRevealIndex++;
+        renderDraftRevealStep();
+        return;
+      }
+      document.getElementById('draft-reveal-modal').classList.add('hidden');
+      const resolve = draftRevealResolve;
+      draftRevealResolve = null;
+      if (resolve) resolve();
     }
 
     // currency: 'slive' (🪙1000, лимит 1/сутки — лимит проверяет сервер),
@@ -5662,8 +5791,14 @@
         else if (currency === 'stars') tgStars = result.balance;
         updateHeader();
         document.getElementById('draft-last-result').classList.add('hidden');
+        draftSelectedFormation = 'f442';
+        // Фолбэк на старый формат (плоский squad.players из 5 карт), пока
+        // бэкенд не обновлён на squad.starters (11) + squad.subs (3).
+        const starters = result.squad.starters || result.squad.players || [];
+        const subs = result.squad.subs || [];
+        await revealDraftSquad(starters, subs);
         await loadDraftState();
-        alertMsg(`Драфт собран! Рейтинг состава: ${result.squad.rating} OVR. Одно поражение — и серия закончится.`);
+        alertMsg(`Состав собран — ${result.squad.rating} OVR. Выбери схему на матч и жми "В бой". Одно поражение — и серия закончится.`);
       } catch (e) {
         if (e.message === 'daily_entry_used') {
           alertMsg('Бесплатный вход за $SLive уже использован сегодня. Попробуй вход за ⭐️ 100.');
@@ -5799,7 +5934,7 @@
     // Общий "движок" проигрывания интерактивного матча — используется и
     // Драфтом, и Битвами составами: обе фичи используют одинаковый протокол
     // (start -> сегмент событий -> решение тактики -> decide -> ... -> finished).
-    async function runInteractiveMatch(startUrl, decideUrl, onStart) {
+    async function runInteractiveMatch(startUrl, decideUrl, onStart, startBody = {}) {
       const overlay = document.getElementById('draft-match-overlay');
       const feed = document.getElementById('draft-match-feed');
       const youScoreEl = document.getElementById('draft-score-you');
@@ -5819,7 +5954,7 @@
         // матч вообще начался.
         await sleep(DRAFT_KICKOFF_DELAY_MS);
 
-        let response = await apiPost(startUrl);
+        let response = await apiPost(startUrl, startBody);
         // Сервер списывает плату за вход (если она есть, см. Битвы составами)
         // уже ВНУТРИ /start — до этого колбэка деньги ещё не потрачены, после
         // него — уже да. onStart даёт вызывающей функции обновить баланс сразу.
@@ -5867,7 +6002,9 @@
 
       const { ok, response, opponentLabel, error } = await runInteractiveMatch(
         '/api/draft/battle/start',
-        '/api/draft/battle/decide'
+        '/api/draft/battle/decide',
+        null,
+        { formationKey: draftSelectedFormation }
       );
 
       if (!ok) {
@@ -5917,7 +6054,7 @@
       if (!state.ready) {
         readyBlock.classList.add('hidden');
         notReadyBlock.classList.remove('hidden');
-        notReadyBlock.innerText = 'Собери полный состав из 5 карт на вкладке "Состав" (GK, DEF, MID, FWD1, FWD2), чтобы биться.';
+        notReadyBlock.innerText = 'Собери полный состав из 11 карт (GK, DEF×4, MID×3, FWD×3) на вкладке "Состав", чтобы биться.';
         return;
       }
 
@@ -5956,7 +6093,7 @@
       );
 
       if (!ok) {
-        if (error === 'squad_not_ready') alertMsg('Собери полный состав из 5 карт на вкладке "Состав".');
+        if (error === 'squad_not_ready') alertMsg('Собери полный состав из 11 карт на вкладке "Состав".');
         else if (error === 'cooldown') alertMsg('Ещё рано — состав отдыхает после прошлого боя.');
         else if (error === 'no_opponents') alertMsg('Пока нет соперников с готовым составом. Попробуй чуть позже.');
         else if (error === 'insufficient_funds') alertMsg('Не хватает $SLive на вход в бой (нужно 400 🪙).');
@@ -6339,7 +6476,7 @@
     //    не только новые. После показа версия обновляется, и повторно тур
     //    больше не всплывает, пока ONBOARDING_VERSION не вырастет.
     const ONBOARDING_STEPS = 5;
-    const ONBOARDING_VERSION = 2;
+    const ONBOARDING_VERSION = 3;
     let onboardingStep = 0;
     // true, пока модалка тура реально открыта — по этому флагу (а не по
     // onboardingDone) handleStarterPackCards() ниже решает, подставлять ли
