@@ -668,7 +668,7 @@
             <div class="flex justify-between items-center">
               <div>
                 <h3 class="font-black text-[#cfd8dc] text-sm">СЕРЕБРЯНЫЙ ПАК 🥈</h3>
-                <p class="text-[10px] text-neutral-400 mt-0.5">Улучшенный доход: ~30-50 $SLive/день</p>
+                <p class="text-[10px] text-neutral-400 mt-0.5">Улучшенный доход: ~26-58 $SLive/день</p>
               </div>
               <div class="flex flex-col gap-1.5">
                 <button onclick="buyPack('silver', 7500, 'SLive')" class="bg-neutral-800 text-violet-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 7.5K</button>
@@ -678,7 +678,7 @@
             <div class="bg-black/50 rounded-xl p-2 border border-[#78909c]/50">
               <div class="text-[8px] text-[#90a4ae] font-bold uppercase mb-1.5 flex justify-between">
                 <span>Возможный дроп:</span>
-                <span class="text-violet-500">+30-50/день</span>
+                <span class="text-violet-500">+26-58/день</span>
               </div>
               <div class="flex flex-wrap gap-1.5" id="drop-silver"></div>
             </div>
@@ -689,7 +689,7 @@
             <div class="flex justify-between items-center">
               <div>
                 <h3 class="font-black text-[#fff59d] text-sm">ЗОЛОТОЙ ПАК 🥇</h3>
-                <p class="text-[10px] text-neutral-400 mt-0.5">Звёздный доход: ~100-160/день</p>
+                <p class="text-[10px] text-neutral-400 mt-0.5">Звёздный доход: ~90-165/день</p>
               </div>
               <div class="flex flex-col gap-1.5">
                 <button onclick="buyPack('gold', 30000, 'SLive')" class="bg-neutral-800 text-violet-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 30K</button>
@@ -699,7 +699,7 @@
             <div class="bg-black/50 rounded-xl p-2 border border-[#fbc02d]/30">
               <div class="text-[8px] text-[#fff59d] font-bold uppercase mb-1.5 flex justify-between">
                 <span>Возможный дроп:</span>
-                <span class="text-violet-500">+100-160/день</span>
+                <span class="text-violet-500">+90-165/день</span>
               </div>
               <div class="flex flex-wrap gap-1.5" id="drop-gold"></div>
             </div>
@@ -710,7 +710,7 @@
             <div class="flex justify-between items-center">
               <div>
                 <h3 class="font-black text-[#ede7f6] text-sm">ИКОНЫ ФУТБОЛА 🔮</h3>
-                <p class="text-[10px] text-neutral-400 mt-0.5">Элитный доход: ~450-650 $SLive/день</p>
+                <p class="text-[10px] text-neutral-400 mt-0.5">Элитный доход: ~330-650 $SLive/день</p>
               </div>
               <div class="flex flex-col gap-1.5">
                 <button onclick="buyPack('legend', 150000, 'SLive')" class="bg-neutral-800 text-violet-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 150K</button>
@@ -720,7 +720,7 @@
             <div class="bg-black/50 rounded-xl p-2 border border-[#b39ddb]/30">
               <div class="text-[8px] text-[#d1c4e9] font-bold uppercase mb-1.5 flex justify-between">
                 <span>Возможный дроп:</span>
-                <span class="text-violet-500">+450-650/день</span>
+                <span class="text-violet-500">+330-650/день</span>
               </div>
               <div class="flex flex-wrap gap-1.5" id="drop-legend"></div>
             </div>
@@ -731,7 +731,7 @@
             <div class="flex justify-between items-center">
               <div>
                 <h3 class="font-black text-[#e0f2fe] text-sm">МИФИЧЕСКИЙ ПАК 💠</h3>
-                <p class="text-[10px] text-neutral-400 mt-0.5">Максимальный доход: ~780-850 $SLive/день</p>
+                <p class="text-[10px] text-neutral-400 mt-0.5">Максимальный доход: ~770-870 $SLive/день</p>
               </div>
               <div class="flex flex-col gap-1.5">
                 <button onclick="buyPack('mythic', 600000, 'SLive')" class="bg-neutral-800 text-violet-400 text-[11px] font-black px-3 py-1.5 rounded-xl border border-neutral-700 hover:bg-neutral-700 text-center">🪙 600K</button>
@@ -741,7 +741,7 @@
             <div class="bg-black/50 rounded-xl p-2 border border-[#7dd3fc]/30">
               <div class="text-[8px] text-[#e0f2fe] font-bold uppercase mb-1.5 flex justify-between">
                 <span>Возможный дроп:</span>
-                <span class="text-violet-500">+780-850/день</span>
+                <span class="text-violet-500">+770-870/день</span>
               </div>
               <div class="flex flex-wrap gap-1.5" id="drop-mythic"></div>
             </div>
@@ -945,7 +945,7 @@
       </div>
 
       <!-- Модалка выбора суммы ставки, открывается по тапу на вариант исхода -->
-      <div id="bet-amount-modal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-end">
+      <div id="bet-amount-modal" class="hidden absolute inset-0 bg-black/80 z-50 flex items-end">
         <div class="bg-[#111] border-t border-neutral-800 rounded-t-3xl w-full p-4" style="animation: popIn 0.25s ease-out;">
           <div class="w-10 h-1 bg-neutral-700 rounded-full mx-auto mb-3"></div>
           <div class="flex justify-between items-center mb-3 bg-neutral-900 border border-neutral-800 rounded-xl p-2.5">
@@ -2970,7 +2970,7 @@
             </div>
             <div class="w-6 h-6 mx-auto bg-white/15 rounded flex items-center justify-center ring-1 ring-white/20">${avatar}</div>
             <div class="bg-black/70 rounded px-0.5 py-0.5 text-center">
-              <div class="font-black text-[5.5px] uppercase truncate leading-none">${surname}</div>
+              <div class="font-black text-[7.5px] uppercase truncate leading-none tracking-tight">${surname}</div>
             </div>
           </div>`;
       }
@@ -3001,7 +3001,7 @@
             </div>
             <div class="w-9 h-9 mx-auto bg-white/15 rounded-lg flex items-center justify-center p-0.5 ring-1 ring-white/20">${avatar}</div>
             <div class="bg-black/70 rounded-md px-1 py-0.5 text-center">
-              <div class="font-black text-[6.5px] uppercase truncate">${p.name}</div>
+              <div class="font-black text-[8px] uppercase truncate tracking-tight">${p.name}</div>
             </div>
           </div>`;
       }
@@ -3024,76 +3024,291 @@
     // Локальный справочник для витрины "Возможный дроп" в табе ПАКИ — не влияет
     // на игровую логику (реальный дроп решает сервер по players-data.js).
     const PLAYER_POOL = {
-      common: [
-        { id: 'c1', name: 'Trafford', rating: 68, pos: 'GK', nation: 'ENG', type: 'common', income: 5 },
-        { id: 'c2', name: 'Colwill', rating: 67, pos: 'DEF', nation: 'ENG', type: 'common', income: 5 },
-        { id: 'c3', name: 'Estupinan', rating: 69, pos: 'DEF', nation: 'ESP', type: 'common', income: 5 },
-        { id: 'c4', name: 'Yarmoliuk', rating: 65, pos: 'MID', nation: 'UKR', type: 'common', income: 5 },
-        { id: 'c5', name: 'Veerman', rating: 66, pos: 'MID', nation: 'NED', type: 'common', income: 5 },
-        { id: 'c6', name: 'Doue', rating: 66, pos: 'MID', nation: 'FRA', type: 'common', income: 5 },
-        { id: 'c7', name: 'Alarcon', rating: 64, pos: 'MID', nation: 'ARG', type: 'common', income: 5 },
-        { id: 'c8', name: 'Kayky', rating: 63, pos: 'FWD', nation: 'BRA', type: 'common', income: 5 },
-        { id: 'c9', name: 'Bynoe-Gittens', rating: 68, pos: 'FWD', nation: 'ENG', type: 'common', income: 5 },
-        { id: 'c10', name: 'Nmecha', rating: 65, pos: 'FWD', nation: 'GER', type: 'common', income: 5 },
-        { id: 'c11', name: 'Lukebakio', rating: 68, pos: 'FWD', nation: 'BEL', type: 'common', income: 6 },
-      ],
-      bronze: [
-        { id: 'b1', name: 'Zinchenko', rating: 79, pos: 'DEF', nation: 'UKR', type: 'bronze', income: 10 },
-        { id: 'b2', name: 'Mudryk', rating: 77, pos: 'FWD', nation: 'UKR', type: 'bronze', income: 10 },
-        { id: 'b3', name: 'Pickford', rating: 81, pos: 'GK', nation: 'ENG', type: 'bronze', income: 10 },
-        { id: 'b4', name: 'Maguire', rating: 79, pos: 'DEF', nation: 'ENG', type: 'bronze', income: 10 },
-        { id: 'b5', name: 'Timber', rating: 80, pos: 'DEF', nation: 'NED', type: 'bronze', income: 10 },
-        { id: 'b6', name: 'Malen', rating: 78, pos: 'FWD', nation: 'NED', type: 'bronze', income: 10 },
-        { id: 'b7', name: 'Konate', rating: 80, pos: 'DEF', nation: 'FRA', type: 'bronze', income: 10 },
-        { id: 'b8', name: 'Doku', rating: 79, pos: 'FWD', nation: 'BEL', type: 'bronze', income: 10 },
-        { id: 'b9', name: 'Wharton', rating: 76, pos: 'MID', nation: 'ENG', type: 'bronze', income: 10 },
-        { id: 'b10', name: 'Trubin', rating: 80, pos: 'GK', nation: 'UKR', type: 'bronze', income: 20 },
-      ],
-      silver: [
-        { id: 's1', name: 'Dovbyk', rating: 83, pos: 'FWD', nation: 'UKR', type: 'silver', income: 30 },
-        { id: 's2', name: 'Cucurella', rating: 82, pos: 'DEF', nation: 'ESP', type: 'silver', income: 30 },
-        { id: 's3', name: 'Gallagher', rating: 80, pos: 'MID', nation: 'ENG', type: 'silver', income: 30 },
-        { id: 's4', name: 'Tchouameni', rating: 84, pos: 'MID', nation: 'FRA', type: 'silver', income: 40 },
-        { id: 's5', name: 'Havertz', rating: 85, pos: 'FWD', nation: 'GER', type: 'silver', income: 40 },
-        { id: 's6', name: 'Musiala', rating: 86, pos: 'MID', nation: 'GER', type: 'silver', income: 50 },
-        { id: 's7', name: 'Zaire-Emery', rating: 82, pos: 'MID', nation: 'FRA', type: 'silver', income: 30 },
-        { id: 's8', name: 'Frimpong', rating: 81, pos: 'DEF', nation: 'NED', type: 'silver', income: 30 },
-        { id: 's9', name: 'Sudakov', rating: 82, pos: 'MID', nation: 'UKR', type: 'silver', income: 30 },
-        { id: 's10', name: 'Olise', rating: 84, pos: 'FWD', nation: 'FRA', type: 'silver', income: 40 },
-      ],
-      gold: [
-        { id: 'g1', name: 'L. Messi', rating: 92, pos: 'FWD', nation: 'ARG', type: 'gold', income: 150 },
-        { id: 'g2', name: 'Lamine Yamal', rating: 88, pos: 'FWD', nation: 'ESP', type: 'gold', income: 100 },
-        { id: 'g3', name: 'Rodri', rating: 91, pos: 'MID', nation: 'ESP', type: 'gold', income: 120 },
-        { id: 'g4', name: 'Bellingham', rating: 90, pos: 'MID', nation: 'ENG', type: 'gold', income: 120 },
-        { id: 'g5', name: 'Mbappe', rating: 93, pos: 'FWD', nation: 'FRA', type: 'gold', income: 160 },
-        { id: 'g6', name: 'Vinicius Jr', rating: 89, pos: 'FWD', nation: 'BRA', type: 'gold', income: 110 },
-        { id: 'g7', name: 'Haaland', rating: 91, pos: 'FWD', nation: 'NOR', type: 'gold', income: 140 },
-        { id: 'g8', name: 'De Bruyne', rating: 90, pos: 'MID', nation: 'BEL', type: 'gold', income: 120 },
-      ],
-      legend: [
-        { id: 'l1', name: 'Z. Zidane', rating: 96, pos: 'MID', nation: 'FRA', type: 'legend', income: 500 },
-        { id: 'l2', name: 'Ronaldinho', rating: 95, pos: 'FWD', nation: 'BRA', type: 'legend', income: 450 },
-        { id: 'l3', name: 'Ronaldo R9', rating: 97, pos: 'FWD', nation: 'BRA', type: 'legend', income: 550 },
-        { id: 'l4', name: 'Maradona', rating: 98, pos: 'MID', nation: 'ARG', type: 'legend', income: 600 },
-        { id: 'l5', name: 'Pele', rating: 99, pos: 'FWD', nation: 'BRA', type: 'legend', income: 650 },
-        { id: 'l6', name: 'C. Ronaldo', rating: 96, pos: 'FWD', nation: 'POR', type: 'legend', income: 520 },
-      ],
-      mythic: [
-        { id: 'm1', name: 'J. Cruyff', rating: 97, pos: 'MID', nation: 'NED', type: 'mythic', income: 800 },
-        { id: 'm2', name: 'F. Beckenbauer', rating: 96, pos: 'DEF', nation: 'GER', type: 'mythic', income: 780 },
-        { id: 'm3', name: 'A. Di Stefano', rating: 98, pos: 'FWD', nation: 'ESP', type: 'mythic', income: 850 },
-        { id: 'm4', name: 'Eusebio', rating: 97, pos: 'FWD', nation: 'POR', type: 'mythic', income: 830 },
-        { id: 'm5', name: 'M. Platini', rating: 96, pos: 'MID', nation: 'FRA', type: 'mythic', income: 800 },
-        { id: 'm6', name: 'Romario', rating: 97, pos: 'FWD', nation: 'BRA', type: 'mythic', income: 840 },
-      ]
-    };
+  // Самая дешёвая редкость — ниже bronze. Изначально введена для
+  // онбординга: ВСЕ игроки (и новые, и уже играющие) при входе получают
+  // один бесплатный стартовый набор из ВСЕХ 11 карт этого пула разом (см.
+  // claimStarterPackIfNeeded в db.js) — поэтому здесь ровно 11 карт, по
+  // одной на каждую позицию будущего состава из 11 футболистов. Income
+  // нарочно ниже bronze, чтобы бесплатный набор не обесценивал экономику
+  // платных паков.
+  common: [
+    { id: 'c1', name: 'Trafford', rating: 68, pos: 'GK', nation: 'ENG', type: 'common', income: 5 },
+    { id: 'c2', name: 'Colwill', rating: 67, pos: 'DEF', nation: 'ENG', type: 'common', income: 5 },
+    { id: 'c3', name: 'Estupinan', rating: 69, pos: 'DEF', nation: 'ESP', type: 'common', income: 5 },
+    { id: 'c4', name: 'Yarmoliuk', rating: 65, pos: 'MID', nation: 'UKR', type: 'common', income: 5 },
+    { id: 'c5', name: 'Veerman', rating: 66, pos: 'MID', nation: 'NED', type: 'common', income: 5 },
+    { id: 'c6', name: 'Doue', rating: 66, pos: 'MID', nation: 'FRA', type: 'common', income: 5 },
+    { id: 'c7', name: 'Alarcon', rating: 64, pos: 'MID', nation: 'ARG', type: 'common', income: 5 },
+    { id: 'c8', name: 'Kayky', rating: 63, pos: 'FWD', nation: 'BRA', type: 'common', income: 5 },
+    { id: 'c9', name: 'Bynoe-Gittens', rating: 68, pos: 'FWD', nation: 'ENG', type: 'common', income: 5 },
+    { id: 'c10', name: 'Nmecha', rating: 65, pos: 'FWD', nation: 'GER', type: 'common', income: 5 },
+    { id: 'c11', name: 'Lukebakio', rating: 68, pos: 'FWD', nation: 'BEL', type: 'common', income: 6 },
+  ],
+  bronze: [
+    { id: 'b1', name: 'Zinchenko', rating: 79, pos: 'DEF', nation: 'UKR', type: 'bronze', income: 10 },
+    { id: 'b2', name: 'Mudryk', rating: 77, pos: 'FWD', nation: 'UKR', type: 'bronze', income: 10 },
+    { id: 'b3', name: 'Pickford', rating: 81, pos: 'GK', nation: 'ENG', type: 'bronze', income: 10 },
+    { id: 'b4', name: 'Maguire', rating: 79, pos: 'DEF', nation: 'ENG', type: 'bronze', income: 10 },
+    { id: 'b5', name: 'Timber', rating: 80, pos: 'DEF', nation: 'NED', type: 'bronze', income: 10 },
+    { id: 'b6', name: 'Malen', rating: 78, pos: 'FWD', nation: 'NED', type: 'bronze', income: 10 },
+    { id: 'b7', name: 'Konate', rating: 80, pos: 'DEF', nation: 'FRA', type: 'bronze', income: 10 },
+    { id: 'b8', name: 'Doku', rating: 79, pos: 'FWD', nation: 'BEL', type: 'bronze', income: 10 },
+    { id: 'b9', name: 'Wharton', rating: 76, pos: 'MID', nation: 'ENG', type: 'bronze', income: 10 },
+    { id: 'b10', name: 'Trubin', rating: 80, pos: 'GK', nation: 'UKR', type: 'bronze', income: 20 },
+    { id: 'b11', name: 'Kimmich', rating: 82, pos: 'MID', nation: 'GER', type: 'bronze', income: 12 },
+    { id: 'b12', name: 'Kepa', rating: 78, pos: 'GK', nation: 'ESP', type: 'bronze', income: 10 },
+    { id: 'b13', name: 'Digne', rating: 77, pos: 'DEF', nation: 'FRA', type: 'bronze', income: 10 },
+    { id: 'b14', name: 'Adli', rating: 75, pos: 'MID', nation: 'FRA', type: 'bronze', income: 10 },
+    { id: 'b15', name: 'Danjuma', rating: 76, pos: 'FWD', nation: 'NED', type: 'bronze', income: 10 },
+    { id: 'b16', name: 'Livakovic', rating: 79, pos: 'GK', nation: 'CRO', type: 'bronze', income: 10 },
+    { id: 'b17', name: 'Ake', rating: 79, pos: 'DEF', nation: 'NED', type: 'bronze', income: 10 },
+    { id: 'b18', name: 'Iwobi', rating: 77, pos: 'MID', nation: 'NGA', type: 'bronze', income: 10 },
+    { id: 'b19', name: 'Larin', rating: 76, pos: 'FWD', nation: 'CAN', type: 'bronze', income: 10 },
+    { id: 'b20', name: 'Kovacic', rating: 81, pos: 'MID', nation: 'CRO', type: 'bronze', income: 12 },
+    { id: 'b21', name: 'Coman', rating: 82, pos: 'FWD', nation: 'FRA', type: 'bronze', income: 13 },
+    { id: 'b22', name: 'Botman', rating: 80, pos: 'DEF', nation: 'NED', type: 'bronze', income: 10 },
+    { id: 'b23', name: 'J. Lambert', rating: 73, pos: 'DEF', nation: 'FRA', type: 'bronze', income: 10 },
+    { id: 'b24', name: 'M. Shevchenko', rating: 73, pos: 'FWD', nation: 'SRB', type: 'bronze', income: 10 },
+    { id: 'b25', name: 'S. Diaz', rating: 73, pos: 'DEF', nation: 'URU', type: 'bronze', income: 10 },
+    { id: 'b26', name: 'K. Marchand', rating: 73, pos: 'DEF', nation: 'FRA', type: 'bronze', income: 10 },
+    { id: 'b27', name: 'B. Kim', rating: 74, pos: 'FWD', nation: 'KOR', type: 'bronze', income: 11 },
+    { id: 'b28', name: 'S. Lambert', rating: 73, pos: 'FWD', nation: 'FRA', type: 'bronze', income: 10 },
+    { id: 'b29', name: 'A. Toure', rating: 74, pos: 'GK', nation: 'MAR', type: 'bronze', income: 11 },
+    { id: 'b30', name: 'M. Roche', rating: 74, pos: 'FWD', nation: 'FRA', type: 'bronze', income: 11 },
+    { id: 'b31', name: 'V. Ferrari', rating: 74, pos: 'FWD', nation: 'ITA', type: 'bronze', income: 11 },
+    { id: 'b32', name: 'L. Hughes', rating: 75, pos: 'DEF', nation: 'CAN', type: 'bronze', income: 11 },
+    { id: 'b33', name: 'T. Nilsen', rating: 75, pos: 'DEF', nation: 'SWE', type: 'bronze', income: 11 },
+    { id: 'b34', name: 'P. Smith', rating: 76, pos: 'DEF', nation: 'ENG', type: 'bronze', income: 12 },
+    { id: 'b35', name: 'M. Alonso', rating: 76, pos: 'MID', nation: 'ESP', type: 'bronze', income: 12 },
+    { id: 'b36', name: 'D. Nilsen', rating: 76, pos: 'FWD', nation: 'NOR', type: 'bronze', income: 12 },
+    { id: 'b37', name: 'R. Maes', rating: 76, pos: 'MID', nation: 'NED', type: 'bronze', income: 12 },
+    { id: 'b38', name: 'L. Silva', rating: 76, pos: 'GK', nation: 'ARG', type: 'bronze', income: 12 },
+    { id: 'b39', name: 'M. Wilson', rating: 76, pos: 'DEF', nation: 'CAN', type: 'bronze', income: 12 },
+    { id: 'b40', name: 'E. De Boer', rating: 76, pos: 'MID', nation: 'NED', type: 'bronze', income: 12 },
+    { id: 'b41', name: 'E. Ito', rating: 76, pos: 'MID', nation: 'KOR', type: 'bronze', income: 12 },
+    { id: 'b42', name: 'P. Rossi', rating: 77, pos: 'GK', nation: 'ITA', type: 'bronze', income: 13 },
+    { id: 'b43', name: 'V. Oliveira', rating: 76, pos: 'DEF', nation: 'ESP', type: 'bronze', income: 12 },
+    { id: 'b44', name: 'E. Hughes', rating: 78, pos: 'GK', nation: 'CAN', type: 'bronze', income: 13 },
+    { id: 'b45', name: 'P. Roche', rating: 77, pos: 'DEF', nation: 'FRA', type: 'bronze', income: 13 },
+    { id: 'b46', name: 'L. Clarke', rating: 77, pos: 'DEF', nation: 'AUS', type: 'bronze', income: 13 },
+    { id: 'b47', name: 'L. Toure', rating: 77, pos: 'GK', nation: 'ALG', type: 'bronze', income: 13 },
+    { id: 'b48', name: 'B. Andersen', rating: 78, pos: 'MID', nation: 'DEN', type: 'bronze', income: 13 },
+    { id: 'b49', name: 'J. Castillo', rating: 78, pos: 'MID', nation: 'CHI', type: 'bronze', income: 13 },
+    { id: 'b50', name: 'D. Diallo', rating: 77, pos: 'MID', nation: 'GHA', type: 'bronze', income: 13 },
+    { id: 'b51', name: 'D. Lopez', rating: 77, pos: 'MID', nation: 'ESP', type: 'bronze', income: 13 },
+    { id: 'b52', name: 'A. Esposito', rating: 78, pos: 'DEF', nation: 'ITA', type: 'bronze', income: 13 },
+    { id: 'b53', name: 'V. Walker', rating: 79, pos: 'DEF', nation: 'ENG', type: 'bronze', income: 14 },
+    { id: 'b54', name: 'S. Mensah', rating: 79, pos: 'DEF', nation: 'SEN', type: 'bronze', income: 14 },
+    { id: 'b55', name: 'A. Martinez', rating: 79, pos: 'FWD', nation: 'POR', type: 'bronze', income: 14 },
+    { id: 'b56', name: 'V. Girard', rating: 79, pos: 'DEF', nation: 'FRA', type: 'bronze', income: 14 },
+    { id: 'b57', name: 'J. Navarro', rating: 80, pos: 'DEF', nation: 'ESP', type: 'bronze', income: 15 },
+    { id: 'b58', name: 'S. Girard', rating: 80, pos: 'FWD', nation: 'FRA', type: 'bronze', income: 15 },
+    { id: 'b59', name: 'N. Evans', rating: 80, pos: 'DEF', nation: 'AUS', type: 'bronze', income: 15 },
+    { id: 'b60', name: 'J. Ferreira', rating: 79, pos: 'DEF', nation: 'POR', type: 'bronze', income: 14 },
+    { id: 'b61', name: 'D. Bernard', rating: 80, pos: 'MID', nation: 'FRA', type: 'bronze', income: 15 },
+    { id: 'b62', name: 'P. Conti', rating: 80, pos: 'MID', nation: 'ITA', type: 'bronze', income: 15 },
+    { id: 'b63', name: 'D. Maes', rating: 80, pos: 'MID', nation: 'BEL', type: 'bronze', income: 15 },
+    { id: 'b64', name: 'E. Conti', rating: 82, pos: 'FWD', nation: 'ITA', type: 'bronze', income: 16 },
+    { id: 'b65', name: 'C. Diop', rating: 82, pos: 'DEF', nation: 'ALG', type: 'bronze', income: 16 },
+    { id: 'b66', name: 'K. Weber', rating: 80, pos: 'FWD', nation: 'GER', type: 'bronze', income: 15 },
+    { id: 'b67', name: 'E. Roche', rating: 82, pos: 'DEF', nation: 'FRA', type: 'bronze', income: 16 },
+    { id: 'b68', name: 'A. Greco', rating: 82, pos: 'FWD', nation: 'ITA', type: 'bronze', income: 16 },
+    { id: 'b69', name: 'V. Park', rating: 81, pos: 'MID', nation: 'JPN', type: 'bronze', income: 15 },
+    { id: 'b70', name: 'M. Schneider', rating: 81, pos: 'FWD', nation: 'SUI', type: 'bronze', income: 15 },
+  ],
+  silver: [
+    { id: 's1', name: 'Dovbyk', rating: 83, pos: 'FWD', nation: 'UKR', type: 'silver', income: 30 },
+    { id: 's2', name: 'Cucurella', rating: 82, pos: 'DEF', nation: 'ESP', type: 'silver', income: 30 },
+    { id: 's3', name: 'Gallagher', rating: 80, pos: 'MID', nation: 'ENG', type: 'silver', income: 30 },
+    { id: 's4', name: 'Tchouameni', rating: 84, pos: 'MID', nation: 'FRA', type: 'silver', income: 40 },
+    { id: 's5', name: 'Havertz', rating: 85, pos: 'FWD', nation: 'GER', type: 'silver', income: 40 },
+    { id: 's6', name: 'Musiala', rating: 86, pos: 'MID', nation: 'GER', type: 'silver', income: 50 },
+    { id: 's7', name: 'Zaire-Emery', rating: 82, pos: 'MID', nation: 'FRA', type: 'silver', income: 30 },
+    { id: 's8', name: 'Frimpong', rating: 81, pos: 'DEF', nation: 'NED', type: 'silver', income: 30 },
+    { id: 's9', name: 'Sudakov', rating: 82, pos: 'MID', nation: 'UKR', type: 'silver', income: 30 },
+    { id: 's10', name: 'Olise', rating: 84, pos: 'FWD', nation: 'FRA', type: 'silver', income: 40 },
+    { id: 's11', name: 'Wirtz', rating: 86, pos: 'MID', nation: 'GER', type: 'silver', income: 50 },
+    { id: 's12', name: 'Saka', rating: 87, pos: 'FWD', nation: 'ENG', type: 'silver', income: 55 },
+    { id: 's13', name: 'Rice', rating: 85, pos: 'MID', nation: 'ENG', type: 'silver', income: 45 },
+    { id: 's14', name: 'Grimaldo', rating: 83, pos: 'DEF', nation: 'ESP', type: 'silver', income: 35 },
+    { id: 's15', name: 'Pedri', rating: 86, pos: 'MID', nation: 'ESP', type: 'silver', income: 50 },
+    { id: 's16', name: 'Kvaratskhelia', rating: 87, pos: 'FWD', nation: 'GEO', type: 'silver', income: 55 },
+    { id: 's17', name: 'Guler', rating: 82, pos: 'MID', nation: 'TUR', type: 'silver', income: 32 },
+    { id: 's18', name: 'Skriniar', rating: 83, pos: 'DEF', nation: 'SVK', type: 'silver', income: 34 },
+    { id: 's19', name: 'Fernandez', rating: 84, pos: 'MID', nation: 'ARG', type: 'silver', income: 40 },
+    { id: 's20', name: 'Nunez', rating: 84, pos: 'FWD', nation: 'URU', type: 'silver', income: 42 },
+    { id: 's21', name: 'Barella', rating: 85, pos: 'MID', nation: 'ITA', type: 'silver', income: 45 },
+    { id: 's22', name: 'Van Dijk', rating: 86, pos: 'DEF', nation: 'NED', type: 'silver', income: 48 },
+    { id: 's23', name: 'B. Wagner', rating: 79, pos: 'FWD', nation: 'AUT', type: 'silver', income: 30 },
+    { id: 's24', name: 'P. Vidal', rating: 78, pos: 'GK', nation: 'COL', type: 'silver', income: 26 },
+    { id: 's25', name: 'M. Balog', rating: 78, pos: 'DEF', nation: 'SRB', type: 'silver', income: 26 },
+    { id: 's26', name: 'R. Benali', rating: 79, pos: 'MID', nation: 'MAR', type: 'silver', income: 30 },
+    { id: 's27', name: 'A. Wilson', rating: 80, pos: 'DEF', nation: 'USA', type: 'silver', income: 33 },
+    { id: 's28', name: 'R. Clarke', rating: 78, pos: 'GK', nation: 'IRL', type: 'silver', income: 26 },
+    { id: 's29', name: 'M. Janssens', rating: 79, pos: 'MID', nation: 'NED', type: 'silver', income: 30 },
+    { id: 's30', name: 'C. Zimmer', rating: 79, pos: 'MID', nation: 'SUI', type: 'silver', income: 30 },
+    { id: 's31', name: 'R. Johansson', rating: 80, pos: 'FWD', nation: 'NOR', type: 'silver', income: 33 },
+    { id: 's32', name: 'A. Fontaine', rating: 80, pos: 'FWD', nation: 'FRA', type: 'silver', income: 33 },
+    { id: 's33', name: 'B. Shevchenko', rating: 79, pos: 'MID', nation: 'TUR', type: 'silver', income: 30 },
+    { id: 's34', name: 'C. Dvorak', rating: 81, pos: 'FWD', nation: 'RUS', type: 'silver', income: 37 },
+    { id: 's35', name: 'K. Rojas', rating: 80, pos: 'FWD', nation: 'COL', type: 'silver', income: 33 },
+    { id: 's36', name: 'T. Schneider', rating: 81, pos: 'GK', nation: 'AUT', type: 'silver', income: 37 },
+    { id: 's37', name: 'E. Martinez', rating: 81, pos: 'GK', nation: 'POR', type: 'silver', income: 37 },
+    { id: 's38', name: 'J. Nilsen', rating: 81, pos: 'FWD', nation: 'DEN', type: 'silver', income: 37 },
+    { id: 's39', name: 'M. Marino', rating: 82, pos: 'MID', nation: 'ITA', type: 'silver', income: 40 },
+    { id: 's40', name: 'L. Kovalenko', rating: 81, pos: 'FWD', nation: 'SRB', type: 'silver', income: 37 },
+    { id: 's41', name: 'A. Navarro', rating: 82, pos: 'DEF', nation: 'POR', type: 'silver', income: 40 },
+    { id: 's42', name: 'J. Weber', rating: 82, pos: 'FWD', nation: 'SUI', type: 'silver', income: 40 },
+    { id: 's43', name: 'L. Kim', rating: 81, pos: 'DEF', nation: 'JPN', type: 'silver', income: 37 },
+    { id: 's44', name: 'B. Balog', rating: 81, pos: 'FWD', nation: 'HUN', type: 'silver', income: 37 },
+    { id: 's45', name: 'E. Romano', rating: 81, pos: 'DEF', nation: 'ITA', type: 'silver', income: 37 },
+    { id: 's46', name: 'K. Maes', rating: 82, pos: 'GK', nation: 'BEL', type: 'silver', income: 40 },
+    { id: 's47', name: 'R. Osei', rating: 82, pos: 'FWD', nation: 'SEN', type: 'silver', income: 40 },
+    { id: 's48', name: 'J. Choi', rating: 83, pos: 'FWD', nation: 'KOR', type: 'silver', income: 44 },
+    { id: 's49', name: 'E. Nagy', rating: 84, pos: 'FWD', nation: 'TUR', type: 'silver', income: 47 },
+    { id: 's50', name: 'R. Yoon', rating: 83, pos: 'FWD', nation: 'JPN', type: 'silver', income: 44 },
+    { id: 's51', name: 'B. Balog', rating: 83, pos: 'DEF', nation: 'UKR', type: 'silver', income: 44 },
+    { id: 's52', name: 'K. Hansen', rating: 83, pos: 'DEF', nation: 'SWE', type: 'silver', income: 44 },
+    { id: 's53', name: 'C. Roche', rating: 85, pos: 'FWD', nation: 'FRA', type: 'silver', income: 51 },
+    { id: 's54', name: 'V. Karlsson', rating: 85, pos: 'MID', nation: 'DEN', type: 'silver', income: 51 },
+    { id: 's55', name: 'T. Diallo', rating: 83, pos: 'DEF', nation: 'ALG', type: 'silver', income: 44 },
+    { id: 's56', name: 'B. Foster', rating: 85, pos: 'FWD', nation: 'ENG', type: 'silver', income: 51 },
+    { id: 's57', name: 'T. Bakker', rating: 85, pos: 'MID', nation: 'NED', type: 'silver', income: 51 },
+    { id: 's58', name: 'R. Shevchenko', rating: 84, pos: 'DEF', nation: 'GEO', type: 'silver', income: 47 },
+    { id: 's59', name: 'A. Bakker', rating: 84, pos: 'FWD', nation: 'BEL', type: 'silver', income: 47 },
+    { id: 's60', name: 'R. Diallo', rating: 84, pos: 'DEF', nation: 'CIV', type: 'silver', income: 47 },
+    { id: 's61', name: 'E. Andersen', rating: 86, pos: 'DEF', nation: 'NOR', type: 'silver', income: 54 },
+    { id: 's62', name: 'T. Berg', rating: 86, pos: 'GK', nation: 'NOR', type: 'silver', income: 54 },
+    { id: 's63', name: 'B. Rousseau', rating: 85, pos: 'MID', nation: 'FRA', type: 'silver', income: 51 },
+    { id: 's64', name: 'S. Oliveira', rating: 85, pos: 'FWD', nation: 'ESP', type: 'silver', income: 51 },
+    { id: 's65', name: 'T. Torres', rating: 87, pos: 'FWD', nation: 'ARG', type: 'silver', income: 58 },
+    { id: 's66', name: 'C. Schulz', rating: 86, pos: 'DEF', nation: 'SUI', type: 'silver', income: 54 },
+    { id: 's67', name: 'A. Herrera', rating: 86, pos: 'FWD', nation: 'ARG', type: 'silver', income: 54 },
+    { id: 's68', name: 'A. Bianchi', rating: 87, pos: 'FWD', nation: 'ITA', type: 'silver', income: 58 },
+    { id: 's69', name: 'S. Zimmer', rating: 87, pos: 'FWD', nation: 'SUI', type: 'silver', income: 58 },
+    { id: 's70', name: 'T. Hoffmann', rating: 87, pos: 'DEF', nation: 'AUT', type: 'silver', income: 58 },
+  ],
+  gold: [
+    { id: 'g2', name: 'Lamine Yamal', rating: 88, pos: 'FWD', nation: 'ESP', type: 'gold', income: 100 },
+    { id: 'g3', name: 'Rodri', rating: 91, pos: 'MID', nation: 'ESP', type: 'gold', income: 120 },
+    { id: 'g4', name: 'Bellingham', rating: 90, pos: 'MID', nation: 'ENG', type: 'gold', income: 120 },
+    { id: 'g5', name: 'Mbappe', rating: 93, pos: 'FWD', nation: 'FRA', type: 'gold', income: 160 },
+    { id: 'g6', name: 'Vinicius Jr', rating: 89, pos: 'FWD', nation: 'BRA', type: 'gold', income: 110 },
+    { id: 'g7', name: 'Haaland', rating: 91, pos: 'FWD', nation: 'NOR', type: 'gold', income: 140 },
+    { id: 'g8', name: 'De Bruyne', rating: 90, pos: 'MID', nation: 'BEL', type: 'gold', income: 120 },
+    { id: 'g9', name: 'Kane', rating: 90, pos: 'FWD', nation: 'ENG', type: 'gold', income: 125 },
+    { id: 'g10', name: 'Salah', rating: 90, pos: 'FWD', nation: 'EGY', type: 'gold', income: 125 },
+    { id: 'g11', name: 'Courtois', rating: 90, pos: 'GK', nation: 'BEL', type: 'gold', income: 110 },
+    { id: 'g12', name: 'Alisson', rating: 89, pos: 'GK', nation: 'BRA', type: 'gold', income: 105 },
+    { id: 'g13', name: 'Dias', rating: 88, pos: 'DEF', nation: 'POR', type: 'gold', income: 100 },
+    { id: 'g14', name: 'Modric', rating: 88, pos: 'MID', nation: 'CRO', type: 'gold', income: 105 },
+    { id: 'g15', name: 'Foden', rating: 89, pos: 'MID', nation: 'ENG', type: 'gold', income: 110 },
+    { id: 'g16', name: 'Martinez', rating: 87, pos: 'FWD', nation: 'ARG', type: 'gold', income: 95 },
+    { id: 'g17', name: 'Kimpembe', rating: 87, pos: 'DEF', nation: 'FRA', type: 'gold', income: 95 },
+    { id: 'g18', name: 'R. Okafor', rating: 86, pos: 'DEF', nation: 'CIV', type: 'gold', income: 90 },
+    { id: 'g19', name: 'N. Foster', rating: 86, pos: 'MID', nation: 'ENG', type: 'gold', income: 90 },
+    { id: 'g20', name: 'D. Aguirre', rating: 86, pos: 'GK', nation: 'MEX', type: 'gold', income: 90 },
+    { id: 'g21', name: 'K. Fontaine', rating: 87, pos: 'GK', nation: 'FRA', type: 'gold', income: 101 },
+    { id: 'g22', name: 'E. Petrov', rating: 87, pos: 'GK', nation: 'SRB', type: 'gold', income: 101 },
+    { id: 'g23', name: 'L. Romano', rating: 87, pos: 'FWD', nation: 'ITA', type: 'gold', income: 101 },
+    { id: 'g24', name: 'B. Diop', rating: 88, pos: 'DEF', nation: 'EGY', type: 'gold', income: 111 },
+    { id: 'g25', name: 'L. Aguirre', rating: 87, pos: 'MID', nation: 'ARG', type: 'gold', income: 101 },
+    { id: 'g26', name: 'N. Park', rating: 87, pos: 'MID', nation: 'JPN', type: 'gold', income: 101 },
+    { id: 'g27', name: 'M. Berg', rating: 87, pos: 'FWD', nation: 'NOR', type: 'gold', income: 101 },
+    { id: 'g28', name: 'V. Willems', rating: 88, pos: 'GK', nation: 'BEL', type: 'gold', income: 111 },
+    { id: 'g29', name: 'N. Becker', rating: 89, pos: 'DEF', nation: 'AUT', type: 'gold', income: 122 },
+    { id: 'g30', name: 'D. Wagner', rating: 89, pos: 'MID', nation: 'SUI', type: 'gold', income: 122 },
+    { id: 'g31', name: 'D. Garcia', rating: 89, pos: 'MID', nation: 'POR', type: 'gold', income: 122 },
+    { id: 'g32', name: 'P. Clarke', rating: 89, pos: 'FWD', nation: 'USA', type: 'gold', income: 122 },
+    { id: 'g33', name: 'B. Garcia', rating: 88, pos: 'MID', nation: 'POR', type: 'gold', income: 111 },
+    { id: 'g34', name: 'K. Choi', rating: 89, pos: 'MID', nation: 'JPN', type: 'gold', income: 122 },
+    { id: 'g35', name: 'S. Kim', rating: 89, pos: 'MID', nation: 'JPN', type: 'gold', income: 122 },
+    { id: 'g36', name: 'T. Zimmer', rating: 89, pos: 'FWD', nation: 'AUT', type: 'gold', income: 122 },
+    { id: 'g37', name: 'L. Murphy', rating: 90, pos: 'FWD', nation: 'ENG', type: 'gold', income: 133 },
+    { id: 'g38', name: 'P. Schulz', rating: 90, pos: 'DEF', nation: 'GER', type: 'gold', income: 133 },
+    { id: 'g39', name: 'E. Hughes', rating: 91, pos: 'GK', nation: 'ENG', type: 'gold', income: 144 },
+    { id: 'g40', name: 'B. Lindqvist', rating: 90, pos: 'MID', nation: 'SWE', type: 'gold', income: 133 },
+    { id: 'g41', name: 'B. Kowalski', rating: 90, pos: 'DEF', nation: 'GEO', type: 'gold', income: 133 },
+    { id: 'g42', name: 'R. Romano', rating: 92, pos: 'DEF', nation: 'ITA', type: 'gold', income: 154 },
+    { id: 'g43', name: 'A. Cardoso', rating: 91, pos: 'MID', nation: 'URU', type: 'gold', income: 144 },
+    { id: 'g44', name: 'J. Reid', rating: 92, pos: 'DEF', nation: 'CAN', type: 'gold', income: 154 },
+    { id: 'g45', name: 'E. Dvorak', rating: 93, pos: 'FWD', nation: 'SVK', type: 'gold', income: 165 },
+    { id: 'g46', name: 'J. Janssens', rating: 93, pos: 'DEF', nation: 'NED', type: 'gold', income: 165 },
+    { id: 'g47', name: 'V. Kovac', rating: 93, pos: 'DEF', nation: 'TUR', type: 'gold', income: 165 },
+    { id: 'g48', name: 'N. Ferreira', rating: 93, pos: 'MID', nation: 'POR', type: 'gold', income: 165 },
+    { id: 'g49', name: 'A. Kim', rating: 93, pos: 'FWD', nation: 'JPN', type: 'gold', income: 165 },
+    { id: 'g50', name: 'T. Taylor', rating: 93, pos: 'DEF', nation: 'USA', type: 'gold', income: 165 },
+    { id: 'g51', name: 'C. Rodriguez', rating: 93, pos: 'DEF', nation: 'URU', type: 'gold', income: 165 },
+  ],
+  legend: [
+    // Ронду и Месси — топ легенд, оба 99 рейтинга (Роналду первым). Income
+    // считается по той же кривой, что и остальная легенда: 50*rating-4300.
+    { id: 'l6', name: 'C. Ronaldo', rating: 99, pos: 'FWD', nation: 'POR', type: 'legend', income: 650 },
+    { id: 'g1', name: 'L. Messi', rating: 99, pos: 'FWD', nation: 'ARG', type: 'legend', income: 650 },
+    { id: 'l5', name: 'Pele', rating: 99, pos: 'FWD', nation: 'BRA', type: 'legend', income: 650 },
+    { id: 'l4', name: 'Maradona', rating: 98, pos: 'MID', nation: 'ARG', type: 'legend', income: 600 },
+    { id: 'l3', name: 'Ronaldo R9', rating: 97, pos: 'FWD', nation: 'BRA', type: 'legend', income: 550 },
+    { id: 'l1', name: 'Z. Zidane', rating: 96, pos: 'MID', nation: 'FRA', type: 'legend', income: 500 },
+    { id: 'l2', name: 'Ronaldinho', rating: 95, pos: 'FWD', nation: 'BRA', type: 'legend', income: 450 },
+    { id: 'l7', name: 'Xavi', rating: 94, pos: 'MID', nation: 'ESP', type: 'legend', income: 400 },
+    { id: 'l8', name: 'Iniesta', rating: 94, pos: 'MID', nation: 'ESP', type: 'legend', income: 400 },
+    { id: 'l9', name: 'R. Baggio', rating: 93, pos: 'FWD', nation: 'ITA', type: 'legend', income: 350 },
+    { id: 'l10', name: 'Kaka', rating: 93, pos: 'MID', nation: 'BRA', type: 'legend', income: 350 },
+    { id: 'l11', name: 'Zico', rating: 93, pos: 'MID', nation: 'BRA', type: 'legend', income: 350 },
+    { id: 'l12', name: 'V. Benali', rating: 92, pos: 'FWD', nation: 'NGA', type: 'legend', income: 330 },
+    { id: 'l13', name: 'C. Park', rating: 93, pos: 'MID', nation: 'JPN', type: 'legend', income: 378 },
+    { id: 'l14', name: 'E. Lopez', rating: 93, pos: 'MID', nation: 'POR', type: 'legend', income: 378 },
+    { id: 'l15', name: 'K. De Jong', rating: 93, pos: 'MID', nation: 'BEL', type: 'legend', income: 378 },
+    { id: 'l16', name: 'P. Lopez', rating: 94, pos: 'FWD', nation: 'POR', type: 'legend', income: 427 },
+    { id: 'l17', name: 'M. Zimmer', rating: 93, pos: 'DEF', nation: 'GER', type: 'legend', income: 378 },
+    { id: 'l18', name: 'E. Fernandez', rating: 95, pos: 'FWD', nation: 'BRA', type: 'legend', income: 475 },
+    { id: 'l19', name: 'D. Diaz', rating: 94, pos: 'GK', nation: 'MEX', type: 'legend', income: 427 },
+    { id: 'l20', name: 'C. Tanaka', rating: 96, pos: 'GK', nation: 'JPN', type: 'legend', income: 523 },
+    { id: 'l21', name: 'R. Foster', rating: 95, pos: 'DEF', nation: 'USA', type: 'legend', income: 475 },
+    { id: 'l22', name: 'S. Mertens', rating: 95, pos: 'DEF', nation: 'NED', type: 'legend', income: 475 },
+    { id: 'l23', name: 'K. Weber', rating: 96, pos: 'GK', nation: 'SUI', type: 'legend', income: 523 },
+    { id: 'l24', name: 'J. Ferrari', rating: 96, pos: 'DEF', nation: 'ITA', type: 'legend', income: 523 },
+    { id: 'l25', name: 'K. Sato', rating: 96, pos: 'DEF', nation: 'KOR', type: 'legend', income: 523 },
+    { id: 'l26', name: 'B. Hoffmann', rating: 97, pos: 'MID', nation: 'GER', type: 'legend', income: 572 },
+    { id: 'l27', name: 'E. Balog', rating: 97, pos: 'GK', nation: 'RUS', type: 'legend', income: 572 },
+    { id: 'l28', name: 'J. Rossi', rating: 97, pos: 'DEF', nation: 'ITA', type: 'legend', income: 572 },
+    { id: 'l29', name: 'R. Gonzalez', rating: 97, pos: 'GK', nation: 'CHI', type: 'legend', income: 572 },
+  ],
+  // Редкость ВЫШЕ legend — топ дорогого сегмента паков (см. GAME_PACKS в
+  // server.js). Добавлена вместе с common, чтобы расширить и дешёвый, и
+  // дорогой края линейки паков (см. вкладку "Паки" — теперь есть фильтр
+  // "Дешёвые"/"Дорогие").
+  mythic: [
+    { id: 'm1', name: 'J. Cruyff', rating: 97, pos: 'MID', nation: 'NED', type: 'mythic', income: 800 },
+    { id: 'm2', name: 'F. Beckenbauer', rating: 96, pos: 'DEF', nation: 'GER', type: 'mythic', income: 780 },
+    { id: 'm3', name: 'A. Di Stefano', rating: 98, pos: 'FWD', nation: 'ESP', type: 'mythic', income: 850 },
+    { id: 'm4', name: 'Eusebio', rating: 97, pos: 'FWD', nation: 'POR', type: 'mythic', income: 830 },
+    { id: 'm5', name: 'M. Platini', rating: 96, pos: 'MID', nation: 'FRA', type: 'mythic', income: 800 },
+    { id: 'm6', name: 'Romario', rating: 97, pos: 'FWD', nation: 'BRA', type: 'mythic', income: 840 },
+    { id: 'm7', name: 'F. Puskas', rating: 98, pos: 'FWD', nation: 'HUN', type: 'mythic', income: 850 },
+    { id: 'm8', name: 'G. Muller', rating: 98, pos: 'FWD', nation: 'GER', type: 'mythic', income: 850 },
+    { id: 'm9', name: 'B. Moore', rating: 96, pos: 'DEF', nation: 'ENG', type: 'mythic', income: 780 },
+    { id: 'm10', name: 'L. Yashin', rating: 96, pos: 'GK', nation: 'RUS', type: 'mythic', income: 780 },
+    { id: 'm11', name: 'V. Alonso', rating: 95, pos: 'FWD', nation: 'POR', type: 'mythic', income: 770 },
+    { id: 'm12', name: 'N. Janssens', rating: 96, pos: 'GK', nation: 'BEL', type: 'mythic', income: 795 },
+    { id: 'm13', name: 'S. Bernard', rating: 95, pos: 'MID', nation: 'FRA', type: 'mythic', income: 770 },
+    { id: 'm14', name: 'J. Kovac', rating: 97, pos: 'FWD', nation: 'CZE', type: 'mythic', income: 820 },
+    { id: 'm15', name: 'V. Hughes', rating: 97, pos: 'MID', nation: 'USA', type: 'mythic', income: 820 },
+    { id: 'm16', name: 'M. Foster', rating: 97, pos: 'MID', nation: 'AUS', type: 'mythic', income: 820 },
+    { id: 'm17', name: 'E. Murphy', rating: 98, pos: 'DEF', nation: 'IRL', type: 'mythic', income: 845 },
+    { id: 'm18', name: 'D. Bakker', rating: 99, pos: 'MID', nation: 'BEL', type: 'mythic', income: 870 },
+    { id: 'm19', name: 'D. Becker', rating: 98, pos: 'FWD', nation: 'GER', type: 'mythic', income: 845 },
+  ],
+};
 
     // Плоский индекс id -> карточка — нужен там, где приходит только id игрока
     // (например reward.playerId в наградах Батл Пасса), а не весь объект.
     const PLAYERS_BY_ID = Object.values(PLAYER_POOL).flat().reduce((acc, p) => { acc[p.id] = p; return acc; }, {});
 
-    const FLAGS = {'UKR':'🇺🇦', 'ARG':'🇦🇷', 'ESP':'🇪🇸', 'ENG':'🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'FRA':'🇫🇷', 'BRA':'🇧🇷', 'NED':'🇳🇱', 'BEL':'🇧🇪', 'GER':'🇩🇪', 'NOR':'🇳🇴', 'POR':'🇵🇹'};
+    const FLAGS = {'UKR':'🇺🇦', 'ARG':'🇦🇷', 'ESP':'🇪🇸', 'ENG':'🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'FRA':'🇫🇷', 'BRA':'🇧🇷', 'NED':'🇳🇱', 'BEL':'🇧🇪', 'GER':'🇩🇪', 'NOR':'🇳🇴', 'POR':'🇵🇹',
+      'ITA':'🇮🇹', 'CRO':'🇭🇷', 'URU':'🇺🇾', 'TUR':'🇹🇷', 'GEO':'🇬🇪', 'SVK':'🇸🇰', 'HUN':'🇭🇺', 'RUS':'🇷🇺', 'NGA':'🇳🇬', 'CAN':'🇨🇦',
+      'USA':'🇺🇸', 'MAR':'🇲🇦', 'SEN':'🇸🇳', 'COL':'🇨🇴', 'CHI':'🇨🇱', 'MEX':'🇲🇽', 'JPN':'🇯🇵', 'KOR':'🇰🇷', 'AUT':'🇦🇹', 'SUI':'🇨🇭',
+      'SWE':'🇸🇪', 'DEN':'🇩🇰', 'POL':'🇵🇱', 'IRL':'🇮🇪', 'ALG':'🇩🇿', 'EGY':'🇪🇬', 'GHA':'🇬🇭', 'CIV':'🇨🇮', 'AUS':'🇦🇺', 'CZE':'🇨🇿', 'SRB':'🇷🇸'};
 
     let myClub = JSON.parse(localStorage.getItem('myClub')) || [
       { id: 'b1', name: 'Zinchenko', rating: 79, pos: 'DEF', nation: 'UKR', type: 'bronze', income: 10, instId: '1' }
@@ -3169,14 +3384,33 @@
 
     // Рендер витрины (Возможный дроп)
     function renderPackDrops() {
+      // Показываем не весь пул (у бронзы/серебра теперь по 70 карт — вывалить
+      // их все в один flex-wrap блок сделало бы вкладку ПАКИ нечитаемо
+      // длинной), а случайную выборку + бейдж "+N ещё", чтобы было видно,
+      // что пул стал заметно больше, но карточка пака осталась компактной.
+      // Реальный дроп по-прежнему решает сервер по ПОЛНОМУ пулу — это
+      // только превью.
+      const PREVIEW_LIMIT = 10;
       const renderDrops = (pool, elementId, bgClass, borderClass, textClass) => {
         const container = document.getElementById(elementId);
-        container.innerHTML = pool.map(p => `
+        const shown = pool.length <= PREVIEW_LIMIT
+          ? pool
+          : [...pool].sort(() => Math.random() - 0.5).slice(0, PREVIEW_LIMIT);
+        const chips = shown.map(p => `
           <div class="bg-gradient-to-b ${bgClass} border ${borderClass} rounded px-1.5 py-0.5 flex items-center gap-1 shadow-sm">
             <span class="text-[9px] font-black text-white">${p.rating}</span>
             <span class="text-[8px] ${textClass}">${FLAGS[p.nation]} ${p.name}</span>
           </div>
-        `).join('');
+        `);
+        const rest = pool.length - shown.length;
+        if (rest > 0) {
+          chips.push(`
+            <div class="bg-black/40 border border-dashed ${borderClass} rounded px-1.5 py-0.5 flex items-center gap-1">
+              <span class="text-[8px] font-black ${textClass}">+${rest} ещё</span>
+            </div>
+          `);
+        }
+        container.innerHTML = chips.join('');
       };
 
       renderDrops(PLAYER_POOL.common, 'drop-common', 'from-[#3a3a3a] to-black', 'border-[#6b7280]', 'text-[#d4d4d8]');
@@ -5765,6 +5999,28 @@
     // Цвета полос по индексу варианта — как разноцветные шкалы в Binance/Fanton.
     const BET_BAR_COLORS = ['bg-violet-500', 'bg-red-500', 'bg-amber-400', 'bg-sky-400', 'bg-fuchsia-400'];
 
+    function escapeHtmlAttr(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+
+    // Делегированный обработчик клика по варианту исхода — вешаем один раз,
+    // список перерисовывается через innerHTML при каждом loadBetEvents().
+    document.getElementById('bets-events-list').addEventListener('click', (e) => {
+      const row = e.target.closest('.bet-option-row[data-bet-event-id]');
+      if (!row) return;
+      openBetModal(
+        row.dataset.betEventId,
+        row.dataset.betOptionId,
+        row.dataset.betOptionLabel,
+        Number(row.dataset.betOptionMultiplier)
+      );
+    });
+
     async function loadBetEvents() {
       const listEl = document.getElementById('bets-events-list');
       if (!tg?.initData) {
@@ -5798,9 +6054,15 @@
         const optionsHtml = ev.options.map((opt, i) => {
           const color = BET_BAR_COLORS[i % BET_BAR_COLORS.length];
           const isWinner = ev.resolvedOptionId === opt.id;
-          const clickable = isOpen ? `onclick="openBetModal('${ev.id}','${opt.id}','${opt.label.replace(/'/g, "\\'")}',${opt.multiplier})"` : '';
+          // Данные передаём через data-атрибуты (не inline onclick со строковой
+          // интерполяцией) — иначе кавычка в названии варианта ломала HTML и
+          // делала строку кликабельной только визуально (реального обработчика
+          // не оставалось). Клик ловим делегированием на списке (см. ниже).
+          const dataAttrs = isOpen
+            ? `data-bet-event-id="${escapeHtmlAttr(ev.id)}" data-bet-option-id="${escapeHtmlAttr(opt.id)}" data-bet-option-label="${escapeHtmlAttr(opt.label)}" data-bet-option-multiplier="${opt.multiplier}"`
+            : '';
           return `
-            <div class="bet-option-row relative ${isOpen ? 'cursor-pointer' : ''} ${isWinner ? 'ring-1 ring-amber-400/60 rounded-xl p-1.5 bg-amber-400/5' : ''}" ${clickable}>
+            <div class="bet-option-row relative ${isOpen ? 'cursor-pointer' : ''} ${isWinner ? 'ring-1 ring-amber-400/60 rounded-xl p-1.5 bg-amber-400/5' : ''}" ${dataAttrs}>
               <div class="flex justify-between items-center text-[9px] mb-0.5">
                 <span class="font-bold text-white flex items-center gap-1">${opt.label}${isWinner ? ' 🏆' : ''}</span>
                 <span class="text-neutral-400 font-bold">${opt.percent}% <span class="text-neutral-600">·</span> <span class="text-emerald-400">x${opt.multiplier}</span></span>
